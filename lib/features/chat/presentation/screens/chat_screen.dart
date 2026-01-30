@@ -1,6 +1,7 @@
 /// ============================================================================
 /// CHAT SCREEN - Real-time Messaging
 /// ============================================================================
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +32,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final String? _currentUserId = SupabaseService.client.auth.currentUser?.id;
+  bool _isTyping = false;
+  Timer? _typingHeartbeatTimer;
 
   @override
   void initState() {
@@ -43,12 +46,56 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // Scroll listener for loading more
     _scrollController.addListener(_onScroll);
 
-    // Text field listener
-    _messageController.addListener(() => setState(() {}));
+    // Text field listener with typing indicator
+    _messageController.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    setState(() {});
+
+    // Handle typing indicator with heartbeat
+    final hasText = _messageController.text.isNotEmpty;
+    if (hasText && !_isTyping) {
+      _isTyping = true;
+      _startTypingHeartbeat();
+    } else if (!hasText && _isTyping) {
+      _isTyping = false;
+      _stopTypingHeartbeat();
+    }
+  }
+
+  /// Start sending periodic typing events to keep the indicator alive
+  void _startTypingHeartbeat() {
+    // Send initial typing start
+    ref.read(chatProvider.notifier).startTyping();
+
+    // Cancel any existing timer
+    _typingHeartbeatTimer?.cancel();
+
+    // Re-send typing_start every 3 seconds while user has text
+    // This keeps the receiver's indicator alive (their timeout is 5 seconds)
+    _typingHeartbeatTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (_isTyping && _messageController.text.isNotEmpty) {
+        ref.read(chatProvider.notifier).startTyping();
+      } else {
+        _stopTypingHeartbeat();
+      }
+    });
+  }
+
+  /// Stop the typing heartbeat and send stop event
+  void _stopTypingHeartbeat() {
+    _typingHeartbeatTimer?.cancel();
+    _typingHeartbeatTimer = null;
+    ref.read(chatProvider.notifier).stopTyping();
   }
 
   @override
   void dispose() {
+    _typingHeartbeatTimer?.cancel();
+    if (_isTyping) {
+      ref.read(chatProvider.notifier).stopTyping();
+    }
     _messageController.dispose();
     _scrollController.dispose();
     ref.read(chatProvider.notifier).clear();
@@ -65,6 +112,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
+
+    // Stop typing indicator
+    if (_isTyping) {
+      _isTyping = false;
+      _stopTypingHeartbeat();
+    }
 
     _messageController.clear();
 
@@ -175,7 +228,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     child: Text(
                       "Chats disappear $disappearingHours hours after viewing",
                       style: TextStyle(
-                        color: AppColors.textSecondary.withOpacity(0.5),
+                        color: AppColors.textSecondary.withValues(alpha: 0.5),
                         fontSize: 12,
                       ),
                     ),
@@ -186,10 +239,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   child: _buildMessagesList(chatState),
                 ),
 
+                // Typing Indicator
+                if (chatState.isOtherUserTyping)
+                  _buildTypingIndicator(),
+
                 // Input Area
                 _buildInputArea(chatState),
               ],
             ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceLight,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'typing',
+                  style: TextStyle(
+                    color: AppColors.textSecondary.withValues(alpha: 0.7),
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                _TypingDots(),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -269,7 +359,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               Icon(
                 Icons.chat_bubble_outline,
                 size: 64,
-                color: AppColors.textSecondary.withOpacity(0.5),
+                color: AppColors.textSecondary.withValues(alpha:0.5),
               ),
               const SizedBox(height: 16),
               const Text(
@@ -355,7 +445,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       child: Text(
         text,
         style: TextStyle(
-          color: AppColors.textSecondary.withOpacity(0.6),
+          color: AppColors.textSecondary.withValues(alpha:0.6),
           fontSize: 12,
         ),
       ),
@@ -392,7 +482,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
                   border: isMe
                       ? null
-                      : Border.all(color: AppColors.primary.withOpacity(0.2)),
+                      : Border.all(color: AppColors.primary.withValues(alpha:0.2)),
                 ),
                 child: _buildMessageContent(message, isMe),
               ),
@@ -403,7 +493,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   Text(
                     DateFormat('h:mm a').format(message.createdAt),
                     style: TextStyle(
-                      color: AppColors.textSecondary.withOpacity(0.6),
+                      color: AppColors.textSecondary.withValues(alpha:0.6),
                       fontSize: 10,
                     ),
                   ),
@@ -418,7 +508,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       size: 12,
                       color: message.status == MessageStatus.read
                           ? AppColors.primary
-                          : AppColors.textSecondary.withOpacity(0.6),
+                          : AppColors.textSecondary.withValues(alpha:0.6),
                     ),
                   ],
                   if (message.isSaved) ...[
@@ -469,7 +559,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           width: 100,
           height: 24,
           decoration: BoxDecoration(
-            color: (isMe ? AppColors.textInverse : AppColors.primary).withOpacity(0.2),
+            color: (isMe ? AppColors.textInverse : AppColors.primary).withValues(alpha:0.2),
             borderRadius: BorderRadius.circular(12),
           ),
         ),
@@ -697,6 +787,72 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Animated typing dots indicator
+class _TypingDots extends StatefulWidget {
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots> with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late List<Animation<double>> _animations;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat();
+
+    // Create staggered animations for each dot
+    _animations = List.generate(3, (index) {
+      final start = index * 0.2;
+      final end = start + 0.4;
+      return Tween<double>(begin: 0, end: 1).animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: Interval(start, end.clamp(0.0, 1.0), curve: Curves.easeInOut),
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (index) {
+            return Padding(
+              padding: EdgeInsets.only(left: index > 0 ? 3 : 0),
+              child: Transform.translate(
+                offset: Offset(0, -3 * _animations[index].value),
+                child: Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: AppColors.textSecondary.withValues(alpha: 0.7),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

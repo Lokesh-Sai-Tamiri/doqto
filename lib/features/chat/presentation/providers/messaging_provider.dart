@@ -3,8 +3,9 @@
 /// ============================================================================
 library;
 
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../core/services/socket_service.dart';
 import '../../data/models/messaging_models.dart';
 import '../../data/repositories/messaging_repository.dart';
 
@@ -25,12 +26,14 @@ class ConversationsState {
   final List<ConversationModel> conversations;
   final int totalUnreadCount;
   final String? errorMessage;
+  final Map<String, bool> typingIndicators; // conversationId -> isTyping
 
   const ConversationsState({
     this.isLoading = false,
     this.conversations = const [],
     this.totalUnreadCount = 0,
     this.errorMessage,
+    this.typingIndicators = const {},
   });
 
   ConversationsState copyWith({
@@ -38,13 +41,20 @@ class ConversationsState {
     List<ConversationModel>? conversations,
     int? totalUnreadCount,
     String? errorMessage,
+    Map<String, bool>? typingIndicators,
   }) {
     return ConversationsState(
       isLoading: isLoading ?? this.isLoading,
       conversations: conversations ?? this.conversations,
       totalUnreadCount: totalUnreadCount ?? this.totalUnreadCount,
       errorMessage: errorMessage,
+      typingIndicators: typingIndicators ?? this.typingIndicators,
     );
+  }
+
+  /// Check if someone is typing in a conversation
+  bool isTypingIn(String conversationId) {
+    return typingIndicators[conversationId] == true;
   }
 
   List<ConversationModel> get pinnedConversations =>
@@ -59,23 +69,33 @@ class ConversationsState {
 
 class ConversationsNotifier extends Notifier<ConversationsState> {
   late final MessagingRepository _repository;
-  RealtimeChannel? _channel;
+  StreamSubscription<Map<String, dynamic>>? _conversationSubscription;
+  StreamSubscription<MessageEvent>? _newMessageSubscription;
+  StreamSubscription<TypingEvent>? _typingSubscription;
+  final Map<String, Timer> _typingTimers = {};
 
   @override
   ConversationsState build() {
     _repository = ref.watch(messagingRepositoryProvider);
-    
-    // Auto-load and subscribe
-    Future.microtask(() {
+
+    // Auto-load, connect realtime, and subscribe
+    Future.microtask(() async {
+      // Connect to Socket.io for real-time features
+      await _repository.connectRealtime();
       loadConversations();
       _subscribeToUpdates();
     });
 
     // Cleanup on dispose
     ref.onDispose(() {
-      if (_channel != null) {
-        _repository.unsubscribe(_channel!);
+      _conversationSubscription?.cancel();
+      _newMessageSubscription?.cancel();
+      _typingSubscription?.cancel();
+      for (final timer in _typingTimers.values) {
+        timer.cancel();
       }
+      _typingTimers.clear();
+      _repository.disconnectRealtime();
     });
 
     return const ConversationsState(isLoading: true);
@@ -83,11 +103,156 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
 
   void _subscribeToUpdates() {
     try {
-      _channel = _repository.subscribeToConversations(
-        onUpdate: () => loadConversations(),
-      );
+      // Subscribe to conversation updates via Socket.io
+      _conversationSubscription = _repository.onConversationUpdated.listen((_) {
+        loadConversations();
+      });
+
+      // Subscribe to new messages to update chat list in real-time
+      _newMessageSubscription = _repository.onNewMessage.listen((event) {
+        _handleNewMessage(event);
+      });
+
+      // Subscribe to typing events for chat list typing indicator
+      _typingSubscription = _repository.onTyping.listen((event) {
+        _handleTypingEvent(event);
+      });
     } catch (e) {
       // Ignore subscription errors
+    }
+  }
+
+  void _handleTypingEvent(TypingEvent event) {
+    final conversationId = event.conversationId;
+    final isTyping = event.isTyping;
+
+    // Don't show typing indicator for our own typing
+    if (event.userId == _repository.currentUserId) return;
+
+    // Cancel existing timer for this conversation
+    _typingTimers[conversationId]?.cancel();
+
+    // Update typing indicators map
+    final updatedIndicators = Map<String, bool>.from(state.typingIndicators);
+
+    if (isTyping) {
+      updatedIndicators[conversationId] = true;
+
+      // Auto-clear after 5 seconds (in case stop event is missed)
+      _typingTimers[conversationId] = Timer(const Duration(seconds: 5), () {
+        final indicators = Map<String, bool>.from(state.typingIndicators);
+        indicators.remove(conversationId);
+        state = state.copyWith(typingIndicators: indicators);
+      });
+    } else {
+      updatedIndicators.remove(conversationId);
+    }
+
+    state = state.copyWith(typingIndicators: updatedIndicators);
+  }
+
+  void _handleNewMessage(MessageEvent event) {
+    final conversationId = event.conversationId;
+    final message = event.message;
+    final currentUserId = _repository.currentUserId;
+
+    // Clear typing indicator for this conversation (they sent a message, so no longer typing)
+    if (state.typingIndicators.containsKey(conversationId)) {
+      _typingTimers[conversationId]?.cancel();
+      final updatedIndicators = Map<String, bool>.from(state.typingIndicators);
+      updatedIndicators.remove(conversationId);
+      state = state.copyWith(typingIndicators: updatedIndicators);
+    }
+
+    // Find the conversation in our list
+    final existingIndex = state.conversations.indexWhere(
+      (c) => c.conversationId == conversationId,
+    );
+
+    if (existingIndex == -1) {
+      // New conversation - reload all to get full data
+      loadConversations();
+      return;
+    }
+
+    // Update the existing conversation
+    final existingConv = state.conversations[existingIndex];
+    final isFromOther = message['sender_id'] != currentUserId;
+
+    // Create updated conversation with new message info
+    final updatedConv = ConversationModel(
+      conversationId: existingConv.conversationId,
+      lastMessageText: message['content'] as String? ?? _getMessagePreview(message),
+      lastMessageType: _parseMessageType(message['message_type'] as String?),
+      lastMessageAt: DateTime.tryParse(message['created_at'] as String? ?? '') ?? DateTime.now(),
+      lastMessageSenderId: message['sender_id'] as String?,
+      blockedBy: existingConv.blockedBy,
+      disappearingHours: existingConv.disappearingHours,
+      createdAt: existingConv.createdAt,
+      otherUserId: existingConv.otherUserId,
+      firstName: existingConv.firstName,
+      lastName: existingConv.lastName,
+      displayName: existingConv.displayName,
+      avatarUrl: existingConv.avatarUrl,
+      specialization: existingConv.specialization,
+      unreadCount: isFromOther ? existingConv.unreadCount + 1 : existingConv.unreadCount,
+      isMuted: existingConv.isMuted,
+      isArchived: existingConv.isArchived,
+      isPinned: existingConv.isPinned,
+      otherAllowsAudioSave: existingConv.otherAllowsAudioSave,
+      isBlockedByMe: existingConv.isBlockedByMe,
+      isBlockedByOther: existingConv.isBlockedByOther,
+    );
+
+    // Remove from current position and add to top (most recent)
+    final updatedList = List<ConversationModel>.from(state.conversations);
+    updatedList.removeAt(existingIndex);
+
+    // Insert at top (after pinned conversations)
+    final firstNonPinnedIndex = updatedList.indexWhere((c) => !c.isPinned);
+    if (updatedConv.isPinned || firstNonPinnedIndex == -1) {
+      updatedList.insert(0, updatedConv);
+    } else {
+      updatedList.insert(firstNonPinnedIndex, updatedConv);
+    }
+
+    // Update total unread count
+    final newUnreadCount = isFromOther
+        ? state.totalUnreadCount + 1
+        : state.totalUnreadCount;
+
+    state = state.copyWith(
+      conversations: updatedList,
+      totalUnreadCount: newUnreadCount,
+    );
+  }
+
+  String _getMessagePreview(Map<String, dynamic> message) {
+    final type = message['message_type'] as String?;
+    switch (type) {
+      case 'audio':
+        return 'Voice message';
+      case 'image':
+        return 'Photo';
+      case 'document':
+        return 'Document';
+      default:
+        return message['content'] as String? ?? '';
+    }
+  }
+
+  MessageType _parseMessageType(String? type) {
+    switch (type) {
+      case 'audio':
+        return MessageType.audio;
+      case 'image':
+        return MessageType.image;
+      case 'document':
+        return MessageType.document;
+      case 'system':
+        return MessageType.system;
+      default:
+        return MessageType.text;
     }
   }
 
@@ -167,6 +332,54 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
   void clearError() {
     state = state.copyWith(errorMessage: null);
   }
+
+  /// Mark a conversation as read (clear unread count locally)
+  void markConversationAsRead(String conversationId) {
+    final existingIndex = state.conversations.indexWhere(
+      (c) => c.conversationId == conversationId,
+    );
+
+    if (existingIndex == -1) return;
+
+    final existingConv = state.conversations[existingIndex];
+    if (existingConv.unreadCount == 0) return;
+
+    // Update unread count to 0
+    final updatedConv = ConversationModel(
+      conversationId: existingConv.conversationId,
+      lastMessageText: existingConv.lastMessageText,
+      lastMessageType: existingConv.lastMessageType,
+      lastMessageAt: existingConv.lastMessageAt,
+      lastMessageSenderId: existingConv.lastMessageSenderId,
+      blockedBy: existingConv.blockedBy,
+      disappearingHours: existingConv.disappearingHours,
+      createdAt: existingConv.createdAt,
+      otherUserId: existingConv.otherUserId,
+      firstName: existingConv.firstName,
+      lastName: existingConv.lastName,
+      displayName: existingConv.displayName,
+      avatarUrl: existingConv.avatarUrl,
+      specialization: existingConv.specialization,
+      unreadCount: 0,
+      isMuted: existingConv.isMuted,
+      isArchived: existingConv.isArchived,
+      isPinned: existingConv.isPinned,
+      otherAllowsAudioSave: existingConv.otherAllowsAudioSave,
+      isBlockedByMe: existingConv.isBlockedByMe,
+      isBlockedByOther: existingConv.isBlockedByOther,
+    );
+
+    final updatedList = List<ConversationModel>.from(state.conversations);
+    updatedList[existingIndex] = updatedConv;
+
+    // Update total unread count
+    final newTotalUnread = state.totalUnreadCount - existingConv.unreadCount;
+
+    state = state.copyWith(
+      conversations: updatedList,
+      totalUnreadCount: newTotalUnread < 0 ? 0 : newTotalUnread,
+    );
+  }
 }
 
 final conversationsProvider =
@@ -186,6 +399,7 @@ class ChatState {
   final List<MessageModel> messages;
   final String? errorMessage;
   final bool hasMore;
+  final bool isOtherUserTyping;
 
   const ChatState({
     this.isLoading = false,
@@ -195,6 +409,7 @@ class ChatState {
     this.messages = const [],
     this.errorMessage,
     this.hasMore = true,
+    this.isOtherUserTyping = false,
   });
 
   ChatState copyWith({
@@ -205,6 +420,7 @@ class ChatState {
     List<MessageModel>? messages,
     String? errorMessage,
     bool? hasMore,
+    bool? isOtherUserTyping,
   }) {
     return ChatState(
       isLoading: isLoading ?? this.isLoading,
@@ -214,32 +430,50 @@ class ChatState {
       messages: messages ?? this.messages,
       errorMessage: errorMessage,
       hasMore: hasMore ?? this.hasMore,
+      isOtherUserTyping: isOtherUserTyping ?? this.isOtherUserTyping,
     );
   }
 }
 
 class ChatNotifier extends Notifier<ChatState> {
   late final MessagingRepository _repository;
-  RealtimeChannel? _channel;
+  StreamSubscription<MessageEvent>? _newMessageSubscription;
+  StreamSubscription<MessageStatusEvent>? _messageStatusSubscription;
+  StreamSubscription<MessagesReadEvent>? _messagesReadSubscription;
+  StreamSubscription<TypingEvent>? _typingSubscription;
+  Timer? _typingTimer;
 
   @override
   ChatState build() {
     _repository = ref.watch(messagingRepositoryProvider);
 
     ref.onDispose(() {
-      if (_channel != null) {
-        _repository.unsubscribe(_channel!);
-      }
+      _cancelSubscriptions();
     });
 
     return const ChatState();
   }
 
+  void _cancelSubscriptions() {
+    _newMessageSubscription?.cancel();
+    _messageStatusSubscription?.cancel();
+    _messagesReadSubscription?.cancel();
+    _typingSubscription?.cancel();
+    _typingTimer?.cancel();
+    _newMessageSubscription = null;
+    _messageStatusSubscription = null;
+    _messagesReadSubscription = null;
+    _typingSubscription = null;
+    _typingTimer = null;
+  }
+
   Future<void> loadChat(String conversationId) async {
-    // Unsubscribe from previous channel
-    if (_channel != null) {
-      await _repository.unsubscribe(_channel!);
-      _channel = null;
+    // Cancel previous subscriptions
+    _cancelSubscriptions();
+
+    // Leave previous conversation room
+    if (state.conversationId != null && state.conversationId != conversationId) {
+      _repository.leaveConversation(state.conversationId!);
     }
 
     state = state.copyWith(
@@ -254,18 +488,26 @@ class ChatNotifier extends Notifier<ChatState> {
       final conversation = await _repository.getConversation(conversationId);
       final messages = await _repository.getMessages(conversationId);
 
+      // Get the actual conversation ID (in case we passed a user UUID)
+      final actualConversationId = conversation?.conversationId ?? conversationId;
+
       // Mark as read
-      await _repository.markMessagesRead(conversationId);
+      await _repository.markMessagesRead(actualConversationId);
+
+      // Update conversation list to clear unread count
+      ref.read(conversationsProvider.notifier).markConversationAsRead(actualConversationId);
 
       state = state.copyWith(
         isLoading: false,
+        conversationId: actualConversationId, // Use actual conversation ID
         conversation: conversation,
         messages: messages,
         hasMore: messages.length >= 50,
       );
 
-      // Subscribe to new messages
-      _subscribeToMessages(conversationId);
+      // Join conversation room and subscribe to new messages
+      _repository.joinConversation(actualConversationId);
+      _subscribeToMessages(actualConversationId);
 
       // Refresh conversations list to update unread count
       ref.read(conversationsProvider.notifier).loadConversations();
@@ -278,26 +520,86 @@ class ChatNotifier extends Notifier<ChatState> {
   }
 
   void _subscribeToMessages(String conversationId) {
-    _channel = _repository.subscribeToMessages(
-      conversationId: conversationId,
-      onNewMessage: (message) {
-        // Add new message to the list
+    // Subscribe to new messages via Socket.io
+    _newMessageSubscription = _repository.onNewMessage.listen((event) {
+      if (event.conversationId == conversationId) {
+        final message = MessageModel.fromJson(event.message);
+
+        // Check if message already exists (sender already added it locally)
+        final messageExists = state.messages.any((m) => m.id == message.id);
+        if (messageExists) return;
+
+        // Add new message to the list (newest first for reverse ListView)
         final updatedMessages = [message, ...state.messages];
-        state = state.copyWith(messages: updatedMessages);
+        state = state.copyWith(messages: updatedMessages, isOtherUserTyping: false);
 
         // Mark as read if from other user
         if (message.senderId != _repository.currentUserId) {
           _repository.markMessagesRead(conversationId);
         }
-      },
-      onMessageUpdate: (message) {
-        // Update existing message
+      }
+    });
+
+    // Subscribe to message status updates
+    _messageStatusSubscription = _repository.onMessageStatusUpdate.listen((event) {
+      // Update existing message status
+      final updatedMessages = state.messages.map((m) {
+        if (m.id == event.messageId) {
+          return m.copyWith(
+            status: _parseMessageStatus(event.status),
+          );
+        }
+        return m;
+      }).toList();
+      state = state.copyWith(messages: updatedMessages);
+    });
+
+    // Subscribe to messages read events (for read receipts / double tick)
+    _messagesReadSubscription = _repository.onMessagesRead.listen((event) {
+      if (event.conversationId == conversationId) {
+        // Update all messages that were read to show double tick
         final updatedMessages = state.messages.map((m) {
-          return m.id == message.id ? message : m;
+          if (event.messageIds.contains(m.id)) {
+            return m.copyWith(status: MessageStatus.read);
+          }
+          return m;
         }).toList();
         state = state.copyWith(messages: updatedMessages);
-      },
-    );
+      }
+    });
+
+    // Subscribe to typing events
+    _typingSubscription = _repository.onTyping.listen((event) {
+      if (event.conversationId == conversationId &&
+          event.userId != _repository.currentUserId) {
+        state = state.copyWith(isOtherUserTyping: event.isTyping);
+
+        // Auto-clear typing indicator after 5 seconds (in case stop event is missed)
+        if (event.isTyping) {
+          _typingTimer?.cancel();
+          _typingTimer = Timer(const Duration(seconds: 5), () {
+            state = state.copyWith(isOtherUserTyping: false);
+          });
+        } else {
+          _typingTimer?.cancel();
+        }
+      }
+    });
+  }
+
+  MessageStatus _parseMessageStatus(String status) {
+    switch (status) {
+      case 'delivered':
+        return MessageStatus.delivered;
+      case 'read':
+        return MessageStatus.read;
+      case 'failed':
+        return MessageStatus.failed;
+      case 'sending':
+        return MessageStatus.sending;
+      default:
+        return MessageStatus.sent;
+    }
   }
 
   Future<void> loadMoreMessages() async {
@@ -308,7 +610,7 @@ class ChatNotifier extends Notifier<ChatState> {
     try {
       final moreMessages = await _repository.getMessages(
         state.conversationId!,
-        before: oldestMessage?.createdAt,
+        before: oldestMessage?.id, // Use message ID, not DateTime
       );
 
       state = state.copyWith(
@@ -326,12 +628,20 @@ class ChatNotifier extends Notifier<ChatState> {
     state = state.copyWith(isSending: true);
 
     try {
-      await _repository.sendMessage(
+      final message = await _repository.sendMessage(
         conversationId: state.conversationId!,
         content: content.trim(),
       );
 
-      state = state.copyWith(isSending: false);
+      // Add sent message to the list immediately (newest first for reverse ListView)
+      // Check if already exists (from Socket.io) to avoid duplicates
+      final messageExists = state.messages.any((m) => m.id == message.id);
+      if (!messageExists) {
+        final updatedMessages = [message, ...state.messages];
+        state = state.copyWith(isSending: false, messages: updatedMessages);
+      } else {
+        state = state.copyWith(isSending: false);
+      }
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -353,7 +663,7 @@ class ChatNotifier extends Notifier<ChatState> {
     state = state.copyWith(isSending: true);
 
     try {
-      await _repository.sendAudioMessage(
+      final message = await _repository.sendAudioMessage(
         conversationId: state.conversationId!,
         fileUrl: fileUrl,
         durationSeconds: durationSeconds,
@@ -361,7 +671,14 @@ class ChatNotifier extends Notifier<ChatState> {
         fileSize: fileSize,
       );
 
-      state = state.copyWith(isSending: false);
+      // Add sent message to the list (check for duplicates)
+      final messageExists = state.messages.any((m) => m.id == message.id);
+      if (!messageExists) {
+        final updatedMessages = [message, ...state.messages];
+        state = state.copyWith(isSending: false, messages: updatedMessages);
+      } else {
+        state = state.copyWith(isSending: false);
+      }
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -382,14 +699,21 @@ class ChatNotifier extends Notifier<ChatState> {
     state = state.copyWith(isSending: true);
 
     try {
-      await _repository.sendImageMessage(
+      final message = await _repository.sendImageMessage(
         conversationId: state.conversationId!,
         fileUrl: fileUrl,
         fileName: fileName,
         fileSize: fileSize,
       );
 
-      state = state.copyWith(isSending: false);
+      // Add sent message to the list (check for duplicates)
+      final messageExists = state.messages.any((m) => m.id == message.id);
+      if (!messageExists) {
+        final updatedMessages = [message, ...state.messages];
+        state = state.copyWith(isSending: false, messages: updatedMessages);
+      } else {
+        state = state.copyWith(isSending: false);
+      }
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -432,11 +756,25 @@ class ChatNotifier extends Notifier<ChatState> {
   }
 
   void clear() {
-    if (_channel != null) {
-      _repository.unsubscribe(_channel!);
-      _channel = null;
+    _cancelSubscriptions();
+    if (state.conversationId != null) {
+      _repository.leaveConversation(state.conversationId!);
     }
     state = const ChatState();
+  }
+
+  /// Emit typing indicator start
+  void startTyping() {
+    if (state.conversationId != null) {
+      _repository.startTyping(state.conversationId!);
+    }
+  }
+
+  /// Emit typing indicator stop
+  void stopTyping() {
+    if (state.conversationId != null) {
+      _repository.stopTyping(state.conversationId!);
+    }
   }
 }
 
@@ -524,23 +862,23 @@ class BlockedUsersNotifier extends Notifier<BlockedUsersState> {
     }
   }
 
-  Future<String?> reportUser({
+  Future<bool> reportUser({
     required String userId,
     required String reason,
     String? description,
     String? messageId,
   }) async {
     try {
-      final reportId = await _repository.reportUser(
+      final success = await _repository.reportUser(
         userId: userId,
         reason: reason,
         description: description,
         messageId: messageId,
       );
-      return reportId;
+      return success;
     } catch (e) {
       state = state.copyWith(errorMessage: 'Failed to submit report');
-      return null;
+      return false;
     }
   }
 }
@@ -617,28 +955,28 @@ class MessagingPrefsNotifier extends Notifier<MessagingPrefsState> {
 
   Future<bool> setAllowAudioSave(bool allow) async {
     if (state.preferences == null) return false;
-    
+
     final updatedPrefs = state.preferences!.copyWith(allowAudioSave: allow);
     return updatePreferences(updatedPrefs);
   }
 
   Future<bool> setDefaultDisappearingHours(int? hours) async {
     if (state.preferences == null) return false;
-    
+
     final updatedPrefs = state.preferences!.copyWith(defaultDisappearingHours: hours);
     return updatePreferences(updatedPrefs);
   }
 
   Future<bool> setReadReceipts(bool enabled) async {
     if (state.preferences == null) return false;
-    
+
     final updatedPrefs = state.preferences!.copyWith(readReceiptsEnabled: enabled);
     return updatePreferences(updatedPrefs);
   }
 
   Future<bool> setNotifications(bool enabled) async {
     if (state.preferences == null) return false;
-    
+
     final updatedPrefs = state.preferences!.copyWith(messageNotifications: enabled);
     return updatePreferences(updatedPrefs);
   }

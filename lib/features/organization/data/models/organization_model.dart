@@ -71,25 +71,37 @@ class OrganizationModel {
   });
 
   factory OrganizationModel.fromJson(Map<String, dynamic> json) {
+    // Extract contact info (nested in API response)
+    final contact = json['contact'] as Map<String, dynamic>?;
+    // Extract address info (nested in API response)
+    final address = json['address'] as Map<String, dynamic>?;
+
     return OrganizationModel(
       id: json['id'] as String,
       name: json['name'] as String,
       type: _parseType(json['type'] as String?),
       description: json['description'] as String?,
-      phone: json['phone'] as String?,
-      email: json['email'] as String?,
-      website: json['website'] as String?,
-      addressLine1: json['address_line1'] as String?,
-      addressLine2: json['address_line2'] as String?,
-      city: json['city'] as String?,
-      state: json['state'] as String?,
-      postalCode: json['postal_code'] as String?,
-      country: json['country'] as String?,
+      phone: contact?['phone'] as String? ?? json['phone'] as String?,
+      email: contact?['email'] as String? ?? json['email'] as String?,
+      website: contact?['website'] as String? ?? json['website'] as String?,
+      addressLine1: address?['line1'] as String? ?? json['address_line1'] as String?,
+      addressLine2: address?['line2'] as String? ?? json['address_line2'] as String?,
+      city: address?['city'] as String? ?? json['city'] as String?,
+      state: address?['state'] as String? ?? json['state'] as String?,
+      postalCode: address?['postal_code'] as String? ?? json['postal_code'] as String?,
+      country: address?['country'] as String? ?? json['country'] as String?,
       logoUrl: json['logo_url'] as String?,
       isPublic: json['is_public'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: _parseDateTime(json['created_at']) ?? DateTime.now(),
+      updatedAt: _parseDateTime(json['updated_at']) ?? _parseDateTime(json['created_at']) ?? DateTime.now(),
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 
   static OrganizationType _parseType(String? type) {
@@ -167,15 +179,14 @@ class MyOrganizationModel {
       organizationId: json['organization_id'] as String,
       organizationName: json['organization_name'] as String,
       organizationType: OrganizationModel._parseType(json['organization_type'] as String?),
-      logoUrl: json['logo_url'] as String?,
+      // Support both 'logo_url' and 'organization_logo_url'
+      logoUrl: json['logo_url'] as String? ?? json['organization_logo_url'] as String?,
       city: json['city'] as String?,
       state: json['state'] as String?,
       role: _parseRole(json['role'] as String?),
       title: json['title'] as String?,
       status: _parseStatus(json['status'] as String?),
-      joinedAt: json['joined_at'] != null
-          ? DateTime.parse(json['joined_at'] as String)
-          : null,
+      joinedAt: OrganizationModel._parseDateTime(json['joined_at']),
       departmentId: json['department_id'] as String?,
       departmentName: json['department_name'] as String?,
       memberCount: json['member_count'] as int? ?? 0,
@@ -271,7 +282,8 @@ class DepartmentModel {
 
   factory DepartmentModel.fromJson(Map<String, dynamic> json) {
     return DepartmentModel(
-      id: json['department_id'] as String,
+      // Support both 'id' (backend) and 'department_id' (legacy)
+      id: json['id'] as String? ?? json['department_id'] as String,
       organizationId: json['organization_id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
@@ -295,14 +307,10 @@ class DepartmentModel {
 
 /// Organization colleague (member with profile info)
 class ColleagueModel {
-  final String membershipId;
-  final String organizationId;
   final String userId;
   final String? departmentId;
   final MemberRole role;
   final String? title;
-  final MemberStatus status;
-  final DateTime? joinedAt;
   final String? departmentName;
   final String? departmentColor;
   final String? firstName;
@@ -310,16 +318,13 @@ class ColleagueModel {
   final String? displayName;
   final String? specialization;
   final String? avatarUrl;
+  final bool isConnected;
 
   const ColleagueModel({
-    required this.membershipId,
-    required this.organizationId,
     required this.userId,
     this.departmentId,
     required this.role,
     this.title,
-    required this.status,
-    this.joinedAt,
     this.departmentName,
     this.departmentColor,
     this.firstName,
@@ -327,20 +332,15 @@ class ColleagueModel {
     this.displayName,
     this.specialization,
     this.avatarUrl,
+    this.isConnected = false,
   });
 
   factory ColleagueModel.fromJson(Map<String, dynamic> json) {
     return ColleagueModel(
-      membershipId: json['membership_id'] as String,
-      organizationId: json['organization_id'] as String,
       userId: json['user_id'] as String,
       departmentId: json['department_id'] as String?,
       role: MyOrganizationModel._parseRole(json['role'] as String?),
       title: json['title'] as String?,
-      status: MyOrganizationModel._parseStatus(json['status'] as String?),
-      joinedAt: json['joined_at'] != null
-          ? DateTime.parse(json['joined_at'] as String)
-          : null,
       departmentName: json['department_name'] as String?,
       departmentColor: json['department_color'] as String?,
       firstName: json['first_name'] as String?,
@@ -348,6 +348,7 @@ class ColleagueModel {
       displayName: json['display_name'] as String?,
       specialization: json['specialization'] as String?,
       avatarUrl: json['avatar_url'] as String?,
+      isConnected: json['is_connected'] as bool? ?? false,
     );
   }
 
@@ -402,68 +403,43 @@ class OrganizationInviteModel {
   final String organizationId;
   final MemberRole role;
   final String? departmentId;
-  final String? inviteCode;
+  final String inviteCode;
   final DateTime expiresAt;
   final DateTime createdAt;
-  final String organizationName;
-  final OrganizationType organizationType;
-  final String? logoUrl;
-  final String? city;
-  final String? state;
+  final String? organizationName;
   final String? departmentName;
-  final String? inviterFirstName;
-  final String? inviterLastName;
+  final String? inviterId;
+  final String? inviterName;
 
   const OrganizationInviteModel({
     required this.inviteId,
     required this.organizationId,
     required this.role,
     this.departmentId,
-    this.inviteCode,
+    required this.inviteCode,
     required this.expiresAt,
     required this.createdAt,
-    required this.organizationName,
-    required this.organizationType,
-    this.logoUrl,
-    this.city,
-    this.state,
+    this.organizationName,
     this.departmentName,
-    this.inviterFirstName,
-    this.inviterLastName,
+    this.inviterId,
+    this.inviterName,
   });
 
   factory OrganizationInviteModel.fromJson(Map<String, dynamic> json) {
     return OrganizationInviteModel(
-      inviteId: json['invite_id'] as String,
+      // Support both 'id' (backend) and 'invite_id' (legacy)
+      inviteId: json['id'] as String? ?? json['invite_id'] as String,
       organizationId: json['organization_id'] as String,
       role: MyOrganizationModel._parseRole(json['role'] as String?),
       departmentId: json['department_id'] as String?,
-      inviteCode: json['invite_code'] as String?,
-      expiresAt: DateTime.parse(json['expires_at'] as String),
-      createdAt: DateTime.parse(json['created_at'] as String),
-      organizationName: json['organization_name'] as String,
-      organizationType: OrganizationModel._parseType(json['organization_type'] as String?),
-      logoUrl: json['logo_url'] as String?,
-      city: json['city'] as String?,
-      state: json['state'] as String?,
+      inviteCode: json['invite_code'] as String,
+      expiresAt: OrganizationModel._parseDateTime(json['expires_at']) ?? DateTime.now(),
+      createdAt: OrganizationModel._parseDateTime(json['created_at']) ?? DateTime.now(),
+      organizationName: json['organization_name'] as String?,
       departmentName: json['department_name'] as String?,
-      inviterFirstName: json['inviter_first_name'] as String?,
-      inviterLastName: json['inviter_last_name'] as String?,
+      inviterId: json['inviter_id'] as String?,
+      inviterName: json['inviter_name'] as String?,
     );
-  }
-
-  String? get inviterFullName {
-    if (inviterFirstName != null && inviterLastName != null) {
-      return '$inviterFirstName $inviterLastName';
-    }
-    return inviterFirstName ?? inviterLastName;
-  }
-
-  String get location {
-    final parts = <String>[];
-    if (city != null) parts.add(city!);
-    if (state != null) parts.add(state!);
-    return parts.join(', ');
   }
 
   bool get isExpired => DateTime.now().isAfter(expiresAt);

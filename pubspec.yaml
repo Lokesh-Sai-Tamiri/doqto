@@ -65,6 +65,9 @@ dependencies:
   # Speech to Text
   speech_to_text: ^7.0.0
 
+  # Socket.io Client for real-time features
+  socket_io_client: ^2.0.3+1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

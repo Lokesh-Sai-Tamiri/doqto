@@ -1,15 +1,17 @@
 /// ============================================================================
 /// ORGANIZATION REPOSITORY - HIPAA Compliant
 /// ============================================================================
+///
+/// Handles all organization operations via the HymnChat API backend.
+/// ============================================================================
 library;
 
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../core/services/supabase_service.dart';
+import '../../../../core/services/api_service.dart';
 import '../../../../core/config/app_config.dart';
 import '../models/organization_model.dart';
 
 class OrganizationRepository {
-  final SupabaseClient _supabase = SupabaseService.client;
+  final ApiService _api = ApiService();
 
   // ============================================================================
   // MY ORGANIZATIONS
@@ -18,28 +20,25 @@ class OrganizationRepository {
   /// Get user's organizations
   Future<List<MyOrganizationModel>> getMyOrganizations() async {
     try {
-      if (AppConfig.debugMode) {
-        print('🏢 Fetching user organizations...');
+      _log('🏢 Fetching user organizations...');
+
+      final response = await _api.get<List<dynamic>>(
+        '/organizations/my',
+        fromJson: (json) => json as List<dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        final orgs = response.data!
+            .map((json) => MyOrganizationModel.fromJson(json as Map<String, dynamic>))
+            .toList();
+
+        _log('✅ Organizations loaded: ${orgs.length}');
+        return orgs;
       }
 
-      final response = await _supabase
-          .from('my_organizations')
-          .select()
-          .order('organization_name');
-
-      final orgs = (response as List)
-          .map((json) => MyOrganizationModel.fromJson(json))
-          .toList();
-
-      if (AppConfig.debugMode) {
-        print('✅ Organizations loaded: ${orgs.length}');
-      }
-
-      return orgs;
+      return [];
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error fetching organizations: $e');
-      }
+      _log('❌ Error fetching organizations: $e');
       rethrow;
     }
   }
@@ -47,19 +46,18 @@ class OrganizationRepository {
   /// Get single organization details
   Future<OrganizationModel?> getOrganization(String organizationId) async {
     try {
-      final response = await _supabase
-          .from('organizations')
-          .select()
-          .eq('id', organizationId)
-          .maybeSingle();
+      final response = await _api.get<Map<String, dynamic>>(
+        '/organizations/$organizationId',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      if (response == null) return null;
-
-      return OrganizationModel.fromJson(response);
-    } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error fetching organization: $e');
+      if (response.success && response.data != null) {
+        return OrganizationModel.fromJson(response.data!);
       }
+
+      return null;
+    } catch (e) {
+      _log('❌ Error fetching organization: $e');
       rethrow;
     }
   }
@@ -71,58 +69,63 @@ class OrganizationRepository {
   /// Get departments for an organization
   Future<List<DepartmentModel>> getDepartments(String organizationId) async {
     try {
-      if (AppConfig.debugMode) {
-        print('🏬 Fetching departments for org: $organizationId');
+      _log('🏬 Fetching departments for org: $organizationId');
+
+      final response = await _api.get<List<dynamic>>(
+        '/organizations/$organizationId/departments',
+        fromJson: (json) => json as List<dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        final depts = response.data!
+            .map((json) => DepartmentModel.fromJson(json as Map<String, dynamic>))
+            .toList();
+
+        _log('✅ Departments loaded: ${depts.length}');
+        return depts;
       }
 
-      final response = await _supabase
-          .from('organization_departments')
-          .select()
-          .eq('organization_id', organizationId)
-          .order('display_order')
-          .order('name');
-
-      final depts = (response as List)
-          .map((json) => DepartmentModel.fromJson(json))
-          .toList();
-
-      if (AppConfig.debugMode) {
-        print('✅ Departments loaded: ${depts.length}');
-      }
-
-      return depts;
+      return [];
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error fetching departments: $e');
-      }
+      _log('❌ Error fetching departments: $e');
       rethrow;
     }
   }
 
   /// Create a new department
-  Future<String> createDepartment({
+  Future<DepartmentModel> createDepartment({
     required String organizationId,
     required String name,
     String? description,
     String? color,
+    String? icon,
+    int displayOrder = 0,
+    String? headUserId,
   }) async {
     try {
-      if (AppConfig.debugMode) {
-        print('➕ Creating department: $name');
+      _log('➕ Creating department: $name');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/organizations/$organizationId/departments',
+        body: {
+          'name': name,
+          if (description != null) 'description': description,
+          if (color != null) 'color': color,
+          if (icon != null) 'icon': icon,
+          'display_order': displayOrder,
+          if (headUserId != null) 'head_user_id': headUserId,
+        },
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        _log('✅ Department created');
+        return DepartmentModel.fromJson(response.data!);
       }
 
-      final response = await _supabase.rpc('create_department', params: {
-        'p_organization_id': organizationId,
-        'p_name': name,
-        'p_description': description,
-        'p_color': color,
-      });
-
-      return response as String;
+      throw Exception(response.error ?? 'Failed to create department');
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error creating department: $e');
-      }
+      _log('❌ Error creating department: $e');
       rethrow;
     }
   }
@@ -134,30 +137,25 @@ class OrganizationRepository {
   /// Get colleagues in an organization
   Future<List<ColleagueModel>> getColleagues(String organizationId) async {
     try {
-      if (AppConfig.debugMode) {
-        print('👥 Fetching colleagues for org: $organizationId');
+      _log('👥 Fetching colleagues for org: $organizationId');
+
+      final response = await _api.get<List<dynamic>>(
+        '/organizations/$organizationId/colleagues',
+        fromJson: (json) => json as List<dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        final colleagues = response.data!
+            .map((json) => ColleagueModel.fromJson(json as Map<String, dynamic>))
+            .toList();
+
+        _log('✅ Colleagues loaded: ${colleagues.length}');
+        return colleagues;
       }
 
-      final response = await _supabase
-          .from('organization_colleagues')
-          .select()
-          .eq('organization_id', organizationId)
-          .order('department_name')
-          .order('first_name');
-
-      final colleagues = (response as List)
-          .map((json) => ColleagueModel.fromJson(json))
-          .toList();
-
-      if (AppConfig.debugMode) {
-        print('✅ Colleagues loaded: ${colleagues.length}');
-      }
-
-      return colleagues;
+      return [];
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error fetching colleagues: $e');
-      }
+      _log('❌ Error fetching colleagues: $e');
       rethrow;
     }
   }
@@ -168,20 +166,21 @@ class OrganizationRepository {
     String query,
   ) async {
     try {
-      final response = await _supabase
-          .from('organization_colleagues')
-          .select()
-          .eq('organization_id', organizationId)
-          .or('first_name.ilike.%$query%,last_name.ilike.%$query%,display_name.ilike.%$query%,title.ilike.%$query%,specialization.ilike.%$query%')
-          .order('first_name');
+      final response = await _api.get<List<dynamic>>(
+        '/organizations/$organizationId/colleagues/search',
+        queryParams: {'q': query},
+        fromJson: (json) => json as List<dynamic>,
+      );
 
-      return (response as List)
-          .map((json) => ColleagueModel.fromJson(json))
-          .toList();
-    } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error searching colleagues: $e');
+      if (response.success && response.data != null) {
+        return response.data!
+            .map((json) => ColleagueModel.fromJson(json as Map<String, dynamic>))
+            .toList();
       }
+
+      return [];
+    } catch (e) {
+      _log('❌ Error searching colleagues: $e');
       rethrow;
     }
   }
@@ -191,9 +190,9 @@ class OrganizationRepository {
     String organizationId,
   ) async {
     final colleagues = await getColleagues(organizationId);
-    
+
     final Map<String?, List<ColleagueModel>> grouped = {};
-    
+
     for (final colleague in colleagues) {
       final deptName = colleague.departmentName;
       if (!grouped.containsKey(deptName)) {
@@ -201,8 +200,32 @@ class OrganizationRepository {
       }
       grouped[deptName]!.add(colleague);
     }
-    
+
     return grouped;
+  }
+
+  /// Get colleagues in a specific department
+  Future<List<ColleagueModel>> getColleaguesInDepartment(
+    String organizationId,
+    String departmentId,
+  ) async {
+    try {
+      final response = await _api.get<List<dynamic>>(
+        '/organizations/$organizationId/departments/$departmentId/colleagues',
+        fromJson: (json) => json as List<dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        return response.data!
+            .map((json) => ColleagueModel.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+
+      return [];
+    } catch (e) {
+      _log('❌ Error fetching department colleagues: $e');
+      rethrow;
+    }
   }
 
   // ============================================================================
@@ -210,35 +233,48 @@ class OrganizationRepository {
   // ============================================================================
 
   /// Create a new organization
-  Future<String> createOrganization({
+  Future<OrganizationModel> createOrganization({
     required String name,
-    String type = 'hospital',
+    OrganizationType type = OrganizationType.hospital,
     String? description,
+    String? phone,
+    String? email,
+    String? website,
     String? city,
     String? state,
+    bool isPublic = true,
   }) async {
     try {
-      if (AppConfig.debugMode) {
-        print('🏢 Creating organization: $name');
+      _log('🏢 Creating organization: $name');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/organizations',
+        body: {
+          'name': name,
+          'type': type.name,
+          if (description != null) 'description': description,
+          'contact': {
+            if (phone != null) 'phone': phone,
+            if (email != null) 'email': email,
+            if (website != null) 'website': website,
+          },
+          'address': {
+            if (city != null) 'city': city,
+            if (state != null) 'state': state,
+          },
+          'is_public': isPublic,
+        },
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        _log('✅ Organization created');
+        return OrganizationModel.fromJson(response.data!);
       }
 
-      final response = await _supabase.rpc('create_organization', params: {
-        'p_name': name,
-        'p_type': type,
-        'p_description': description,
-        'p_city': city,
-        'p_state': state,
-      });
-
-      if (AppConfig.debugMode) {
-        print('✅ Organization created: $response');
-      }
-
-      return response as String;
+      throw Exception(response.error ?? 'Failed to create organization');
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error creating organization: $e');
-      }
+      _log('❌ Error creating organization: $e');
       rethrow;
     }
   }
@@ -246,19 +282,16 @@ class OrganizationRepository {
   /// Leave an organization
   Future<bool> leaveOrganization(String organizationId) async {
     try {
-      if (AppConfig.debugMode) {
-        print('🚪 Leaving organization: $organizationId');
-      }
+      _log('🚪 Leaving organization: $organizationId');
 
-      final response = await _supabase.rpc('leave_organization', params: {
-        'p_organization_id': organizationId,
-      });
+      final response = await _api.delete<Map<String, dynamic>>(
+        '/organizations/$organizationId/leave',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return response as bool;
+      return response.success;
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error leaving organization: $e');
-      }
+      _log('❌ Error leaving organization: $e');
       rethrow;
     }
   }
@@ -270,84 +303,80 @@ class OrganizationRepository {
   /// Get pending invites for current user
   Future<List<OrganizationInviteModel>> getMyPendingInvites() async {
     try {
-      if (AppConfig.debugMode) {
-        print('📬 Fetching pending invites...');
+      _log('📬 Fetching pending invites...');
+
+      final response = await _api.get<List<dynamic>>(
+        '/organizations/invites/pending',
+        fromJson: (json) => json as List<dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        final invites = response.data!
+            .map((json) => OrganizationInviteModel.fromJson(json as Map<String, dynamic>))
+            .toList();
+
+        _log('✅ Pending invites loaded: ${invites.length}');
+        return invites;
       }
 
-      final response = await _supabase
-          .from('my_pending_invites')
-          .select()
-          .order('created_at', ascending: false);
-
-      final invites = (response as List)
-          .map((json) => OrganizationInviteModel.fromJson(json))
-          .toList();
-
-      if (AppConfig.debugMode) {
-        print('✅ Pending invites loaded: ${invites.length}');
-      }
-
-      return invites;
+      return [];
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error fetching invites: $e');
-      }
+      _log('❌ Error fetching invites: $e');
       rethrow;
     }
   }
 
   /// Create an invite code
-  Future<String> createInvite({
+  Future<OrganizationInviteModel> createInvite({
     required String organizationId,
-    String role = 'member',
+    MemberRole role = MemberRole.member,
     String? departmentId,
-    String? email,
+    int expiresInDays = 7,
   }) async {
     try {
-      if (AppConfig.debugMode) {
-        print('📧 Creating invite for org: $organizationId');
+      _log('📧 Creating invite for org: $organizationId');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/organizations/$organizationId/invites',
+        body: {
+          'role': role.name,
+          if (departmentId != null) 'department_id': departmentId,
+          'expires_in_days': expiresInDays,
+        },
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        _log('✅ Invite created');
+        return OrganizationInviteModel.fromJson(response.data!);
       }
 
-      final response = await _supabase.rpc('create_organization_invite', params: {
-        'p_organization_id': organizationId,
-        'p_role': role,
-        'p_department_id': departmentId,
-        'p_email': email,
-      });
-
-      if (AppConfig.debugMode) {
-        print('✅ Invite code created: $response');
-      }
-
-      return response as String;
+      throw Exception(response.error ?? 'Failed to create invite');
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error creating invite: $e');
-      }
+      _log('❌ Error creating invite: $e');
       rethrow;
     }
   }
 
   /// Join organization using invite code
-  Future<String> joinByInviteCode(String inviteCode) async {
+  Future<MyOrganizationModel> joinByInviteCode(String inviteCode) async {
     try {
-      if (AppConfig.debugMode) {
-        print('🔑 Joining with code: $inviteCode');
+      _log('🔑 Joining with code: $inviteCode');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/organizations/invites/join',
+        body: {'invite_code': inviteCode},
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        _log('✅ Joined organization');
+        return MyOrganizationModel.fromJson(response.data!);
       }
 
-      final response = await _supabase.rpc('join_organization_by_code', params: {
-        'p_invite_code': inviteCode,
-      });
-
-      if (AppConfig.debugMode) {
-        print('✅ Joined organization: $response');
-      }
-
-      return response as String;
+      throw Exception(response.error ?? 'Failed to join organization');
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error joining organization: $e');
-      }
+      _log('❌ Error joining organization: $e');
       rethrow;
     }
   }
@@ -358,21 +387,69 @@ class OrganizationRepository {
 
   /// Update member's department
   Future<bool> updateMemberDepartment({
-    required String memberId,
-    required String departmentId,
+    required String membershipId,
+    String? departmentId,
   }) async {
     try {
-      final response = await _supabase.rpc('update_member_department', params: {
-        'p_member_id': memberId,
-        'p_department_id': departmentId,
-      });
+      final response = await _api.patch<Map<String, dynamic>>(
+        '/organizations/memberships/$membershipId/department',
+        body: {'department_id': departmentId},
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return response as bool;
+      return response.success;
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error updating member department: $e');
-      }
+      _log('❌ Error updating member department: $e');
       rethrow;
     }
   }
+
+  /// Get logo upload URL
+  Future<LogoUploadInfo> getLogoUploadUrl(String organizationId, String filename) async {
+    try {
+      _log('📤 Getting logo upload URL for: $filename');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/organizations/$organizationId/logo',
+        queryParams: {'filename': filename},
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        return LogoUploadInfo(
+          uploadUrl: response.data!['upload_url'] as String,
+          key: response.data!['key'] as String,
+          finalUrl: response.data!['final_url'] as String,
+        );
+      }
+
+      throw Exception(response.error ?? 'Failed to get upload URL');
+    } catch (e) {
+      _log('❌ Error getting logo upload URL: $e');
+      rethrow;
+    }
+  }
+
+  void _log(String message) {
+    if (AppConfig.debugMode) {
+      assert(() {
+        // ignore: avoid_print
+        print('[OrganizationRepository] $message');
+        return true;
+      }());
+    }
+  }
+}
+
+/// Logo upload information
+class LogoUploadInfo {
+  final String uploadUrl;
+  final String key;
+  final String finalUrl;
+
+  LogoUploadInfo({
+    required this.uploadUrl,
+    required this.key,
+    required this.finalUrl,
+  });
 }

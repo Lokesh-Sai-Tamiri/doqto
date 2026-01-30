@@ -132,6 +132,31 @@ class AppConfig {
   static const int apiTimeoutSeconds = 60;
 
   // ============================================================================
+  // HYMNCHAT API BACKEND CONFIGURATION
+  // ============================================================================
+
+  /// HymnChat API Backend base URL
+  /// For local development: 'http://localhost:8000'
+  /// For production: Update to your deployed backend URL
+  static const String apiBaseUrl = 'http://localhost:8000';
+
+  /// Socket.io server URL (same as API for combined deployment)
+  static const String socketUrl = 'http://localhost:8000';
+
+  /// API version prefix
+  static const String apiVersion = '/api/v1';
+
+  /// API request timeout in seconds
+  static const int apiRequestTimeoutSeconds = 30;
+
+  /// Socket.io reconnection settings
+  static const int socketReconnectAttempts = 5;
+  static const int socketReconnectDelayMs = 1000;
+
+  /// Enable API debug logging
+  static const bool apiDebugMode = true;
+
+  // ============================================================================
   // PROFILE CONFIGURATION
   // ============================================================================
 

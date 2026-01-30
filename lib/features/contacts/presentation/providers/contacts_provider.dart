@@ -4,7 +4,6 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/models/connection_model.dart';
 import '../../data/repositories/contacts_repository.dart';
 
@@ -280,18 +279,16 @@ class PendingRequestsNotifier extends Notifier<PendingRequestsState> {
 
   Future<bool> acceptRequest(String connectionId) async {
     try {
-      final success = await _repository.acceptConnectionRequest(connectionId);
-      if (success) {
-        // Remove from local state
-        state = state.copyWith(
-          requests: state.requests
-              .where((r) => r.connectionId != connectionId)
-              .toList(),
-        );
-        // Refresh network
-        ref.read(networkProvider.notifier).loadNetwork();
-      }
-      return success;
+      final connection = await _repository.acceptConnectionRequest(connectionId);
+      // Remove from local state
+      state = state.copyWith(
+        requests: state.requests
+            .where((r) => r.connectionId != connectionId)
+            .toList(),
+      );
+      // Refresh network
+      ref.read(networkProvider.notifier).loadNetwork();
+      return true;
     } catch (e) {
       state = state.copyWith(errorMessage: 'Failed to accept request');
       return false;
@@ -329,25 +326,20 @@ final pendingRequestsProvider =
 // REAL-TIME SUBSCRIPTION PROVIDER
 // ============================================================================
 
-final contactsRealtimeProvider = Provider<RealtimeChannel?>((ref) {
+/// Initializes real-time connection subscriptions via Socket.io
+final contactsRealtimeProvider = Provider<void>((ref) {
   final repository = ref.watch(contactsRepositoryProvider);
-  
-  try {
-    final channel = repository.subscribeToConnections(
-      onNetworkUpdate: (contacts) {
-        ref.read(networkProvider.notifier).updateContacts(contacts);
-      },
-      onPendingUpdate: (requests) {
-        ref.read(pendingRequestsProvider.notifier).updateRequests(requests);
-      },
-    );
 
-    ref.onDispose(() {
-      repository.unsubscribeFromConnections(channel);
-    });
+  // Subscribe to connection changes
+  repository.subscribeToConnections(
+    onNetworkUpdate: (contacts) {
+      ref.read(networkProvider.notifier).updateContacts(contacts);
+    },
+    onPendingUpdate: (requests) {
+      ref.read(pendingRequestsProvider.notifier).updateRequests(requests);
+    },
+  );
 
-    return channel;
-  } catch (e) {
-    return null;
-  }
+  // Note: Socket.io subscriptions are managed by the SocketService singleton
+  // No explicit disposal needed here as the socket handles it
 });

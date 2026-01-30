@@ -5,6 +5,7 @@ library;
 
 class ProfileModel {
   final String id;
+  final String? userId; // Supabase user_id (for API backend)
   final String? firstName;
   final String? lastName;
   final String? displayName;
@@ -28,6 +29,7 @@ class ProfileModel {
 
   const ProfileModel({
     required this.id,
+    this.userId,
     this.firstName,
     this.lastName,
     this.displayName,
@@ -50,10 +52,14 @@ class ProfileModel {
     this.updatedAt,
   });
 
-  // From JSON
+  // From JSON - handles both flat (Supabase) and nested (API) address formats
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
+    // Handle nested address object from API backend
+    final address = json['address'] as Map<String, dynamic>?;
+
     return ProfileModel(
-      id: json['id'] as String,
+      id: json['id'] as String? ?? json['user_id'] as String,
+      userId: json['user_id'] as String?,
       firstName: json['first_name'] as String?,
       lastName: json['last_name'] as String?,
       displayName: json['display_name'] as String?,
@@ -63,12 +69,13 @@ class ProfileModel {
       specialization: json['specialization'] as String?,
       clinicName: json['clinic_name'] as String?,
       yearsOfExperience: json['years_of_experience'] as int?,
-      addressLine1: json['address_line1'] as String?,
-      addressLine2: json['address_line2'] as String?,
-      city: json['city'] as String?,
-      state: json['state'] as String?,
-      postalCode: json['postal_code'] as String?,
-      country: json['country'] as String?,
+      // Support both flat and nested address formats
+      addressLine1: address?['line1'] as String? ?? json['address_line1'] as String?,
+      addressLine2: address?['line2'] as String? ?? json['address_line2'] as String?,
+      city: address?['city'] as String? ?? json['city'] as String?,
+      state: address?['state'] as String? ?? json['state'] as String?,
+      postalCode: address?['postal_code'] as String? ?? json['postal_code'] as String?,
+      country: address?['country'] as String? ?? json['country'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       bio: json['bio'] as String?,
       profileCompleted: json['profile_completed'] as bool? ?? false,
@@ -81,8 +88,34 @@ class ProfileModel {
     );
   }
 
-  // To JSON
+  // To JSON for API backend (nested address format)
   Map<String, dynamic> toJson() {
+    return {
+      'first_name': firstName,
+      'last_name': lastName,
+      'display_name': displayName,
+      'email': email,
+      'phone': phone,
+      'doctor_id': doctorId,
+      'specialization': specialization,
+      'clinic_name': clinicName,
+      'years_of_experience': yearsOfExperience,
+      'address': {
+        'line1': addressLine1,
+        'line2': addressLine2,
+        'city': city,
+        'state': state,
+        'postal_code': postalCode,
+        'country': country,
+      },
+      'avatar_url': avatarUrl,
+      'bio': bio,
+      'profile_completed': profileCompleted,
+    };
+  }
+
+  // To JSON for legacy Supabase format (flat address)
+  Map<String, dynamic> toJsonFlat() {
     return {
       'id': id,
       'first_name': firstName,
@@ -132,6 +165,7 @@ class ProfileModel {
   // Copy with
   ProfileModel copyWith({
     String? id,
+    String? userId,
     String? firstName,
     String? lastName,
     String? displayName,
@@ -155,6 +189,7 @@ class ProfileModel {
   }) {
     return ProfileModel(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
       displayName: displayName ?? this.displayName,

@@ -223,6 +223,8 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
   }
 
   Widget _buildChatTile(ConversationModel conv) {
+    final state = ref.watch(conversationsProvider);
+    final isTyping = state.isTypingIn(conv.conversationId);
     final isVoice = conv.lastMessageType == MessageType.audio;
     final isImage = conv.lastMessageType == MessageType.image;
 
@@ -359,36 +361,46 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: Row(
-                              children: [
-                                if (isVoice)
-                                  const Padding(
-                                    padding: EdgeInsets.only(right: 6),
-                                    child: Icon(Icons.mic, size: 16, color: AppColors.textSecondary),
-                                  ),
-                                if (isImage)
-                                  const Padding(
-                                    padding: EdgeInsets.only(right: 6),
-                                    child: Icon(Icons.image, size: 16, color: AppColors.textSecondary),
-                                  ),
-                                Expanded(
-                                  child: Text(
-                                    conv.lastMessageText ?? 'Start a conversation',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                            child: isTyping
+                                ? const Text(
+                                    'typing...',
                                     style: TextStyle(
-                                      color: conv.unreadCount > 0
-                                          ? AppColors.textPrimary
-                                          : AppColors.textSecondary,
+                                      color: AppColors.primary,
                                       fontSize: 14,
-                                      fontWeight: conv.unreadCount > 0
-                                          ? FontWeight.w500
-                                          : FontWeight.normal,
+                                      fontStyle: FontStyle.italic,
+                                      fontWeight: FontWeight.w500,
                                     ),
+                                  )
+                                : Row(
+                                    children: [
+                                      if (isVoice)
+                                        const Padding(
+                                          padding: EdgeInsets.only(right: 6),
+                                          child: Icon(Icons.mic, size: 16, color: AppColors.textSecondary),
+                                        ),
+                                      if (isImage)
+                                        const Padding(
+                                          padding: EdgeInsets.only(right: 6),
+                                          child: Icon(Icons.image, size: 16, color: AppColors.textSecondary),
+                                        ),
+                                      Expanded(
+                                        child: Text(
+                                          conv.lastMessageText ?? 'Start a conversation',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: conv.unreadCount > 0
+                                                ? AppColors.textPrimary
+                                                : AppColors.textSecondary,
+                                            fontSize: 14,
+                                            fontWeight: conv.unreadCount > 0
+                                                ? FontWeight.w500
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ],
-                            ),
                           ),
                           if (conv.unreadCount > 0)
                             Container(

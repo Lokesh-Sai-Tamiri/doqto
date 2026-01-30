@@ -98,24 +98,24 @@ class MyOrganizationsNotifier extends Notifier<MyOrganizationsState> {
 
   Future<String?> createOrganization({
     required String name,
-    String type = 'hospital',
+    OrganizationType type = OrganizationType.hospital,
     String? description,
     String? city,
     String? state,
   }) async {
     try {
-      final orgId = await _repository.createOrganization(
+      final org = await _repository.createOrganization(
         name: name,
         type: type,
         description: description,
         city: city,
         state: state,
       );
-      
+
       // Refresh organizations list
       await loadOrganizations();
-      
-      return orgId;
+
+      return org.id;
     } catch (e) {
       this.state = this.state.copyWith(
         errorMessage: 'Failed to create organization: ${e.toString()}',
@@ -145,9 +145,9 @@ class MyOrganizationsNotifier extends Notifier<MyOrganizationsState> {
 
   Future<String?> joinByCode(String inviteCode) async {
     try {
-      final memberId = await _repository.joinByInviteCode(inviteCode);
+      final membership = await _repository.joinByInviteCode(inviteCode);
       await loadOrganizations();
-      return memberId;
+      return membership.organizationId;
     } catch (e) {
       state = state.copyWith(
         errorMessage: e.toString().contains('Invalid')
@@ -349,15 +349,15 @@ class DepartmentsNotifier extends Notifier<DepartmentsState> {
     if (state.organizationId == null) return null;
 
     try {
-      final deptId = await _repository.createDepartment(
+      final dept = await _repository.createDepartment(
         organizationId: state.organizationId!,
         name: name,
         description: description,
         color: color,
       );
-      
+
       await loadDepartments(state.organizationId!);
-      return deptId;
+      return dept.id;
     } catch (e) {
       state = state.copyWith(
         errorMessage: 'Failed to create department: ${e.toString()}',
@@ -429,18 +429,16 @@ class InvitesNotifier extends Notifier<InvitesState> {
 
   Future<String?> createInvite({
     required String organizationId,
-    String role = 'member',
+    MemberRole role = MemberRole.member,
     String? departmentId,
-    String? email,
   }) async {
     try {
-      final code = await _repository.createInvite(
+      final invite = await _repository.createInvite(
         organizationId: organizationId,
         role: role,
         departmentId: departmentId,
-        email: email,
       );
-      return code;
+      return invite.inviteCode;
     } catch (e) {
       state = state.copyWith(
         errorMessage: 'Failed to create invite: ${e.toString()}',

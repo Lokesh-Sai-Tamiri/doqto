@@ -31,6 +31,14 @@ enum ReportReason {
   other,
 }
 
+/// Helper function to safely parse DateTime from various formats
+DateTime? _parseDateTime(dynamic value) {
+  if (value == null) return null;
+  if (value is DateTime) return value;
+  if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
 /// Messaging preferences model
 class MessagingPreferencesModel {
   final String userId;
@@ -73,8 +81,8 @@ class MessagingPreferencesModel {
       messageNotifications: json['message_notifications'] as bool? ?? true,
       soundEnabled: json['sound_enabled'] as bool? ?? true,
       vibrationEnabled: json['vibration_enabled'] as bool? ?? true,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: _parseDateTime(json['created_at']) ?? DateTime.now(),
+      updatedAt: _parseDateTime(json['updated_at']) ?? DateTime.now(),
     );
   }
 
@@ -121,7 +129,7 @@ class MessagingPreferencesModel {
   }
 }
 
-/// Conversation model (from my_conversations view)
+/// Conversation model (supports both Supabase view and API response formats)
 class ConversationModel {
   final String conversationId;
   final String? lastMessageText;
@@ -131,7 +139,7 @@ class ConversationModel {
   final String? blockedBy;
   final int? disappearingHours;
   final DateTime createdAt;
-  
+
   // Other user info
   final String otherUserId;
   final String? firstName;
@@ -139,15 +147,19 @@ class ConversationModel {
   final String? displayName;
   final String? avatarUrl;
   final String? specialization;
-  
+
   // My settings
   final int unreadCount;
   final bool isMuted;
   final bool isArchived;
   final bool isPinned;
-  
+
   // Other user's audio save preference
   final bool otherAllowsAudioSave;
+
+  // Block status from API
+  final bool isBlockedByMe;
+  final bool isBlockedByOther;
 
   const ConversationModel({
     required this.conversationId,
@@ -169,20 +181,32 @@ class ConversationModel {
     this.isArchived = false,
     this.isPinned = false,
     this.otherAllowsAudioSave = false,
+    this.isBlockedByMe = false,
+    this.isBlockedByOther = false,
   });
 
   factory ConversationModel.fromJson(Map<String, dynamic> json) {
+    // Support both Supabase view format and API format
+    final isApiFormat = json.containsKey('id') && json.containsKey('participants');
+
+    if (isApiFormat) {
+      return ConversationModel._fromApiJson(json);
+    }
+
+    return ConversationModel._fromSupabaseJson(json);
+  }
+
+  // Parse from Supabase my_conversations view format
+  factory ConversationModel._fromSupabaseJson(Map<String, dynamic> json) {
     return ConversationModel(
       conversationId: json['conversation_id'] as String,
       lastMessageText: json['last_message_text'] as String?,
       lastMessageType: _parseMessageType(json['last_message_type'] as String?),
-      lastMessageAt: json['last_message_at'] != null
-          ? DateTime.parse(json['last_message_at'] as String)
-          : null,
+      lastMessageAt: _parseDateTime(json['last_message_at']),
       lastMessageSenderId: json['last_message_sender_id'] as String?,
       blockedBy: json['blocked_by'] as String?,
       disappearingHours: json['disappearing_hours'] as int?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: _parseDateTime(json['created_at']) ?? DateTime.now(),
       otherUserId: json['other_user_id'] as String,
       firstName: json['first_name'] as String?,
       lastName: json['last_name'] as String?,
@@ -194,6 +218,39 @@ class ConversationModel {
       isArchived: json['is_archived'] as bool? ?? false,
       isPinned: json['is_pinned'] as bool? ?? false,
       otherAllowsAudioSave: json['other_allows_audio_save'] as bool? ?? false,
+    );
+  }
+
+  // Parse from API backend format
+  factory ConversationModel._fromApiJson(Map<String, dynamic> json) {
+    // Extract last message info
+    final lastMessage = json['last_message'] as Map<String, dynamic>?;
+
+    // Extract other user info
+    final otherUser = json['other_user'] as Map<String, dynamic>?;
+
+    return ConversationModel(
+      conversationId: json['id'] as String,
+      lastMessageText: lastMessage?['text'] as String?,
+      lastMessageType: _parseMessageType(lastMessage?['type'] as String?),
+      lastMessageAt: _parseDateTime(lastMessage?['at']),
+      lastMessageSenderId: lastMessage?['sender_id'] as String?,
+      blockedBy: null, // Handled by isBlockedByMe/isBlockedByOther
+      disappearingHours: null, // Stored in settings
+      createdAt: _parseDateTime(json['created_at']) ?? DateTime.now(),
+      otherUserId: otherUser?['user_id'] as String? ?? '',
+      firstName: otherUser?['first_name'] as String?,
+      lastName: otherUser?['last_name'] as String?,
+      displayName: otherUser?['display_name'] as String?,
+      avatarUrl: otherUser?['avatar_url'] as String?,
+      specialization: otherUser?['specialization'] as String?,
+      unreadCount: json['unread_count'] as int? ?? 0,
+      isMuted: false, // Extract from settings if needed
+      isArchived: false,
+      isPinned: false,
+      otherAllowsAudioSave: false,
+      isBlockedByMe: json['is_blocked'] as bool? ?? false,
+      isBlockedByOther: json['blocked_by_other'] as bool? ?? false,
     );
   }
 
@@ -221,7 +278,7 @@ class ConversationModel {
     return '?';
   }
 
-  bool get isBlocked => blockedBy != null;
+  bool get isBlocked => blockedBy != null || isBlockedByMe || isBlockedByOther;
 
   static MessageType _parseMessageType(String? type) {
     switch (type) {
@@ -288,38 +345,38 @@ class MessageModel {
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
+    // Support both Supabase and API backend formats
+    final fileInfo = json['file'] as Map<String, dynamic>?;
+    final audioInfo = json['audio'] as Map<String, dynamic>?;
+
+    final createdAt = _parseDateTime(json['created_at']) ?? DateTime.now();
+
     return MessageModel(
       id: json['id'] as String,
       conversationId: json['conversation_id'] as String,
       senderId: json['sender_id'] as String,
       messageType: ConversationModel._parseMessageType(json['message_type'] as String?),
       content: json['content'] as String?,
-      fileUrl: json['file_url'] as String?,
-      fileName: json['file_name'] as String?,
-      fileSize: json['file_size'] as int?,
-      fileMimeType: json['file_mime_type'] as String?,
-      audioDurationSeconds: json['audio_duration_seconds'] as int?,
-      audioWaveform: json['audio_waveform'] as Map<String, dynamic>?,
+      // Support both flat and nested file formats
+      fileUrl: fileInfo?['url'] as String? ?? json['file_url'] as String?,
+      fileName: fileInfo?['name'] as String? ?? json['file_name'] as String?,
+      fileSize: fileInfo?['size'] as int? ?? json['file_size'] as int?,
+      fileMimeType: fileInfo?['mime_type'] as String? ?? json['file_mime_type'] as String?,
+      // Support both flat and nested audio formats
+      audioDurationSeconds: audioInfo?['duration_seconds'] as int? ?? json['audio_duration_seconds'] as int?,
+      audioWaveform: audioInfo?['waveform'] != null
+          ? {'data': audioInfo!['waveform']}
+          : json['audio_waveform'] as Map<String, dynamic>?,
       savedBy: json['saved_by'] as String?,
-      savedAt: json['saved_at'] != null
-          ? DateTime.parse(json['saved_at'] as String)
-          : null,
+      savedAt: _parseDateTime(json['saved_at']),
       status: _parseStatus(json['status'] as String?),
-      deliveredAt: json['delivered_at'] != null
-          ? DateTime.parse(json['delivered_at'] as String)
-          : null,
-      readAt: json['read_at'] != null
-          ? DateTime.parse(json['read_at'] as String)
-          : null,
-      disappearsAt: json['disappears_at'] != null
-          ? DateTime.parse(json['disappears_at'] as String)
-          : null,
-      viewedAt: json['viewed_at'] != null
-          ? DateTime.parse(json['viewed_at'] as String)
-          : null,
+      deliveredAt: _parseDateTime(json['delivered_at']),
+      readAt: _parseDateTime(json['read_at']),
+      disappearsAt: _parseDateTime(json['disappears_at']),
+      viewedAt: _parseDateTime(json['viewed_at']),
       replyToId: json['reply_to_id'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: createdAt,
+      updatedAt: _parseDateTime(json['updated_at']) ?? createdAt,
     );
   }
 
@@ -408,10 +465,10 @@ class BlockedUserModel {
 
   factory BlockedUserModel.fromJson(Map<String, dynamic> json) {
     return BlockedUserModel(
-      blockId: json['block_id'] as String,
+      blockId: json['block_id'] as String? ?? json['id'] as String,
       blockedId: json['blocked_id'] as String,
       reason: json['reason'] as String?,
-      blockedAt: DateTime.parse(json['blocked_at'] as String),
+      blockedAt: _parseDateTime(json['blocked_at']) ?? DateTime.now(),
       firstName: json['first_name'] as String?,
       lastName: json['last_name'] as String?,
       displayName: json['display_name'] as String?,

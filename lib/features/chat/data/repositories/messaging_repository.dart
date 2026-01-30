@@ -1,17 +1,24 @@
 /// ============================================================================
 /// MESSAGING REPOSITORY - HIPAA Compliant
 /// ============================================================================
+///
+/// Handles messaging operations via the HymnChat API backend.
+/// Uses Socket.io for real-time message delivery and typing indicators.
+/// ============================================================================
 library;
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
+import '../../../../core/services/api_service.dart';
+import '../../../../core/services/socket_service.dart';
 import '../../../../core/services/supabase_service.dart';
 import '../../../../core/config/app_config.dart';
 import '../models/messaging_models.dart';
 
 class MessagingRepository {
-  final SupabaseClient _supabase = SupabaseService.client;
+  final ApiService _api = ApiService();
+  final SocketService _socket = SocketService();
 
-  String? get currentUserId => _supabase.auth.currentUser?.id;
+  String? get currentUserId => SupabaseService.currentUser?.id;
 
   // ============================================================================
   // CONVERSATIONS
@@ -20,33 +27,30 @@ class MessagingRepository {
   /// Get all conversations for current user
   Future<List<ConversationModel>> getConversations({bool includeArchived = false}) async {
     try {
-      if (AppConfig.debugMode) {
-        print('💬 Fetching conversations...');
+      _log('💬 Fetching conversations...');
+
+      final response = await _api.get<List<dynamic>>(
+        '/conversations',
+        fromJson: (json) => json as List<dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        var convs = response.data!
+            .map((json) => ConversationModel.fromJson(json as Map<String, dynamic>))
+            .toList();
+
+        if (!includeArchived) {
+          convs = convs.where((c) => !c.isArchived).toList();
+        }
+
+        _log('✅ Conversations loaded: ${convs.length}');
+        return convs;
       }
 
-      var query = _supabase
-          .from('my_conversations')
-          .select();
-      
-      if (!includeArchived) {
-        query = query.eq('is_archived', false);
-      }
-
-      final response = await query.order('last_message_at', ascending: false);
-
-      final convs = (response as List)
-          .map((json) => ConversationModel.fromJson(json))
-          .toList();
-
-      if (AppConfig.debugMode) {
-        print('✅ Conversations loaded: ${convs.length}');
-      }
-
-      return convs;
+      _log('⚠️ Failed to fetch conversations: ${response.error}');
+      return [];
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error fetching conversations: $e');
-      }
+      _log('❌ Error fetching conversations: $e');
       rethrow;
     }
   }
@@ -54,19 +58,21 @@ class MessagingRepository {
   /// Get or create conversation with another user
   Future<String> getOrCreateConversation(String otherUserId) async {
     try {
-      if (AppConfig.debugMode) {
-        print('💬 Getting/creating conversation with: $otherUserId');
+      _log('💬 Getting/creating conversation with: $otherUserId');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/conversations',
+        body: {'other_user_id': otherUserId},
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        return response.data!['id'] as String;
       }
 
-      final response = await _supabase.rpc('get_or_create_conversation', params: {
-        'p_other_user_id': otherUserId,
-      });
-
-      return response as String;
+      throw Exception(response.error ?? 'Failed to create conversation');
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error getting/creating conversation: $e');
-      }
+      _log('❌ Error getting/creating conversation: $e');
       rethrow;
     }
   }
@@ -74,19 +80,18 @@ class MessagingRepository {
   /// Get single conversation by ID
   Future<ConversationModel?> getConversation(String conversationId) async {
     try {
-      final response = await _supabase
-          .from('my_conversations')
-          .select()
-          .eq('conversation_id', conversationId)
-          .maybeSingle();
+      final response = await _api.get<Map<String, dynamic>>(
+        '/conversations/$conversationId',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      if (response == null) return null;
-
-      return ConversationModel.fromJson(response);
-    } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error fetching conversation: $e');
+      if (response.success && response.data != null) {
+        return ConversationModel.fromJson(response.data!);
       }
+
+      return null;
+    } catch (e) {
+      _log('❌ Error fetching conversation: $e');
       rethrow;
     }
   }
@@ -100,19 +105,21 @@ class MessagingRepository {
     int? disappearingHours,
   }) async {
     try {
-      final response = await _supabase.rpc('update_conversation_settings', params: {
-        'p_conversation_id': conversationId,
-        'p_muted': muted,
-        'p_archived': archived,
-        'p_pinned': pinned,
-        'p_disappearing_hours': disappearingHours,
-      });
+      final body = <String, dynamic>{};
+      if (muted != null) body['is_muted'] = muted;
+      if (archived != null) body['is_archived'] = archived;
+      if (pinned != null) body['is_pinned'] = pinned;
+      if (disappearingHours != null) body['disappearing_hours'] = disappearingHours;
 
-      return response as bool;
+      final response = await _api.patch<Map<String, dynamic>>(
+        '/conversations/$conversationId/settings',
+        body: body,
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      return response.success;
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error updating conversation settings: $e');
-      }
+      _log('❌ Error updating conversation settings: $e');
       rethrow;
     }
   }
@@ -120,15 +127,14 @@ class MessagingRepository {
   /// Delete conversation (soft delete for user)
   Future<bool> deleteConversation(String conversationId) async {
     try {
-      final response = await _supabase.rpc('delete_conversation', params: {
-        'p_conversation_id': conversationId,
-      });
+      final response = await _api.delete<Map<String, dynamic>>(
+        '/conversations/$conversationId',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return response as bool;
+      return response.success;
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error deleting conversation: $e');
-      }
+      _log('❌ Error deleting conversation: $e');
       rethrow;
     }
   }
@@ -136,12 +142,17 @@ class MessagingRepository {
   /// Get total unread count
   Future<int> getTotalUnreadCount() async {
     try {
-      final response = await _supabase.rpc('get_total_unread_count');
-      return response as int? ?? 0;
-    } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error getting unread count: $e');
+      final response = await _api.get<Map<String, dynamic>>(
+        '/messaging/unread-count',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        return response.data!['total_unread'] as int? ?? 0;
       }
+      return 0;
+    } catch (e) {
+      _log('❌ Error getting unread count: $e');
       return 0;
     }
   }
@@ -154,73 +165,72 @@ class MessagingRepository {
   Future<List<MessageModel>> getMessages(
     String conversationId, {
     int limit = 50,
-    DateTime? before,
+    String? before,
   }) async {
     try {
-      if (AppConfig.debugMode) {
-        print('📨 Fetching messages for: $conversationId');
-      }
+      _log('📨 Fetching messages for: $conversationId');
 
-      var query = _supabase
-          .from('messages')
-          .select()
-          .eq('conversation_id', conversationId)
-          .isFilter('deleted_at', null);
-
+      final queryParams = <String, String>{
+        'limit': limit.toString(),
+      };
       if (before != null) {
-        query = query.lt('created_at', before.toIso8601String());
+        queryParams['before'] = before;
       }
 
-      final response = await query
-          .order('created_at', ascending: false)
-          .limit(limit);
+      final response = await _api.get<List<dynamic>>(
+        '/conversations/$conversationId/messages',
+        queryParams: queryParams,
+        fromJson: (json) => json as List<dynamic>,
+      );
 
-      final messages = (response as List)
-          .map((json) => MessageModel.fromJson(json))
-          .toList();
+      if (response.success && response.data != null) {
+        final messages = response.data!
+            .map((json) => MessageModel.fromJson(json as Map<String, dynamic>))
+            .toList();
 
-      if (AppConfig.debugMode) {
-        print('✅ Messages loaded: ${messages.length}');
+        _log('✅ Messages loaded: ${messages.length}');
+        return messages;
       }
 
-      return messages;
+      return [];
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error fetching messages: $e');
-      }
+      _log('❌ Error fetching messages: $e');
       rethrow;
     }
   }
 
   /// Send a text message
-  Future<String> sendMessage({
+  Future<MessageModel> sendMessage({
     required String conversationId,
     required String content,
     String? replyToId,
   }) async {
     try {
-      if (AppConfig.debugMode) {
-        print('📤 Sending message to: $conversationId');
+      _log('📤 Sending message to: $conversationId');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/conversations/$conversationId/messages',
+        body: {
+          'message_type': 'text',
+          'content': content,
+          if (replyToId != null) 'reply_to_id': replyToId,
+        },
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        return MessageModel.fromJson(response.data!);
       }
 
-      final response = await _supabase.rpc('send_message', params: {
-        'p_conversation_id': conversationId,
-        'p_content': content,
-        'p_message_type': 'text',
-        'p_reply_to_id': replyToId,
-      });
-
-      return response as String;
+      throw Exception(response.error ?? 'Failed to send message');
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error sending message: $e');
-      }
+      _log('❌ Error sending message: $e');
       rethrow;
     }
   }
 
   /// Send an audio message
-  Future<String> sendAudioMessage({
+  Future<MessageModel> sendAudioMessage({
     required String conversationId,
     required String fileUrl,
     required int durationSeconds,
@@ -228,45 +238,61 @@ class MessagingRepository {
     int? fileSize,
   }) async {
     try {
-      final response = await _supabase.rpc('send_message', params: {
-        'p_conversation_id': conversationId,
-        'p_message_type': 'audio',
-        'p_file_url': fileUrl,
-        'p_file_name': fileName,
-        'p_file_size': fileSize,
-        'p_audio_duration': durationSeconds,
-      });
+      final response = await _api.post<Map<String, dynamic>>(
+        '/conversations/$conversationId/messages',
+        body: {
+          'message_type': 'audio',
+          'file': {
+            'url': fileUrl,
+            'name': fileName,
+            'size': fileSize,
+          },
+          'audio': {
+            'duration_seconds': durationSeconds,
+          },
+        },
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return response as String;
-    } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error sending audio message: $e');
+      if (response.success && response.data != null) {
+        return MessageModel.fromJson(response.data!);
       }
+
+      throw Exception(response.error ?? 'Failed to send audio message');
+    } catch (e) {
+      _log('❌ Error sending audio message: $e');
       rethrow;
     }
   }
 
   /// Send an image message
-  Future<String> sendImageMessage({
+  Future<MessageModel> sendImageMessage({
     required String conversationId,
     required String fileUrl,
     String? fileName,
     int? fileSize,
   }) async {
     try {
-      final response = await _supabase.rpc('send_message', params: {
-        'p_conversation_id': conversationId,
-        'p_message_type': 'image',
-        'p_file_url': fileUrl,
-        'p_file_name': fileName,
-        'p_file_size': fileSize,
-      });
+      final response = await _api.post<Map<String, dynamic>>(
+        '/conversations/$conversationId/messages',
+        body: {
+          'message_type': 'image',
+          'file': {
+            'url': fileUrl,
+            'name': fileName,
+            'size': fileSize,
+          },
+        },
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return response as String;
-    } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error sending image message: $e');
+      if (response.success && response.data != null) {
+        return MessageModel.fromJson(response.data!);
       }
+
+      throw Exception(response.error ?? 'Failed to send image message');
+    } catch (e) {
+      _log('❌ Error sending image message: $e');
       rethrow;
     }
   }
@@ -274,15 +300,17 @@ class MessagingRepository {
   /// Mark messages as read
   Future<int> markMessagesRead(String conversationId) async {
     try {
-      final response = await _supabase.rpc('mark_messages_read', params: {
-        'p_conversation_id': conversationId,
-      });
+      final response = await _api.post<Map<String, dynamic>>(
+        '/conversations/$conversationId/messages/read',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return response as int? ?? 0;
-    } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error marking messages read: $e');
+      if (response.success && response.data != null) {
+        return response.data!['marked_read'] as int? ?? 0;
       }
+      return 0;
+    } catch (e) {
+      _log('❌ Error marking messages read: $e');
       rethrow;
     }
   }
@@ -290,125 +318,90 @@ class MessagingRepository {
   /// Save audio message (Snapchat-style)
   Future<bool> saveAudioMessage(String messageId) async {
     try {
-      final response = await _supabase.rpc('save_audio_message', params: {
-        'p_message_id': messageId,
-      });
+      final response = await _api.post<Map<String, dynamic>>(
+        '/messages/$messageId/save-audio',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return response as bool;
+      return response.success;
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error saving audio message: $e');
-      }
+      _log('❌ Error saving audio message: $e');
       rethrow;
     }
   }
 
   // ============================================================================
-  // REAL-TIME SUBSCRIPTIONS
+  // REAL-TIME SUBSCRIPTIONS (via Socket.io)
   // ============================================================================
 
-  /// Subscribe to new messages in a conversation
-  RealtimeChannel subscribeToMessages({
-    required String conversationId,
-    required void Function(MessageModel message) onNewMessage,
-    required void Function(MessageModel message) onMessageUpdate,
-  }) {
-    final channel = _supabase
-        .channel('messages:$conversationId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'conversation_id',
-            value: conversationId,
-          ),
-          callback: (payload) {
-            if (payload.newRecord.isNotEmpty) {
-              final message = MessageModel.fromJson(payload.newRecord);
-              onNewMessage(message);
-            }
-          },
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'conversation_id',
-            value: conversationId,
-          ),
-          callback: (payload) {
-            if (payload.newRecord.isNotEmpty) {
-              final message = MessageModel.fromJson(payload.newRecord);
-              onMessageUpdate(message);
-            }
-          },
-        )
-        .subscribe();
-
-    return channel;
+  /// Connect to real-time server
+  Future<bool> connectRealtime() async {
+    return await _socket.connect();
   }
 
-  /// Subscribe to conversation list updates
-  RealtimeChannel subscribeToConversations({
-    required void Function() onUpdate,
-  }) {
-    final userId = currentUserId;
-    if (userId == null) {
-      throw Exception('User not authenticated');
-    }
-
-    final channel = _supabase
-        .channel('conversations:$userId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'conversations',
-          callback: (payload) {
-            // Check if this conversation involves the current user
-            final newRecord = payload.newRecord;
-            final oldRecord = payload.oldRecord;
-            
-            final record = newRecord.isNotEmpty ? newRecord : oldRecord;
-            if (record['user1_id'] == userId || record['user2_id'] == userId) {
-              onUpdate();
-            }
-          },
-        )
-        .subscribe();
-
-    return channel;
+  /// Disconnect from real-time server
+  void disconnectRealtime() {
+    _socket.disconnect();
   }
 
-  /// Unsubscribe from channel
-  Future<void> unsubscribe(RealtimeChannel channel) async {
-    await _supabase.removeChannel(channel);
+  /// Join a conversation room for real-time updates
+  void joinConversation(String conversationId) {
+    _socket.joinConversation(conversationId);
+  }
+
+  /// Leave a conversation room
+  void leaveConversation(String conversationId) {
+    _socket.leaveConversation(conversationId);
+  }
+
+  /// Stream of new messages
+  Stream<MessageEvent> get onNewMessage => _socket.onNewMessage;
+
+  /// Stream of message status updates
+  Stream<MessageStatusEvent> get onMessageStatusUpdate => _socket.onMessageStatusUpdate;
+
+  /// Stream of messages read (for read receipts)
+  Stream<MessagesReadEvent> get onMessagesRead => _socket.onMessagesRead;
+
+  /// Stream of typing events
+  Stream<TypingEvent> get onTyping => _socket.onTyping;
+
+  /// Stream of conversation updates
+  Stream<Map<String, dynamic>> get onConversationUpdated => _socket.onConversationUpdated;
+
+  /// Start typing indicator
+  void startTyping(String conversationId) {
+    _socket.startTyping(conversationId);
+  }
+
+  /// Stop typing indicator
+  void stopTyping(String conversationId) {
+    _socket.stopTyping(conversationId);
+  }
+
+  /// Acknowledge message delivery
+  void acknowledgeDelivery(String messageId, String conversationId) {
+    _socket.acknowledgeDelivery(messageId, conversationId);
   }
 
   // ============================================================================
-  // BLOCKING & REPORTING
+  // BLOCKING & REPORTING (via connections API)
   // ============================================================================
 
   /// Block a user
   Future<bool> blockUser(String userId, {String? reason}) async {
     try {
-      if (AppConfig.debugMode) {
-        print('🚫 Blocking user: $userId');
-      }
+      _log('🚫 Blocking user: $userId');
 
-      final response = await _supabase.rpc('block_user_messaging', params: {
-        'p_user_id': userId,
-        'p_reason': reason,
-      });
+      final response = await _api.post<Map<String, dynamic>>(
+        '/connections/users/$userId/block',
+        body: reason != null ? {'reason': reason} : null,
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return response as bool;
+      return response.success;
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error blocking user: $e');
-      }
+      _log('❌ Error blocking user: $e');
       rethrow;
     }
   }
@@ -416,19 +409,16 @@ class MessagingRepository {
   /// Unblock a user
   Future<bool> unblockUser(String userId) async {
     try {
-      if (AppConfig.debugMode) {
-        print('✅ Unblocking user: $userId');
-      }
+      _log('✅ Unblocking user: $userId');
 
-      final response = await _supabase.rpc('unblock_user_messaging', params: {
-        'p_user_id': userId,
-      });
+      final response = await _api.delete<Map<String, dynamic>>(
+        '/connections/users/$userId/block',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return response as bool;
+      return response.success;
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error unblocking user: $e');
-      }
+      _log('❌ Error unblocking user: $e');
       rethrow;
     }
   }
@@ -436,46 +426,48 @@ class MessagingRepository {
   /// Get blocked users
   Future<List<BlockedUserModel>> getBlockedUsers() async {
     try {
-      final response = await _supabase
-          .from('my_blocked_users')
-          .select()
-          .order('blocked_at', ascending: false);
+      final response = await _api.get<List<dynamic>>(
+        '/connections/users/blocked',
+        fromJson: (json) => json as List<dynamic>,
+      );
 
-      return (response as List)
-          .map((json) => BlockedUserModel.fromJson(json))
-          .toList();
-    } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error fetching blocked users: $e');
+      if (response.success && response.data != null) {
+        return response.data!
+            .map((json) => BlockedUserModel.fromJson(json as Map<String, dynamic>))
+            .toList();
       }
+
+      return [];
+    } catch (e) {
+      _log('❌ Error fetching blocked users: $e');
       rethrow;
     }
   }
 
   /// Report a user
-  Future<String> reportUser({
+  Future<bool> reportUser({
     required String userId,
     required String reason,
     String? description,
     String? messageId,
   }) async {
     try {
-      if (AppConfig.debugMode) {
-        print('🚨 Reporting user: $userId');
-      }
+      _log('🚨 Reporting user: $userId');
 
-      final response = await _supabase.rpc('report_user_messaging', params: {
-        'p_user_id': userId,
-        'p_reason': reason,
-        'p_description': description,
-        'p_message_id': messageId,
-      });
+      final response = await _api.post<Map<String, dynamic>>(
+        '/connections/users/$userId/report',
+        body: {
+          'reported_user_id': userId,
+          'reason': reason,
+          if (description != null) 'description': description,
+          if (messageId != null) 'message_id': messageId,
+        },
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return response as String;
+      return response.success;
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error reporting user: $e');
-      }
+      _log('❌ Error reporting user: $e');
       rethrow;
     }
   }
@@ -487,33 +479,18 @@ class MessagingRepository {
   /// Get user's messaging preferences
   Future<MessagingPreferencesModel?> getMessagingPreferences() async {
     try {
-      final userId = currentUserId;
-      if (userId == null) return null;
+      final response = await _api.get<Map<String, dynamic>>(
+        '/messaging/preferences',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      final response = await _supabase
-          .from('messaging_preferences')
-          .select()
-          .eq('user_id', userId)
-          .maybeSingle();
-
-      if (response == null) {
-        // Create default preferences
-        await _supabase.from('messaging_preferences').insert({
-          'user_id': userId,
-        });
-        
-        return MessagingPreferencesModel(
-          userId: userId,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
+      if (response.success && response.data != null) {
+        return MessagingPreferencesModel.fromJson(response.data!);
       }
 
-      return MessagingPreferencesModel.fromJson(response);
+      return null;
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error fetching messaging preferences: $e');
-      }
+      _log('❌ Error fetching messaging preferences: $e');
       rethrow;
     }
   }
@@ -521,15 +498,15 @@ class MessagingRepository {
   /// Update messaging preferences
   Future<bool> updateMessagingPreferences(MessagingPreferencesModel prefs) async {
     try {
-      await _supabase
-          .from('messaging_preferences')
-          .upsert(prefs.toJson());
+      final response = await _api.put<Map<String, dynamic>>(
+        '/messaging/preferences',
+        body: prefs.toJson(),
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      return true;
+      return response.success;
     } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error updating messaging preferences: $e');
-      }
+      _log('❌ Error updating messaging preferences: $e');
       rethrow;
     }
   }
@@ -538,29 +515,60 @@ class MessagingRepository {
   // FILE UPLOAD
   // ============================================================================
 
-  /// Upload a file to storage
-  Future<String> uploadFile({
-    required String bucket,
-    required String path,
-    required List<int> bytes,
+  /// Get presigned URL for file upload
+  Future<FileUploadInfo> getUploadUrl({
+    required String filename,
     String? contentType,
   }) async {
     try {
-      final response = await _supabase.storage.from(bucket).uploadBinary(
-        path,
-        bytes as dynamic,
-        fileOptions: FileOptions(contentType: contentType),
+      final queryParams = <String, String>{
+        'filename': filename,
+      };
+      if (contentType != null) {
+        queryParams['content_type'] = contentType;
+      }
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/messaging/upload-url',
+        queryParams: queryParams,
+        fromJson: (json) => json as Map<String, dynamic>,
       );
 
-      // Get public URL
-      final publicUrl = _supabase.storage.from(bucket).getPublicUrl(path);
-
-      return publicUrl;
-    } catch (e) {
-      if (AppConfig.debugMode) {
-        print('❌ Error uploading file: $e');
+      if (response.success && response.data != null) {
+        return FileUploadInfo(
+          uploadUrl: response.data!['upload_url'] as String,
+          key: response.data!['key'] as String,
+          downloadUrl: response.data!['download_url'] as String,
+        );
       }
+
+      throw Exception(response.error ?? 'Failed to get upload URL');
+    } catch (e) {
+      _log('❌ Error getting upload URL: $e');
       rethrow;
     }
   }
+
+  void _log(String message) {
+    if (AppConfig.debugMode) {
+      assert(() {
+        // ignore: avoid_print
+        print('[MessagingRepository] $message');
+        return true;
+      }());
+    }
+  }
+}
+
+/// File upload information
+class FileUploadInfo {
+  final String uploadUrl;
+  final String key;
+  final String downloadUrl;
+
+  FileUploadInfo({
+    required this.uploadUrl,
+    required this.key,
+    required this.downloadUrl,
+  });
 }

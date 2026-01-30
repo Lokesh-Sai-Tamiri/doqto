@@ -77,6 +77,14 @@ class AuthNotifier extends Notifier<AuthStateModel> {
     return await _repository.hasCompletedProfile();
   }
 
+  /// Explicitly set authenticated state (used after OTP verification)
+  void setAuthenticated(User user) {
+    state = AuthStateModel.authenticated(user);
+    if (AppConfig.debugMode) {
+      print('✅ Auth state explicitly set to authenticated');
+    }
+  }
+
   /// Sign out
   Future<void> signOut() async {
     try {
@@ -105,6 +113,12 @@ class OtpNotifier extends Notifier<OtpStateModel> {
   OtpStateModel build() {
     _repository = ref.watch(authRepositoryProvider);
     return OtpStateModel.initial();
+  }
+
+  /// Explicitly update auth state after successful verification
+  void _syncAuthState(User user) {
+    // Directly update the auth state to avoid race conditions with listener
+    ref.read(authStateProvider.notifier).setAuthenticated(user);
   }
 
   /// Send OTP to phone number
@@ -180,6 +194,8 @@ class OtpNotifier extends Notifier<OtpStateModel> {
       );
 
       if (response.user != null) {
+        // Explicitly sync auth state to avoid race condition with listener
+        _syncAuthState(response.user!);
         state = OtpStateModel.verified(phoneNumber);
         _resetAttempts();
         return true;

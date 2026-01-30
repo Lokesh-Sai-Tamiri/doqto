@@ -282,7 +282,7 @@ class ContactProfileScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Action Button
-                _buildActionButton(context, ref, isPending, isConnected),
+                _buildActionButton(context, ref, profile, isPending, isConnected),
                 
                 const SizedBox(height: 24),
 
@@ -374,7 +374,7 @@ class ContactProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildActionButton(BuildContext context, WidgetRef ref, bool isPending, bool isConnected) {
+  Widget _buildActionButton(BuildContext context, WidgetRef ref, ProfileModel? profile, bool isPending, bool isConnected) {
     if (isConnected) {
       return Row(
         children: [
@@ -382,7 +382,13 @@ class ContactProfileScreen extends ConsumerWidget {
             child: ElevatedButton.icon(
               onPressed: () {
                 HapticFeedback.selectionClick();
-                context.push('/chat/$userId');
+                context.push(
+                  '/chat/$userId',
+                  extra: {
+                    'userName': profile?.fullName ?? 'Chat',
+                    'otherUserId': userId,
+                  },
+                );
               },
               icon: const Icon(Icons.chat_bubble_outline),
               label: const Text('Message'),
@@ -546,7 +552,16 @@ class ContactProfileScreen extends ConsumerWidget {
   void _handleMenuAction(BuildContext context, WidgetRef ref, String action) async {
     switch (action) {
       case 'message':
-        context.push('/chat/$userId');
+        // Get profile for the name
+        final profileAsync = ref.read(contactProfileProvider(userId));
+        final profile = profileAsync.hasValue ? profileAsync.value : null;
+        context.push(
+          '/chat/$userId',
+          extra: {
+            'userName': profile?.fullName ?? 'Chat',
+            'otherUserId': userId,
+          },
+        );
         break;
       case 'remove':
         if (connectionId != null) {

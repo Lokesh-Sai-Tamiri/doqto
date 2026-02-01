@@ -70,6 +70,30 @@ class ConnectionRequestEvent {
   ConnectionRequestEvent({required this.data});
 }
 
+/// Group event types
+enum GroupEventType {
+  created,
+  updated,
+  membersAdded,
+  memberRemoved,
+  memberLeft,
+  adminChanged,
+  removedFromGroup,
+}
+
+/// Group event
+class GroupEvent {
+  final GroupEventType type;
+  final String groupId;
+  final Map<String, dynamic> data;
+
+  GroupEvent({
+    required this.type,
+    required this.groupId,
+    required this.data,
+  });
+}
+
 /// Socket.io service for real-time features
 class SocketService {
   static final SocketService _instance = SocketService._internal();
@@ -87,6 +111,7 @@ class SocketService {
   final _conversationUpdatedController = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionRequestController = StreamController<ConnectionRequestEvent>.broadcast();
   final _connectionAcceptedController = StreamController<Map<String, dynamic>>.broadcast();
+  final _groupEventController = StreamController<GroupEvent>.broadcast();
 
   // Current state
   SocketConnectionState _connectionState = SocketConnectionState.disconnected;
@@ -104,6 +129,7 @@ class SocketService {
   Stream<Map<String, dynamic>> get onConversationUpdated => _conversationUpdatedController.stream;
   Stream<ConnectionRequestEvent> get onConnectionRequest => _connectionRequestController.stream;
   Stream<Map<String, dynamic>> get onConnectionAccepted => _connectionAcceptedController.stream;
+  Stream<GroupEvent> get onGroupEvent => _groupEventController.stream;
 
   SocketConnectionState get currentConnectionState => _connectionState;
   bool get isConnected => _connectionState == SocketConnectionState.connected;
@@ -311,6 +337,70 @@ class SocketService {
       _log('✅ Connection accepted');
       _connectionAcceptedController.add(data);
     });
+
+    // Group events
+    _socket!.on('group:created', (data) {
+      _log('👥 Group created');
+      _groupEventController.add(GroupEvent(
+        type: GroupEventType.created,
+        groupId: data['group_id'],
+        data: data,
+      ));
+    });
+
+    _socket!.on('group:updated', (data) {
+      _log('📝 Group updated');
+      _groupEventController.add(GroupEvent(
+        type: GroupEventType.updated,
+        groupId: data['group_id'],
+        data: data,
+      ));
+    });
+
+    _socket!.on('group:members_added', (data) {
+      _log('➕ Group members added');
+      _groupEventController.add(GroupEvent(
+        type: GroupEventType.membersAdded,
+        groupId: data['group_id'],
+        data: data,
+      ));
+    });
+
+    _socket!.on('group:member_removed', (data) {
+      _log('➖ Group member removed');
+      _groupEventController.add(GroupEvent(
+        type: GroupEventType.memberRemoved,
+        groupId: data['group_id'],
+        data: data,
+      ));
+    });
+
+    _socket!.on('group:member_left', (data) {
+      _log('🚪 Group member left');
+      _groupEventController.add(GroupEvent(
+        type: GroupEventType.memberLeft,
+        groupId: data['group_id'],
+        data: data,
+      ));
+    });
+
+    _socket!.on('group:admin_changed', (data) {
+      _log('👑 Group admin changed');
+      _groupEventController.add(GroupEvent(
+        type: GroupEventType.adminChanged,
+        groupId: data['group_id'],
+        data: data,
+      ));
+    });
+
+    _socket!.on('group:removed_from_group', (data) {
+      _log('🚫 Removed from group');
+      _groupEventController.add(GroupEvent(
+        type: GroupEventType.removedFromGroup,
+        groupId: data['group_id'],
+        data: data,
+      ));
+    });
   }
 
   void _updateState(SocketConnectionState state) {
@@ -388,5 +478,6 @@ class SocketService {
     _conversationUpdatedController.close();
     _connectionRequestController.close();
     _connectionAcceptedController.close();
+    _groupEventController.close();
   }
 }

@@ -8,6 +8,12 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
+class ConversationType(str, Enum):
+    """Types of conversations."""
+    DIRECT = "direct"
+    GROUP = "group"
+
+
 class MessageType(str, Enum):
     """Types of messages supported."""
     TEXT = "text"
@@ -64,6 +70,48 @@ class ConversationSettingsEntry(BaseModel):
     disappearing_hours: Optional[int] = None
 
 
+class GroupSettings(BaseModel):
+    """Settings for group conversations."""
+    only_admins_can_send: bool = False
+    only_admins_can_edit_info: bool = True
+    allow_member_invites: bool = False
+
+
+class GroupInfo(BaseModel):
+    """Group-specific information."""
+    name: str
+    icon_url: Optional[str] = None
+    description: Optional[str] = None
+    created_by: str
+    admins: List[str] = Field(default_factory=list)
+    settings: GroupSettings = Field(default_factory=GroupSettings)
+
+
+class GroupCreate(BaseModel):
+    """Create a new group conversation."""
+    name: str = Field(..., min_length=1, max_length=100)
+    participant_ids: List[str] = Field(..., min_length=2)
+    description: Optional[str] = Field(None, max_length=500)
+
+
+class GroupUpdate(BaseModel):
+    """Update group information."""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    icon_url: Optional[str] = None
+    settings: Optional[GroupSettings] = None
+
+
+class GroupMembersAdd(BaseModel):
+    """Add members to a group."""
+    user_ids: List[str] = Field(..., min_length=1)
+
+
+class GroupAdminUpdate(BaseModel):
+    """Update admin status for a group member."""
+    user_id: str
+
+
 class ConversationSettings(BaseModel):
     """Update model for conversation settings."""
     is_muted: Optional[bool] = None
@@ -80,15 +128,20 @@ class ConversationCreate(BaseModel):
 class ConversationModel(BaseModel):
     """Full conversation model."""
     id: str = Field(..., description="MongoDB ObjectId as string")
-    participants: List[str] = Field(..., min_length=2, max_length=2)
+    type: ConversationType = ConversationType.DIRECT
+    participants: List[str] = Field(..., min_length=2)
     settings: Dict[str, ConversationSettingsEntry] = Field(default_factory=dict)
     last_message: Optional[LastMessage] = None
     unread_count: int = 0
     created_at: datetime
     updated_at: datetime
 
+    # Group-specific fields
+    group_info: Optional[GroupInfo] = None
+
     # Populated fields (for list view)
-    other_user: Optional[Dict[str, Any]] = None
+    other_user: Optional[Dict[str, Any]] = None  # For direct conversations
+    member_profiles: List[Dict[str, Any]] = Field(default_factory=list)  # For group conversations
     is_blocked: bool = False
     blocked_by_other: bool = False
 
@@ -103,6 +156,29 @@ class MessageCreate(BaseModel):
     file: Optional[FileInfo] = None
     audio: Optional[AudioInfo] = None
     reply_to_id: Optional[str] = None
+    mentions: List[str] = Field(default_factory=list)  # List of user IDs mentioned
+
+
+class SystemEventType(str, Enum):
+    """Types of system events for group messages."""
+    GROUP_CREATED = "group_created"
+    MEMBER_ADDED = "member_added"
+    MEMBER_REMOVED = "member_removed"
+    MEMBER_LEFT = "member_left"
+    ADMIN_ADDED = "admin_added"
+    ADMIN_REMOVED = "admin_removed"
+    GROUP_INFO_UPDATED = "group_info_updated"
+    GROUP_ICON_UPDATED = "group_icon_updated"
+    DISAPPEARING_CHANGED = "disappearing_changed"
+
+
+class SystemEventData(BaseModel):
+    """Data for system messages in groups."""
+    event_type: SystemEventType
+    actor_id: str  # User who performed the action
+    target_ids: List[str] = Field(default_factory=list)  # Affected users
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
 
 
 class MessageModel(BaseModel):
@@ -122,6 +198,8 @@ class MessageModel(BaseModel):
     disappears_at: Optional[datetime] = None
     reply_to_id: Optional[str] = None
     reply_to: Optional["MessageModel"] = None
+    mentions: List[str] = Field(default_factory=list)
+    system_event: Optional[SystemEventData] = None  # For system messages
     created_at: datetime
 
     class Config:

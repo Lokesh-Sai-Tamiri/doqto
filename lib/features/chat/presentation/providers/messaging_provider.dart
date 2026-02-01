@@ -9,6 +9,8 @@ import '../../../../core/services/socket_service.dart';
 import '../../data/models/messaging_models.dart';
 import '../../data/repositories/messaging_repository.dart';
 
+export '../../data/repositories/messaging_repository.dart' show GroupEvent, GroupEventType;
+
 // ============================================================================
 // REPOSITORY PROVIDER
 // ============================================================================
@@ -72,6 +74,7 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
   StreamSubscription<Map<String, dynamic>>? _conversationSubscription;
   StreamSubscription<MessageEvent>? _newMessageSubscription;
   StreamSubscription<TypingEvent>? _typingSubscription;
+  StreamSubscription<GroupEvent>? _groupEventSubscription;
   final Map<String, Timer> _typingTimers = {};
 
   @override
@@ -91,6 +94,7 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
       _conversationSubscription?.cancel();
       _newMessageSubscription?.cancel();
       _typingSubscription?.cancel();
+      _groupEventSubscription?.cancel();
       for (final timer in _typingTimers.values) {
         timer.cancel();
       }
@@ -117,8 +121,34 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
       _typingSubscription = _repository.onTyping.listen((event) {
         _handleTypingEvent(event);
       });
+
+      // Subscribe to group events
+      _groupEventSubscription = _repository.onGroupEvent.listen((event) {
+        _handleGroupEvent(event);
+      });
     } catch (e) {
       // Ignore subscription errors
+    }
+  }
+
+  void _handleGroupEvent(GroupEvent event) {
+    // Reload conversations for any group event to update the list
+    switch (event.type) {
+      case GroupEventType.created:
+      case GroupEventType.updated:
+      case GroupEventType.membersAdded:
+      case GroupEventType.memberRemoved:
+      case GroupEventType.memberLeft:
+      case GroupEventType.adminChanged:
+        loadConversations();
+        break;
+      case GroupEventType.removedFromGroup:
+        // Remove the group from our list
+        final updatedList = state.conversations
+            .where((c) => c.conversationId != event.groupId)
+            .toList();
+        state = state.copyWith(conversations: updatedList);
+        break;
     }
   }
 
@@ -180,28 +210,12 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
     final isFromOther = message['sender_id'] != currentUserId;
 
     // Create updated conversation with new message info
-    final updatedConv = ConversationModel(
-      conversationId: existingConv.conversationId,
+    final updatedConv = existingConv.copyWith(
       lastMessageText: message['content'] as String? ?? _getMessagePreview(message),
       lastMessageType: _parseMessageType(message['message_type'] as String?),
       lastMessageAt: DateTime.tryParse(message['created_at'] as String? ?? '') ?? DateTime.now(),
       lastMessageSenderId: message['sender_id'] as String?,
-      blockedBy: existingConv.blockedBy,
-      disappearingHours: existingConv.disappearingHours,
-      createdAt: existingConv.createdAt,
-      otherUserId: existingConv.otherUserId,
-      firstName: existingConv.firstName,
-      lastName: existingConv.lastName,
-      displayName: existingConv.displayName,
-      avatarUrl: existingConv.avatarUrl,
-      specialization: existingConv.specialization,
       unreadCount: isFromOther ? existingConv.unreadCount + 1 : existingConv.unreadCount,
-      isMuted: existingConv.isMuted,
-      isArchived: existingConv.isArchived,
-      isPinned: existingConv.isPinned,
-      otherAllowsAudioSave: existingConv.otherAllowsAudioSave,
-      isBlockedByMe: existingConv.isBlockedByMe,
-      isBlockedByOther: existingConv.isBlockedByOther,
     );
 
     // Remove from current position and add to top (most recent)
@@ -345,29 +359,7 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
     if (existingConv.unreadCount == 0) return;
 
     // Update unread count to 0
-    final updatedConv = ConversationModel(
-      conversationId: existingConv.conversationId,
-      lastMessageText: existingConv.lastMessageText,
-      lastMessageType: existingConv.lastMessageType,
-      lastMessageAt: existingConv.lastMessageAt,
-      lastMessageSenderId: existingConv.lastMessageSenderId,
-      blockedBy: existingConv.blockedBy,
-      disappearingHours: existingConv.disappearingHours,
-      createdAt: existingConv.createdAt,
-      otherUserId: existingConv.otherUserId,
-      firstName: existingConv.firstName,
-      lastName: existingConv.lastName,
-      displayName: existingConv.displayName,
-      avatarUrl: existingConv.avatarUrl,
-      specialization: existingConv.specialization,
-      unreadCount: 0,
-      isMuted: existingConv.isMuted,
-      isArchived: existingConv.isArchived,
-      isPinned: existingConv.isPinned,
-      otherAllowsAudioSave: existingConv.otherAllowsAudioSave,
-      isBlockedByMe: existingConv.isBlockedByMe,
-      isBlockedByOther: existingConv.isBlockedByOther,
-    );
+    final updatedConv = existingConv.copyWith(unreadCount: 0);
 
     final updatedList = List<ConversationModel>.from(state.conversations);
     updatedList[existingIndex] = updatedConv;
@@ -400,6 +392,7 @@ class ChatState {
   final String? errorMessage;
   final bool hasMore;
   final bool isOtherUserTyping;
+  final String? typingUserId; // Track WHO is typing
 
   const ChatState({
     this.isLoading = false,
@@ -410,6 +403,7 @@ class ChatState {
     this.errorMessage,
     this.hasMore = true,
     this.isOtherUserTyping = false,
+    this.typingUserId,
   });
 
   ChatState copyWith({
@@ -421,6 +415,7 @@ class ChatState {
     String? errorMessage,
     bool? hasMore,
     bool? isOtherUserTyping,
+    String? typingUserId,
   }) {
     return ChatState(
       isLoading: isLoading ?? this.isLoading,
@@ -431,6 +426,7 @@ class ChatState {
       errorMessage: errorMessage,
       hasMore: hasMore ?? this.hasMore,
       isOtherUserTyping: isOtherUserTyping ?? this.isOtherUserTyping,
+      typingUserId: typingUserId ?? this.typingUserId,
     );
   }
 }
@@ -531,7 +527,14 @@ class ChatNotifier extends Notifier<ChatState> {
 
         // Add new message to the list (newest first for reverse ListView)
         final updatedMessages = [message, ...state.messages];
-        state = state.copyWith(messages: updatedMessages, isOtherUserTyping: false);
+
+        // Clear typing indicator if the message is from the user who was typing
+        final clearTyping = state.typingUserId == message.senderId;
+        state = state.copyWith(
+          messages: updatedMessages,
+          isOtherUserTyping: clearTyping ? false : state.isOtherUserTyping,
+          typingUserId: clearTyping ? null : state.typingUserId,
+        );
 
         // Mark as read if from other user
         if (message.senderId != _repository.currentUserId) {
@@ -572,13 +575,19 @@ class ChatNotifier extends Notifier<ChatState> {
     _typingSubscription = _repository.onTyping.listen((event) {
       if (event.conversationId == conversationId &&
           event.userId != _repository.currentUserId) {
-        state = state.copyWith(isOtherUserTyping: event.isTyping);
+        state = state.copyWith(
+          isOtherUserTyping: event.isTyping,
+          typingUserId: event.isTyping ? event.userId : null,
+        );
 
         // Auto-clear typing indicator after 5 seconds (in case stop event is missed)
         if (event.isTyping) {
           _typingTimer?.cancel();
           _typingTimer = Timer(const Duration(seconds: 5), () {
-            state = state.copyWith(isOtherUserTyping: false);
+            state = state.copyWith(
+              isOtherUserTyping: false,
+              typingUserId: null,
+            );
           });
         } else {
           _typingTimer?.cancel();
@@ -622,7 +631,7 @@ class ChatNotifier extends Notifier<ChatState> {
     }
   }
 
-  Future<bool> sendMessage(String content) async {
+  Future<bool> sendMessage(String content, {List<String>? mentions}) async {
     if (state.conversationId == null || content.trim().isEmpty) return false;
 
     state = state.copyWith(isSending: true);
@@ -631,6 +640,7 @@ class ChatNotifier extends Notifier<ChatState> {
       final message = await _repository.sendMessage(
         conversationId: state.conversationId!,
         content: content.trim(),
+        mentions: mentions,
       );
 
       // Add sent message to the list immediately (newest first for reverse ListView)
@@ -985,4 +995,242 @@ class MessagingPrefsNotifier extends Notifier<MessagingPrefsState> {
 final messagingPrefsProvider =
     NotifierProvider<MessagingPrefsNotifier, MessagingPrefsState>(() {
   return MessagingPrefsNotifier();
+});
+
+// ============================================================================
+// GROUP STATE
+// ============================================================================
+
+class GroupState {
+  final bool isLoading;
+  final String? errorMessage;
+
+  const GroupState({
+    this.isLoading = false,
+    this.errorMessage,
+  });
+
+  GroupState copyWith({
+    bool? isLoading,
+    String? errorMessage,
+  }) {
+    return GroupState(
+      isLoading: isLoading ?? this.isLoading,
+      errorMessage: errorMessage,
+    );
+  }
+}
+
+class GroupNotifier extends Notifier<GroupState> {
+  late final MessagingRepository _repository;
+
+  @override
+  GroupState build() {
+    _repository = ref.watch(messagingRepositoryProvider);
+    return const GroupState();
+  }
+
+  /// Create a new group
+  Future<ConversationModel?> createGroup({
+    required String name,
+    required List<String> participantIds,
+    String? description,
+  }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      final group = await _repository.createGroup(
+        name: name,
+        participantIds: participantIds,
+        description: description,
+      );
+
+      state = state.copyWith(isLoading: false);
+
+      // Refresh conversations list
+      ref.read(conversationsProvider.notifier).loadConversations();
+
+      return group;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Failed to create group: ${e.toString()}',
+      );
+      return null;
+    }
+  }
+
+  /// Update group info
+  Future<ConversationModel?> updateGroup({
+    required String conversationId,
+    String? name,
+    String? description,
+    String? iconUrl,
+  }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      final group = await _repository.updateGroup(
+        conversationId: conversationId,
+        name: name,
+        description: description,
+        iconUrl: iconUrl,
+      );
+
+      state = state.copyWith(isLoading: false);
+
+      // Refresh conversations list
+      ref.read(conversationsProvider.notifier).loadConversations();
+
+      return group;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Failed to update group',
+      );
+      return null;
+    }
+  }
+
+  /// Add members to a group
+  Future<bool> addMembers({
+    required String conversationId,
+    required List<String> userIds,
+  }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      await _repository.addGroupMembers(
+        conversationId: conversationId,
+        userIds: userIds,
+      );
+
+      state = state.copyWith(isLoading: false);
+
+      // Refresh conversations list
+      ref.read(conversationsProvider.notifier).loadConversations();
+
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Failed to add members',
+      );
+      return false;
+    }
+  }
+
+  /// Remove a member from a group
+  Future<bool> removeMember({
+    required String conversationId,
+    required String userId,
+  }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      await _repository.removeGroupMember(
+        conversationId: conversationId,
+        userId: userId,
+      );
+
+      state = state.copyWith(isLoading: false);
+
+      // Refresh conversations list
+      ref.read(conversationsProvider.notifier).loadConversations();
+
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Failed to remove member',
+      );
+      return false;
+    }
+  }
+
+  /// Leave a group
+  Future<bool> leaveGroup(String conversationId) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      await _repository.leaveGroup(conversationId);
+
+      state = state.copyWith(isLoading: false);
+
+      // Refresh conversations list
+      ref.read(conversationsProvider.notifier).loadConversations();
+
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Failed to leave group',
+      );
+      return false;
+    }
+  }
+
+  /// Add an admin to a group
+  Future<bool> addAdmin({
+    required String conversationId,
+    required String userId,
+  }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      await _repository.addGroupAdmin(
+        conversationId: conversationId,
+        userId: userId,
+      );
+
+      state = state.copyWith(isLoading: false);
+
+      // Refresh conversations list
+      ref.read(conversationsProvider.notifier).loadConversations();
+
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Failed to add admin',
+      );
+      return false;
+    }
+  }
+
+  /// Remove an admin from a group
+  Future<bool> removeAdmin({
+    required String conversationId,
+    required String userId,
+  }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      await _repository.removeGroupAdmin(
+        conversationId: conversationId,
+        userId: userId,
+      );
+
+      state = state.copyWith(isLoading: false);
+
+      // Refresh conversations list
+      ref.read(conversationsProvider.notifier).loadConversations();
+
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Failed to remove admin',
+      );
+      return false;
+    }
+  }
+
+  void clearError() {
+    state = state.copyWith(errorMessage: null);
+  }
+}
+
+final groupProvider = NotifierProvider<GroupNotifier, GroupState>(() {
+  return GroupNotifier();
 });

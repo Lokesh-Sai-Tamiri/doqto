@@ -15,11 +15,24 @@ from api.models.messaging import (
     MessagingPreferencesModel,
     MessagingPreferencesUpdate,
     UnreadCountResponse,
+    GroupCreate,
+    GroupUpdate,
+    GroupMembersAdd,
+    GroupAdminUpdate,
 )
 from services.messaging_service import MessagingService
 from services.storage_service import StorageService
 from services.connection_service import ConnectionService
-from realtime.events import emit_new_message, emit_messages_read
+from realtime.events import (
+    emit_new_message,
+    emit_messages_read,
+    emit_group_created,
+    emit_group_updated,
+    emit_group_members_added,
+    emit_group_member_removed,
+    emit_group_member_left,
+    emit_group_admin_changed,
+)
 
 router = APIRouter()
 
@@ -126,6 +139,218 @@ async def delete_conversation(
         )
 
     return {"success": True}
+
+
+# ==================== Groups ====================
+
+@router.post("/groups", response_model=ConversationModel)
+async def create_group(
+    data: GroupCreate,
+    user: AuthUser = Depends(get_current_user)
+):
+    """Create a new group conversation."""
+    conv = await MessagingService.create_group(
+        creator_id=user.user_id,
+        name=data.name,
+        participant_ids=data.participant_ids,
+        description=data.description
+    )
+
+    # Emit real-time event to all participants
+    await emit_group_created(
+        conv.id,
+        conv.model_dump(mode='json'),
+        conv.participants
+    )
+
+    return conv
+
+
+@router.patch("/groups/{group_id}", response_model=ConversationModel)
+async def update_group(
+    group_id: str,
+    data: GroupUpdate,
+    user: AuthUser = Depends(get_current_user)
+):
+    """Update group information."""
+    conv = await MessagingService.update_group_info(
+        conversation_id=group_id,
+        user_id=user.user_id,
+        name=data.name,
+        description=data.description,
+        icon_url=data.icon_url,
+        settings=data.settings
+    )
+
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot update this group"
+        )
+
+    # Emit real-time event
+    await emit_group_updated(
+        group_id,
+        conv.model_dump(mode='json'),
+        conv.participants
+    )
+
+    return conv
+
+
+@router.post("/groups/{group_id}/members", response_model=ConversationModel)
+async def add_group_members(
+    group_id: str,
+    data: GroupMembersAdd,
+    user: AuthUser = Depends(get_current_user)
+):
+    """Add members to a group."""
+    conv = await MessagingService.add_group_members(
+        conversation_id=group_id,
+        actor_id=user.user_id,
+        user_ids=data.user_ids
+    )
+
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot add members to this group"
+        )
+
+    # Emit real-time event
+    await emit_group_members_added(
+        group_id,
+        data.user_ids,
+        conv.model_dump(mode='json'),
+        conv.participants
+    )
+
+    return conv
+
+
+@router.delete("/groups/{group_id}/members/{member_id}")
+async def remove_group_member(
+    group_id: str,
+    member_id: str,
+    user: AuthUser = Depends(get_current_user)
+):
+    """Remove a member from a group (admin only)."""
+    conv = await MessagingService.remove_group_member(
+        conversation_id=group_id,
+        actor_id=user.user_id,
+        user_id=member_id
+    )
+
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot remove this member"
+        )
+
+    # Emit real-time event
+    await emit_group_member_removed(
+        group_id,
+        member_id,
+        user.user_id,
+        conv.participants + [member_id]  # Include removed member
+    )
+
+    return {"success": True}
+
+
+@router.post("/groups/{group_id}/leave")
+async def leave_group(
+    group_id: str,
+    user: AuthUser = Depends(get_current_user)
+):
+    """Leave a group conversation."""
+    # Get participants before leaving
+    conv = await MessagingService.get_conversation(group_id, user.user_id)
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found"
+        )
+
+    success = await MessagingService.leave_group(
+        conversation_id=group_id,
+        user_id=user.user_id
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot leave this group"
+        )
+
+    # Emit real-time event
+    await emit_group_member_left(
+        group_id,
+        user.user_id,
+        conv.participants  # Includes the leaving user
+    )
+
+    return {"success": True}
+
+
+@router.post("/groups/{group_id}/admins", response_model=ConversationModel)
+async def add_group_admin(
+    group_id: str,
+    data: GroupAdminUpdate,
+    user: AuthUser = Depends(get_current_user)
+):
+    """Promote a group member to admin."""
+    conv = await MessagingService.add_group_admin(
+        conversation_id=group_id,
+        actor_id=user.user_id,
+        user_id=data.user_id
+    )
+
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot promote this member"
+        )
+
+    # Emit real-time event
+    await emit_group_admin_changed(
+        group_id,
+        data.user_id,
+        True,  # is_admin now
+        conv.participants
+    )
+
+    return conv
+
+
+@router.delete("/groups/{group_id}/admins/{admin_id}", response_model=ConversationModel)
+async def remove_group_admin(
+    group_id: str,
+    admin_id: str,
+    user: AuthUser = Depends(get_current_user)
+):
+    """Demote a group admin."""
+    conv = await MessagingService.remove_group_admin(
+        conversation_id=group_id,
+        actor_id=user.user_id,
+        user_id=admin_id
+    )
+
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot demote this admin"
+        )
+
+    # Emit real-time event
+    await emit_group_admin_changed(
+        group_id,
+        admin_id,
+        False,  # is_admin now
+        conv.participants
+    )
+
+    return conv
 
 
 # ==================== Messages ====================

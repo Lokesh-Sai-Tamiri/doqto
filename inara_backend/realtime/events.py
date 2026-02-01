@@ -272,3 +272,119 @@ async def emit_messages_read(conversation_id: str, reader_id: str, message_ids: 
         },
         exclude_user_id=reader_id
     )
+
+
+# ==================== Group Events ====================
+
+async def emit_group_created(group_id: str, group_data: dict, participant_ids: list):
+    """Emit group created event to all participants."""
+    for user_id in participant_ids:
+        await SocketManager.emit_to_user(
+            user_id,
+            "group:created",
+            {
+                "group_id": group_id,
+                "group": group_data,
+            }
+        )
+
+
+async def emit_group_updated(group_id: str, group_data: dict, participant_ids: list):
+    """Emit group info updated event to all participants."""
+    await SocketManager.emit_to_conversation(
+        group_id,
+        "group:updated",
+        {
+            "group_id": group_id,
+            "group": group_data,
+        }
+    )
+
+
+async def emit_group_members_added(
+    group_id: str,
+    new_member_ids: list,
+    group_data: dict,
+    participant_ids: list
+):
+    """Emit members added event. Notify existing and new members."""
+    # Notify existing members in the conversation room
+    await SocketManager.emit_to_conversation(
+        group_id,
+        "group:members_added",
+        {
+            "group_id": group_id,
+            "new_member_ids": new_member_ids,
+            "group": group_data,
+        }
+    )
+
+    # Notify new members directly (they might not be in the room yet)
+    for member_id in new_member_ids:
+        await SocketManager.emit_to_user(
+            member_id,
+            "group:created",  # Treat as new group for them
+            {
+                "group_id": group_id,
+                "group": group_data,
+            }
+        )
+
+
+async def emit_group_member_removed(
+    group_id: str,
+    removed_user_id: str,
+    actor_id: str,
+    participant_ids: list
+):
+    """Emit member removed event."""
+    # Notify remaining members
+    await SocketManager.emit_to_conversation(
+        group_id,
+        "group:member_removed",
+        {
+            "group_id": group_id,
+            "removed_user_id": removed_user_id,
+            "actor_id": actor_id,
+        }
+    )
+
+    # Notify the removed user
+    await SocketManager.emit_to_user(
+        removed_user_id,
+        "group:removed_from_group",
+        {
+            "group_id": group_id,
+            "actor_id": actor_id,
+        }
+    )
+
+
+async def emit_group_member_left(group_id: str, user_id: str, participant_ids: list):
+    """Emit member left event."""
+    await SocketManager.emit_to_conversation(
+        group_id,
+        "group:member_left",
+        {
+            "group_id": group_id,
+            "user_id": user_id,
+        }
+    )
+
+
+async def emit_group_admin_changed(
+    group_id: str,
+    user_id: str,
+    is_admin: bool,
+    participant_ids: list
+):
+    """Emit admin role changed event."""
+    await SocketManager.emit_to_conversation(
+        group_id,
+        "group:admin_changed",
+        {
+            "group_id": group_id,
+            "user_id": user_id,
+            "is_admin": is_admin,
+        }
+    )

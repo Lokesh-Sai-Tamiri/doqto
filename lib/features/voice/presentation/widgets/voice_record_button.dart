@@ -1,9 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/colors.dart';
 import '../providers/voice_recording_provider.dart';
 import 'audio_waveform.dart';
+import '../../../contacts/presentation/providers/contacts_provider.dart';
+import '../../../contacts/data/models/connection_model.dart';
+import '../../../chat/presentation/providers/messaging_provider.dart';
 
 /// The main voice recording button with waveform visualization
 class VoiceRecordButton extends ConsumerStatefulWidget {
@@ -176,6 +181,8 @@ class _VoiceRecordButtonState extends ConsumerState<VoiceRecordButton>
         AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           height: isRecording ? 70 : 0, // Increased height to prevent overflow
+          clipBehavior: Clip.hardEdge,
+          decoration: const BoxDecoration(), // Required for clipBehavior
           child: isRecording
               ? Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -232,7 +239,7 @@ class _VoiceRecordButtonState extends ConsumerState<VoiceRecordButton>
                     boxShadow: isRecording
                         ? [
                             BoxShadow(
-                              color: AppColors.error.withOpacity(0.4),
+                              color: AppColors.error.withValues(alpha: 0.4),
                               blurRadius: 20,
                               spreadRadius: 4,
                             ),
@@ -244,7 +251,7 @@ class _VoiceRecordButtonState extends ConsumerState<VoiceRecordButton>
                     decoration: BoxDecoration(
                       color: isRecording 
                           ? AppColors.error 
-                          : AppColors.error.withOpacity(0.8),
+                          : AppColors.error.withValues(alpha: 0.8),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -299,33 +306,33 @@ class SendToFriendsSheet extends ConsumerStatefulWidget {
 }
 
 class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
-  final Set<String> _selectedFriends = {};
+  final Set<String> _selectedContacts = {};
   bool _isSending = false;
 
-  // TODO: Replace with actual friends from database
-  final List<Map<String, String>> _mockFriends = [
-    {'id': '1', 'name': 'Dr. Sarah Johnson', 'specialty': 'Cardiologist'},
-    {'id': '2', 'name': 'Dr. Michael Chen', 'specialty': 'Neurologist'},
-    {'id': '3', 'name': 'Dr. Emily Davis', 'specialty': 'Pediatrician'},
-    {'id': '4', 'name': 'Dr. James Wilson', 'specialty': 'Orthopedic'},
-    {'id': '5', 'name': 'Dr. Lisa Anderson', 'specialty': 'Dermatologist'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    // Load contacts when sheet opens
+    Future.microtask(() {
+      ref.read(networkProvider.notifier).loadNetwork();
+    });
+  }
 
-  void _toggleFriend(String id) {
+  void _toggleContact(String userId) {
     setState(() {
-      if (_selectedFriends.contains(id)) {
-        _selectedFriends.remove(id);
+      if (_selectedContacts.contains(userId)) {
+        _selectedContacts.remove(userId);
       } else {
-        _selectedFriends.add(id);
+        _selectedContacts.add(userId);
       }
     });
   }
 
-  Future<void> _sendToFriends() async {
-    if (_selectedFriends.isEmpty) {
+  Future<void> _sendToContacts() async {
+    if (_selectedContacts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select at least one friend'),
+          content: Text('Please select at least one contact'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -334,22 +341,89 @@ class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
 
     setState(() => _isSending = true);
 
-    // TODO: Implement actual sending logic
-    // 1. Upload recording to Supabase Storage
-    // 2. Create message entries in database
-    // 3. Send notifications to selected friends
+    try {
+      // Get file info
+      final file = File(widget.recordingPath);
+      final fileSize = await file.length();
+      final fileName = file.path.split('/').last;
 
-    await Future.delayed(const Duration(seconds: 1)); // Simulated delay
+      // Get audio duration from the recording provider
+      final voiceState = ref.read(voiceRecordingProvider);
+      final durationSeconds = voiceState.recordingDuration.inSeconds;
 
-    if (mounted) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Voice sent to ${_selectedFriends.length} friend(s)'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      int successCount = 0;
+      int failCount = 0;
+
+      // Send to each selected contact
+      for (final userId in _selectedContacts) {
+        try {
+          // Get or create conversation with this user
+          final conversationId = await ref
+              .read(messagingRepositoryProvider)
+              .getOrCreateConversation(userId);
+
+          // Send audio message - throws on failure
+          await ref
+              .read(messagingRepositoryProvider)
+              .sendAudioMessage(
+                conversationId: conversationId,
+                fileUrl: widget.recordingPath, // Use local path for now
+                durationSeconds: durationSeconds,
+                fileName: fileName,
+                fileSize: fileSize,
+              );
+
+          // If we get here, it succeeded (method throws on failure)
+          successCount++;
+        } catch (e) {
+          failCount++;
+        }
+      }
+
+      // Get conversation ID before popping context
+      String? lastConversationId;
+      if (_selectedContacts.length == 1 && successCount == 1) {
+        final userId = _selectedContacts.first;
+        lastConversationId = await ref
+            .read(messagingRepositoryProvider)
+            .getOrCreateConversation(userId);
+      }
+
+      if (mounted) {
+        // Refresh conversations list to show the new messages
+        ref.read(conversationsProvider.notifier).loadConversations();
+
+        Navigator.of(context).pop();
+
+        // Navigate to the last conversation if only one contact selected
+        if (lastConversationId != null) {
+          context.push('/chat/$lastConversationId');
+        }
+
+        // Show result message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              successCount > 0
+                  ? 'Voice sent to $successCount contact(s)${failCount > 0 ? ' ($failCount failed)' : ''}'
+                  : 'Failed to send voice message',
+            ),
+            backgroundColor: successCount > 0 ? AppColors.success : AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSending = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send voice: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -365,6 +439,9 @@ class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final networkState = ref.watch(networkProvider);
+    final contacts = networkState.contacts.where((c) => c.status == ConnectionStatus.accepted).toList();
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
       decoration: BoxDecoration(
@@ -383,7 +460,7 @@ class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          
+
           // Header
           Padding(
             padding: const EdgeInsets.all(16),
@@ -394,7 +471,7 @@ class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
                   onPressed: _deleteRecording,
                   icon: const Icon(Icons.delete_outline, color: AppColors.error),
                 ),
-                
+
                 const Expanded(
                   child: Text(
                     'Send To',
@@ -406,12 +483,12 @@ class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
                     ),
                   ),
                 ),
-                
+
                 // Send button
                 TextButton(
-                  onPressed: _selectedFriends.isEmpty || _isSending 
-                      ? null 
-                      : _sendToFriends,
+                  onPressed: _selectedContacts.isEmpty || _isSending
+                      ? null
+                      : _sendToContacts,
                   child: _isSending
                       ? const SizedBox(
                           width: 20,
@@ -422,10 +499,10 @@ class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
                           ),
                         )
                       : Text(
-                          'Send (${_selectedFriends.length})',
+                          'Send (${_selectedContacts.length})',
                           style: TextStyle(
-                            color: _selectedFriends.isEmpty 
-                                ? AppColors.textSecondary 
+                            color: _selectedContacts.isEmpty
+                                ? AppColors.textSecondary
                                 : AppColors.primary,
                             fontWeight: FontWeight.bold,
                           ),
@@ -434,59 +511,91 @@ class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
               ],
             ),
           ),
-          
+
           const Divider(color: AppColors.divider),
-          
-          // Friends list
+
+          // Contacts list
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _mockFriends.length,
-              itemBuilder: (context, index) {
-                final friend = _mockFriends[index];
-                final isSelected = _selectedFriends.contains(friend['id']);
-                
-                return ListTile(
-                  onTap: () => _toggleFriend(friend['id']!),
-                  leading: CircleAvatar(
-                    backgroundColor: isSelected 
-                        ? AppColors.primary 
-                        : AppColors.inputBackground,
-                    child: isSelected
-                        ? const Icon(Icons.check, color: Colors.black)
-                        : Text(
-                            friend['name']![0],
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.bold,
+            child: networkState.isLoading && contacts.isEmpty
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  )
+                : contacts.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.people_outline,
+                              size: 64,
+                              color: AppColors.textSecondary.withValues(alpha: 0.5),
                             ),
-                          ),
-                  ),
-                  title: Text(
-                    friend['name']!,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  subtitle: Text(
-                    friend['specialty']!,
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                  trailing: isSelected
-                      ? const Icon(Icons.check_circle, color: AppColors.primary)
-                      : Icon(
-                          Icons.circle_outlined,
-                          color: AppColors.textSecondary.withOpacity(0.5),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'No contacts yet',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
                         ),
-                );
-              },
-            ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: contacts.length,
+                        itemBuilder: (context, index) {
+                          final contact = contacts[index];
+                          final isSelected = _selectedContacts.contains(contact.contactUserId);
+
+                          return ListTile(
+                            onTap: () => _toggleContact(contact.contactUserId),
+                            leading: CircleAvatar(
+                              backgroundColor: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.inputBackground,
+                              backgroundImage: contact.avatarUrl != null
+                                  ? NetworkImage(contact.avatarUrl!)
+                                  : null,
+                              child: contact.avatarUrl == null
+                                  ? (isSelected
+                                      ? const Icon(Icons.check, color: Colors.black)
+                                      : Text(
+                                          contact.initials,
+                                          style: const TextStyle(
+                                            color: AppColors.textPrimary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ))
+                                  : null,
+                            ),
+                            title: Text(
+                              contact.fullName,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            subtitle: contact.specialization != null
+                                ? Text(
+                                    contact.specialization!,
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  )
+                                : null,
+                            trailing: isSelected
+                                ? const Icon(Icons.check_circle, color: AppColors.primary)
+                                : Icon(
+                                    Icons.circle_outlined,
+                                    color: AppColors.textSecondary.withValues(alpha: 0.5),
+                                  ),
+                          );
+                        },
+                      ),
           ),
-          
+
           // Bottom safe area
           SizedBox(height: MediaQuery.of(context).padding.bottom),
         ],

@@ -1,6 +1,8 @@
 /// ============================================================================
 /// CHAT LIST SCREEN - Conversations List
 /// ============================================================================
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -101,7 +103,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     List<ConversationModel> filteredConversations = state.conversations;
     if (_searchQuery.isNotEmpty) {
       filteredConversations = state.conversations.where((conv) {
-        return conv.otherUserName.toLowerCase().contains(_searchQuery) ||
+        return conv.conversationDisplayName.toLowerCase().contains(_searchQuery) ||
             (conv.lastMessageText?.toLowerCase().contains(_searchQuery) ?? false);
       }).toList();
     }
@@ -143,7 +145,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               child: Icon(
                 Icons.chat_bubble_outline_rounded,
                 size: 64,
-                color: AppColors.textSecondary.withOpacity(0.5),
+                color: AppColors.textSecondary.withValues(alpha: 0.5),
               ),
             ),
             const SizedBox(height: 24),
@@ -178,7 +180,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
           Icon(
             Icons.search_off,
             size: 64,
-            color: AppColors.textSecondary.withOpacity(0.5),
+            color: AppColors.textSecondary.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -227,6 +229,8 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     final isTyping = state.isTypingIn(conv.conversationId);
     final isVoice = conv.lastMessageType == MessageType.audio;
     final isImage = conv.lastMessageType == MessageType.image;
+    final isSystem = conv.lastMessageType == MessageType.system;
+    final isGroup = conv.isGroup;
 
     return Dismissible(
       key: Key(conv.conversationId),
@@ -246,8 +250,9 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
             context.push(
               '/chat/${conv.conversationId}',
               extra: {
-                'userName': conv.otherUserName,
-                'otherUserId': conv.otherUserId,
+                'userName': conv.conversationDisplayName,
+                'otherUserId': conv.isGroup ? null : conv.otherUserId,
+                'isGroup': conv.isGroup,
               },
             );
           },
@@ -267,46 +272,23 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
-                      child: conv.avatarUrl != null
-                          ? ClipOval(
-                              child: Image.network(
-                                conv.avatarUrl!,
-                                width: 56,
-                                height: 56,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Text(
-                                  conv.initials,
-                                  style: const TextStyle(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 20,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : Text(
-                              conv.initials,
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20,
-                              ),
-                            ),
+                      child: _buildAvatar(conv),
                     ),
-                    // Online indicator (placeholder)
-                    Positioned(
-                      right: 2,
-                      bottom: 2,
-                      child: Container(
-                        width: 14,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: AppColors.success,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.background, width: 2),
+                    // Online indicator (only for direct conversations)
+                    if (!isGroup)
+                      Positioned(
+                        right: 2,
+                        bottom: 2,
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: AppColors.success,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.background, width: 2),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
 
@@ -335,7 +317,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                                   ),
                                 Expanded(
                                   child: Text(
-                                    conv.otherUserName,
+                                    conv.conversationDisplayName,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: AppColors.textPrimary,
@@ -347,13 +329,37 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                               ],
                             ),
                           ),
-                          Text(
-                            _formatTime(conv.lastMessageAt),
-                            style: TextStyle(
-                              color: conv.unreadCount > 0 ? AppColors.primary : AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: conv.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-                            ),
+                          // Show member count for groups, time for all
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isGroup)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.people, size: 12, color: AppColors.textSecondary),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        conv.memberCount.toString(),
+                                        style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              Text(
+                                _formatTime(conv.lastMessageAt),
+                                style: TextStyle(
+                                  color: conv.unreadCount > 0 ? AppColors.primary : AppColors.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: conv.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -385,7 +391,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                                         ),
                                       Expanded(
                                         child: Text(
-                                          conv.lastMessageText ?? 'Start a conversation',
+                                          _getMessagePreview(conv, isSystem),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -396,6 +402,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                                             fontWeight: conv.unreadCount > 0
                                                 ? FontWeight.w500
                                                 : FontWeight.normal,
+                                            fontStyle: isSystem ? FontStyle.italic : FontStyle.normal,
                                           ),
                                         ),
                                       ),
@@ -432,6 +439,87 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildAvatar(ConversationModel conv) {
+    if (conv.isGroup) {
+      // Group avatar
+      if (conv.displayAvatarUrl != null) {
+        return ClipOval(
+          child: Image.network(
+            conv.displayAvatarUrl!,
+            width: 56,
+            height: 56,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const Icon(
+              Icons.group,
+              color: AppColors.primary,
+              size: 28,
+            ),
+          ),
+        );
+      }
+      return const Icon(
+        Icons.group,
+        color: AppColors.primary,
+        size: 28,
+      );
+    } else {
+      // Direct conversation avatar
+      if (conv.avatarUrl != null) {
+        return ClipOval(
+          child: Image.network(
+            conv.avatarUrl!,
+            width: 56,
+            height: 56,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Text(
+              conv.initials,
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+          ),
+        );
+      }
+      return Text(
+        conv.initials,
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontWeight: FontWeight.bold,
+          fontSize: 20,
+        ),
+      );
+    }
+  }
+
+  String _getMessagePreview(ConversationModel conv, bool isSystem) {
+    if (conv.lastMessageText == null) {
+      return 'Start a conversation';
+    }
+
+    // For system messages, resolve user ID placeholders
+    if (isSystem) {
+      String content = conv.lastMessageText!;
+      final regex = RegExp(r'\{user:([^}]+)\}');
+      content = content.replaceAllMapped(regex, (match) {
+        final userId = match.group(1);
+        final member = conv.getMemberProfile(userId ?? '');
+        return member?.firstName ?? member?.displayName ?? 'Someone';
+      });
+      return content;
+    }
+
+    // For group conversations, show sender name prefix
+    if (conv.isGroup && conv.lastMessageSenderId != null && !isSystem) {
+      final sender = conv.getMemberProfile(conv.lastMessageSenderId!);
+      final senderName = sender?.firstName ?? sender?.displayName ?? 'Someone';
+      return '$senderName: ${conv.lastMessageText}';
+    }
+
+    return conv.lastMessageText!;
   }
 
   String _formatTime(DateTime? dateTime) {

@@ -14,6 +14,8 @@ import '../../../../core/services/supabase_service.dart';
 import '../../../../core/config/app_config.dart';
 import '../models/messaging_models.dart';
 
+export '../../../../core/services/socket_service.dart' show GroupEvent, GroupEventType;
+
 class MessagingRepository {
   final ApiService _api = ApiService();
   final SocketService _socket = SocketService();
@@ -158,6 +160,184 @@ class MessagingRepository {
   }
 
   // ============================================================================
+  // GROUPS
+  // ============================================================================
+
+  /// Create a new group conversation
+  Future<ConversationModel> createGroup({
+    required String name,
+    required List<String> participantIds,
+    String? description,
+  }) async {
+    try {
+      _log('👥 Creating group: $name');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/groups',
+        body: {
+          'name': name,
+          'participant_ids': participantIds,
+          if (description != null) 'description': description,
+        },
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        _log('✅ Group created successfully');
+        return ConversationModel.fromJson(response.data!);
+      }
+
+      throw Exception(response.error ?? 'Failed to create group');
+    } catch (e) {
+      _log('❌ Error creating group: $e');
+      rethrow;
+    }
+  }
+
+  /// Update group information
+  Future<ConversationModel> updateGroup({
+    required String conversationId,
+    String? name,
+    String? description,
+    String? iconUrl,
+  }) async {
+    try {
+      _log('📝 Updating group: $conversationId');
+
+      final body = <String, dynamic>{};
+      if (name != null) body['name'] = name;
+      if (description != null) body['description'] = description;
+      if (iconUrl != null) body['icon_url'] = iconUrl;
+
+      final response = await _api.patch<Map<String, dynamic>>(
+        '/groups/$conversationId',
+        body: body,
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        return ConversationModel.fromJson(response.data!);
+      }
+
+      throw Exception(response.error ?? 'Failed to update group');
+    } catch (e) {
+      _log('❌ Error updating group: $e');
+      rethrow;
+    }
+  }
+
+  /// Add members to a group
+  Future<ConversationModel> addGroupMembers({
+    required String conversationId,
+    required List<String> userIds,
+  }) async {
+    try {
+      _log('➕ Adding members to group: $conversationId');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/groups/$conversationId/members',
+        body: {'user_ids': userIds},
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        return ConversationModel.fromJson(response.data!);
+      }
+
+      throw Exception(response.error ?? 'Failed to add members');
+    } catch (e) {
+      _log('❌ Error adding group members: $e');
+      rethrow;
+    }
+  }
+
+  /// Remove a member from a group
+  Future<bool> removeGroupMember({
+    required String conversationId,
+    required String userId,
+  }) async {
+    try {
+      _log('➖ Removing member from group: $conversationId');
+
+      final response = await _api.delete<Map<String, dynamic>>(
+        '/groups/$conversationId/members/$userId',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      return response.success;
+    } catch (e) {
+      _log('❌ Error removing group member: $e');
+      rethrow;
+    }
+  }
+
+  /// Leave a group
+  Future<bool> leaveGroup(String conversationId) async {
+    try {
+      _log('🚪 Leaving group: $conversationId');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/groups/$conversationId/leave',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      return response.success;
+    } catch (e) {
+      _log('❌ Error leaving group: $e');
+      rethrow;
+    }
+  }
+
+  /// Add an admin to a group
+  Future<ConversationModel> addGroupAdmin({
+    required String conversationId,
+    required String userId,
+  }) async {
+    try {
+      _log('👑 Adding admin to group: $conversationId');
+
+      final response = await _api.post<Map<String, dynamic>>(
+        '/groups/$conversationId/admins',
+        body: {'user_id': userId},
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        return ConversationModel.fromJson(response.data!);
+      }
+
+      throw Exception(response.error ?? 'Failed to add admin');
+    } catch (e) {
+      _log('❌ Error adding group admin: $e');
+      rethrow;
+    }
+  }
+
+  /// Remove an admin from a group
+  Future<ConversationModel> removeGroupAdmin({
+    required String conversationId,
+    required String userId,
+  }) async {
+    try {
+      _log('👤 Removing admin from group: $conversationId');
+
+      final response = await _api.delete<Map<String, dynamic>>(
+        '/groups/$conversationId/admins/$userId',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        return ConversationModel.fromJson(response.data!);
+      }
+
+      throw Exception(response.error ?? 'Failed to remove admin');
+    } catch (e) {
+      _log('❌ Error removing group admin: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================================
   // MESSAGES
   // ============================================================================
 
@@ -204,6 +384,7 @@ class MessagingRepository {
     required String conversationId,
     required String content,
     String? replyToId,
+    List<String>? mentions,
   }) async {
     try {
       _log('📤 Sending message to: $conversationId');
@@ -214,6 +395,7 @@ class MessagingRepository {
           'message_type': 'text',
           'content': content,
           if (replyToId != null) 'reply_to_id': replyToId,
+          if (mentions != null && mentions.isNotEmpty) 'mentions': mentions,
         },
         fromJson: (json) => json as Map<String, dynamic>,
       );
@@ -368,6 +550,9 @@ class MessagingRepository {
 
   /// Stream of conversation updates
   Stream<Map<String, dynamic>> get onConversationUpdated => _socket.onConversationUpdated;
+
+  /// Stream of group events
+  Stream<GroupEvent> get onGroupEvent => _socket.onGroupEvent;
 
   /// Start typing indicator
   void startTyping(String conversationId) {

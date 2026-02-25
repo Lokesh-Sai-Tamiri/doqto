@@ -8,6 +8,9 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:mime/mime.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../core/services/socket_service.dart';
 import '../../../../core/services/supabase_service.dart';
@@ -730,6 +733,106 @@ class MessagingRepository {
       throw Exception(response.error ?? 'Failed to get upload URL');
     } catch (e) {
       _log('❌ Error getting upload URL: $e');
+      rethrow;
+    }
+  }
+
+  /// Upload a file to S3 using presigned URL
+  /// Returns the download URL on success
+  Future<String> uploadFileToS3({
+    required String localFilePath,
+    required String uploadUrl,
+    required String downloadUrl,
+    String? contentType,
+  }) async {
+    try {
+      final file = File(localFilePath);
+      if (!await file.exists()) {
+        throw Exception('File not found: $localFilePath');
+      }
+
+      final bytes = await file.readAsBytes();
+      final mimeType = contentType ??
+          lookupMimeType(localFilePath) ??
+          'application/octet-stream';
+
+      _log('📤 Uploading file to S3: ${file.path} (${bytes.length} bytes, $mimeType)');
+
+      final response = await http.put(
+        Uri.parse(uploadUrl),
+        headers: {
+          'Content-Type': mimeType,
+          'Content-Length': bytes.length.toString(),
+        },
+        body: bytes,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _log('✅ File uploaded successfully to S3');
+        return downloadUrl;
+      }
+
+      throw Exception('S3 upload failed with status ${response.statusCode}: ${response.body}');
+    } catch (e) {
+      _log('❌ Error uploading file to S3: $e');
+      rethrow;
+    }
+  }
+
+  /// Upload an audio file and send it as a message
+  /// This is a convenience method that handles the full flow:
+  /// 1. Get presigned upload URL
+  /// 2. Upload file to S3
+  /// 3. Send message with the S3 download URL
+  Future<MessageModel> uploadAndSendAudioMessage({
+    required String conversationId,
+    required String localFilePath,
+    required int durationSeconds,
+  }) async {
+    try {
+      final file = File(localFilePath);
+      if (!await file.exists()) {
+        throw Exception('Audio file not found: $localFilePath');
+      }
+
+      final fileName = localFilePath.split('/').last;
+      final fileSize = await file.length();
+      final mimeType = lookupMimeType(localFilePath) ?? 'audio/m4a';
+
+      _log('🎙️ Starting audio upload: $fileName ($fileSize bytes)');
+
+      // Step 1: Get presigned upload URL
+      final uploadInfo = await getUploadUrl(
+        filename: fileName,
+        contentType: mimeType,
+      );
+
+      // Step 2: Upload to S3
+      final downloadUrl = await uploadFileToS3(
+        localFilePath: localFilePath,
+        uploadUrl: uploadInfo.uploadUrl,
+        downloadUrl: uploadInfo.downloadUrl,
+        contentType: mimeType,
+      );
+
+      // Step 3: Send message with S3 URL
+      final message = await sendAudioMessage(
+        conversationId: conversationId,
+        fileUrl: downloadUrl,
+        durationSeconds: durationSeconds,
+        fileName: fileName,
+        fileSize: fileSize,
+      );
+
+      _log('✅ Audio message sent successfully');
+
+      // Optionally delete local file after successful upload
+      // Uncomment if you want to clean up local recordings:
+      // await file.delete();
+
+      return message;
+    } catch (e) {
+      _log('❌ Error uploading and sending audio: $e');
       rethrow;
     }
   }

@@ -21,12 +21,20 @@ class StorageService:
     def _get_client(cls):
         """Get or create S3 client."""
         if cls._client is None:
-            cls._client = boto3.client(
-                "s3",
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key,
-                region_name=settings.aws_region,
-            )
+            # Use explicit credentials if provided, otherwise fall back to default AWS credential chain
+            if settings.aws_access_key_id and settings.aws_secret_access_key:
+                cls._client = boto3.client(
+                    "s3",
+                    aws_access_key_id=settings.aws_access_key_id,
+                    aws_secret_access_key=settings.aws_secret_access_key,
+                    region_name=settings.aws_region,
+                )
+            else:
+                # Use default credential chain (env vars, ~/.aws/credentials, IAM role, etc.)
+                cls._client = boto3.client(
+                    "s3",
+                    region_name=settings.aws_region,
+                )
         return cls._client
 
     @staticmethod

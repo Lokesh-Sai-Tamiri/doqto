@@ -53,7 +53,8 @@ dependencies:
   
   # HTTP Client
   http: ^1.2.0
-  
+  mime: ^1.0.6
+
   # Audio Recording & Playback
   record: ^6.0.0
   audioplayers: ^6.1.0

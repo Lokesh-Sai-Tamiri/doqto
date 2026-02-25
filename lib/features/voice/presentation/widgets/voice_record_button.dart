@@ -354,6 +354,9 @@ class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
       int successCount = 0;
       int failCount = 0;
 
+      // Upload the audio file once to S3, then send to all recipients
+      String? uploadedFileUrl;
+
       // Send to each selected contact
       for (final userId in _selectedContacts) {
         try {
@@ -362,20 +365,36 @@ class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
               .read(messagingRepositoryProvider)
               .getOrCreateConversation(userId);
 
-          // Send audio message - throws on failure
-          await ref
-              .read(messagingRepositoryProvider)
-              .sendAudioMessage(
-                conversationId: conversationId,
-                fileUrl: widget.recordingPath, // Use local path for now
-                durationSeconds: durationSeconds,
-                fileName: fileName,
-                fileSize: fileSize,
-              );
+          // For the first contact, use uploadAndSendAudioMessage which uploads to S3
+          // For subsequent contacts, reuse the uploaded URL
+          if (uploadedFileUrl == null) {
+            // First recipient - upload and send
+            final message = await ref
+                .read(messagingRepositoryProvider)
+                .uploadAndSendAudioMessage(
+                  conversationId: conversationId,
+                  localFilePath: widget.recordingPath,
+                  durationSeconds: durationSeconds,
+                );
+            // Store the uploaded URL for subsequent recipients
+            uploadedFileUrl = message.fileUrl;
+          } else {
+            // Subsequent recipients - just send with the already uploaded URL
+            await ref
+                .read(messagingRepositoryProvider)
+                .sendAudioMessage(
+                  conversationId: conversationId,
+                  fileUrl: uploadedFileUrl,
+                  durationSeconds: durationSeconds,
+                  fileName: fileName,
+                  fileSize: fileSize,
+                );
+          }
 
           // If we get here, it succeeded (method throws on failure)
           successCount++;
         } catch (e) {
+          debugPrint('Error sending audio to $userId: $e');
           failCount++;
         }
       }

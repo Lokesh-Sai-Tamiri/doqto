@@ -11,11 +11,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../../core/theme/colors.dart';
 import '../../../../core/services/supabase_service.dart';
 import '../../data/models/messaging_models.dart';
 import '../providers/messaging_provider.dart';
 import '../widgets/mention_picker.dart';
+import '../../../voice/presentation/providers/voice_recording_provider.dart';
+import '../../../voice/presentation/widgets/audio_waveform.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String chatId;
@@ -43,6 +46,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Timer? _typingHeartbeatTimer;
   bool _showMentionPicker = false;
   final Map<String, String> _mentionMap = {}; // Maps display name to userId
+
+  // Voice recording state
+  bool _isVoiceRecording = false;
 
   // Audio playback state
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -197,12 +203,129 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.read(chatProvider.notifier).stopTyping();
   }
 
+  Future<void> _startVoiceRecording() async {
+    debugPrint('[Chat] Starting voice recording...');
+    final success = await ref.read(voiceRecordingProvider.notifier).startRecording();
+    debugPrint('[Chat] startRecording returned: $success');
+    if (!mounted) return;
+    if (success) {
+      setState(() => _isVoiceRecording = true);
+    } else {
+      final voiceState = ref.read(voiceRecordingProvider);
+      debugPrint('[Chat] permission denied=${voiceState.isPermissionPermanentlyDenied}, hasPermission=${voiceState.hasPermission}');
+      if (voiceState.isPermissionPermanentlyDenied) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            backgroundColor: AppColors.surface,
+            title: const Text('Microphone Access Required',
+                style: TextStyle(color: AppColors.textPrimary)),
+            content: const Text(
+                'Enable microphone access in Settings to record voice messages.',
+                style: TextStyle(color: AppColors.textSecondary)),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel')),
+              TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    ref.read(voiceRecordingProvider.notifier).openSettings();
+                  },
+                  child: const Text('Open Settings')),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Microphone permission is required'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
+  Future<void> _stopAndSendVoiceRecording() async {
+    final voiceState = ref.read(voiceRecordingProvider);
+    final durationSeconds = voiceState.recordingDuration.inSeconds;
+
+    final path = await ref.read(voiceRecordingProvider.notifier).stopRecording();
+    if (!mounted) return;
+    setState(() => _isVoiceRecording = false);
+
+    if (path == null) return;
+
+    final String fileName;
+    final int fileSize;
+    final String contentType;
+
+    if (kIsWeb) {
+      fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.webm';
+      fileSize = 0;
+      contentType = 'audio/webm';
+    } else {
+      final file = File(path);
+      fileName = path.split('/').last;
+      fileSize = await file.length();
+      contentType = 'audio/m4a';
+    }
+
+    try {
+      final repo = ref.read(messagingRepositoryProvider);
+
+      // Step 1: upload to S3
+      final uploadInfo = await repo.getUploadUrl(
+        filename: fileName,
+        contentType: contentType,
+      );
+      final downloadUrl = await repo.uploadFileToS3(
+        localFilePath: path,
+        uploadUrl: uploadInfo.uploadUrl,
+        downloadUrl: uploadInfo.downloadUrl,
+        contentType: contentType,
+      );
+
+      // Step 2: send message — updates chat state immediately
+      if (mounted) {
+        await ref.read(chatProvider.notifier).sendAudioMessage(
+          fileUrl: downloadUrl,
+          durationSeconds: durationSeconds,
+          fileName: fileName,
+          fileSize: fileSize,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to send voice message: $e'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
+  Future<void> _cancelVoiceRecording() async {
+    await ref.read(voiceRecordingProvider.notifier).cancelRecording();
+    if (mounted) setState(() => _isVoiceRecording = false);
+  }
+
+  @override
+  void deactivate() {
+    // Capture notifier before deactivation; delay state mutations out of the
+    // build frame to avoid "modified provider during build" assertion.
+    final notifier = ref.read(chatProvider.notifier);
+    final wasTyping = _isTyping;
+    Future.microtask(() {
+      if (wasTyping) notifier.stopTyping();
+      notifier.clear();
+    });
+    super.deactivate();
+  }
+
   @override
   void dispose() {
     _typingHeartbeatTimer?.cancel();
-    if (_isTyping) {
-      ref.read(chatProvider.notifier).stopTyping();
-    }
     // Clean up audio player
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();
@@ -212,7 +335,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     _mentionMap.clear();
-    ref.read(chatProvider.notifier).clear();
     super.dispose();
   }
 
@@ -1041,6 +1163,78 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildInputArea(ChatState state, {bool isGroup = false}) {
+    // ── Inline voice recording bar ──────────────────────────────────────────
+    if (_isVoiceRecording) {
+      final voiceState = ref.watch(voiceRecordingProvider);
+      final duration = voiceState.recordingDuration;
+      final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+      final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+
+      return Container(
+        padding: EdgeInsets.only(
+          left: 12,
+          right: 12,
+          top: 10,
+          bottom: MediaQuery.of(context).padding.bottom + 10,
+        ),
+        decoration: const BoxDecoration(color: AppColors.background),
+        child: Row(
+          children: [
+            // Cancel
+            GestureDetector(
+              onTap: _cancelVoiceRecording,
+              child: const Icon(Icons.delete_outline, color: AppColors.error, size: 28),
+            ),
+            const SizedBox(width: 10),
+
+            // Waveform + timer
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 28,
+                    child: AudioWaveform(
+                      isRecording: true,
+                      amplitude: voiceState.currentAmplitude,
+                      color: AppColors.error,
+                      barCount: 28,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$minutes:$seconds',
+                    style: const TextStyle(
+                      color: AppColors.error,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 10),
+
+            // Send
+            GestureDetector(
+              onTap: _stopAndSendVoiceRecording,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Normal input bar ────────────────────────────────────────────────────
     return Container(
       padding: EdgeInsets.only(
         left: 16,
@@ -1124,14 +1318,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
           const SizedBox(width: 8),
 
-          // Send Button
+          // Send / Mic Button
           GestureDetector(
             onTap: () {
               if (_messageController.text.isNotEmpty) {
                 HapticFeedback.lightImpact();
                 _sendMessage();
               } else {
-                // Voice record - future feature
+                HapticFeedback.mediumImpact();
+                _startVoiceRecording();
               }
             },
             child: Container(

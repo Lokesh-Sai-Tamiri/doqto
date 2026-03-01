@@ -28,10 +28,10 @@ class ProfileService:
             specialization=doc.get("specialization"),
             clinic_name=doc.get("clinic_name"),
             years_of_experience=doc.get("years_of_experience"),
-            address=doc.get("address"),
             avatar_url=doc.get("avatar_url"),
             bio=doc.get("bio"),
             profile_completed=doc.get("profile_completed", False),
+            organization_id=doc.get("organization_id"),
             created_at=doc.get("created_at", datetime.now(timezone.utc)),
             updated_at=doc.get("updated_at", datetime.now(timezone.utc)),
         )
@@ -71,10 +71,12 @@ class ProfileService:
             "specialization": data.specialization,
             "clinic_name": data.clinic_name,
             "years_of_experience": data.years_of_experience,
+            "years_of_experience": data.years_of_experience,
             "address": data.address.model_dump() if data.address else None,
             "bio": data.bio,
             "avatar_url": None,
             "profile_completed": False,
+            "organization_id": data.organization_id,
             "created_at": now,
             "updated_at": now,
         }
@@ -170,8 +172,8 @@ class ProfileService:
         return doc.get("profile_completed", False) if doc else False
 
     @staticmethod
-    async def search(query: str, limit: int = 20, exclude_user_id: Optional[str] = None) -> list[ProfileModel]:
-        """Search profiles by name, specialization, or clinic."""
+    async def search(query: str, limit: int = 20, exclude_user_id: Optional[str] = None, organization_id: Optional[str] = None) -> list[ProfileModel]:
+        """Search profiles by name, specialization, or clinic within the same organization."""
         search_filter = {
             "$or": [
                 {"first_name": {"$regex": query, "$options": "i"}},
@@ -184,6 +186,10 @@ class ProfileService:
 
         if exclude_user_id:
             search_filter["user_id"] = {"$ne": exclude_user_id}
+            
+        # Tenant Isolation: Strict check on organization
+        if organization_id:
+            search_filter["organization_id"] = organization_id
 
         cursor = Collections.profiles().find(search_filter).limit(limit)
         profiles = []

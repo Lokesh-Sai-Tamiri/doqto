@@ -23,6 +23,8 @@ class Collections:
     ORGANIZATION_MEMBERSHIPS = "organization_memberships"
     ORGANIZATION_DEPARTMENTS = "organization_departments"
     ORGANIZATION_INVITES = "organization_invites"
+    ORG_SUBSCRIPTIONS = "org_subscriptions"
+    STRIPE_EVENTS = "stripe_events"
 
     @classmethod
     def profiles(cls) -> AsyncIOMotorCollection:
@@ -68,6 +70,14 @@ class Collections:
     def organization_invites(cls) -> AsyncIOMotorCollection:
         return get_db()[cls.ORGANIZATION_INVITES]
 
+    @classmethod
+    def org_subscriptions(cls) -> AsyncIOMotorCollection:
+        return get_db()[cls.ORG_SUBSCRIPTIONS]
+
+    @classmethod
+    def stripe_events(cls) -> AsyncIOMotorCollection:
+        return get_db()[cls.STRIPE_EVENTS]
+
 
 async def create_indexes() -> None:
     """Create all necessary indexes for optimal query performance."""
@@ -92,6 +102,11 @@ async def create_indexes() -> None:
         IndexModel([("conversation_id", ASCENDING), ("created_at", DESCENDING)]),
         IndexModel([("sender_id", ASCENDING)]),
         IndexModel([("saved_by", ASCENDING)]),
+        IndexModel(
+            [("disappears_at", ASCENDING)],
+            expireAfterSeconds=0,
+            partialFilterExpression={"disappears_at": {"$type": "date"}},
+        ),
     ])
 
     # Connections indexes
@@ -144,6 +159,17 @@ async def create_indexes() -> None:
         IndexModel([("invite_code", ASCENDING)], unique=True),
         IndexModel([("organization_id", ASCENDING)]),
         IndexModel([("expires_at", ASCENDING)]),
+    ])
+
+    # Org subscriptions indexes
+    await db[Collections.ORG_SUBSCRIPTIONS].create_indexes([
+        IndexModel([("org_id", ASCENDING)], unique=True),
+        IndexModel([("stripe_subscription_id", ASCENDING)]),
+    ])
+
+    # Stripe events idempotency indexes
+    await db[Collections.STRIPE_EVENTS].create_indexes([
+        IndexModel([("stripe_event_id", ASCENDING)], unique=True),
     ])
 
     print("All indexes created successfully")

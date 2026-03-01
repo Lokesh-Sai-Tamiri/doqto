@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -16,23 +17,23 @@ enum MicrophonePermissionResult {
 /// Service for audio recording with amplitude (waveform) data
 class AudioRecordingService {
   final AudioRecorder _recorder = AudioRecorder();
-  
+
   StreamSubscription<Amplitude>? _amplitudeSubscription;
   final _amplitudeController = StreamController<double>.broadcast();
-  
+
   String? _currentRecordingPath;
   bool _isRecording = false;
   DateTime? _recordingStartTime;
-  
+
   /// Stream of amplitude values (0.0 to 1.0) for waveform visualization
   Stream<double> get amplitudeStream => _amplitudeController.stream;
-  
+
   /// Whether currently recording
   bool get isRecording => _isRecording;
-  
+
   /// Current recording path
   String? get currentRecordingPath => _currentRecordingPath;
-  
+
   /// Recording duration
   Duration get recordingDuration {
     if (_recordingStartTime == null) return Duration.zero;
@@ -41,11 +42,12 @@ class AudioRecordingService {
 
   /// Request microphone permission and return detailed result
   Future<MicrophonePermissionResult> requestPermission() async {
+    if (kIsWeb) return MicrophonePermissionResult.granted;
     final status = await Permission.microphone.request();
     if (AppConfig.debugMode) {
       print('🎤 Microphone permission: $status');
     }
-    
+
     if (status.isGranted) {
       return MicrophonePermissionResult.granted;
     } else if (status.isPermanentlyDenied) {
@@ -57,14 +59,16 @@ class AudioRecordingService {
 
   /// Check if microphone permission is granted
   Future<bool> hasPermission() async {
+    if (kIsWeb) return true;
     return await Permission.microphone.isGranted;
   }
-  
+
   /// Check if permission is permanently denied
   Future<bool> isPermissionPermanentlyDenied() async {
+    if (kIsWeb) return false;
     return await Permission.microphone.isPermanentlyDenied;
   }
-  
+
   /// Open app settings
   Future<bool> openSettings() async {
     return await openAppSettings();
@@ -73,8 +77,8 @@ class AudioRecordingService {
   /// Start recording audio
   Future<bool> startRecording() async {
     try {
-      // Check permission
-      if (!await hasPermission()) {
+      // Request permission if not already granted (mobile only)
+      if (!kIsWeb && !await hasPermission()) {
         final result = await requestPermission();
         if (result != MicrophonePermissionResult.granted) {
           if (AppConfig.debugMode) {
@@ -84,18 +88,15 @@ class AudioRecordingService {
         }
       }
 
-      // Check if recorder is available
-      if (!await _recorder.hasPermission()) {
-        if (AppConfig.debugMode) {
-          print('❌ Recorder has no permission');
-        }
-        return false;
+      // On web the record package returns a blob URL from stop().
+      // On mobile, write to the documents directory.
+      if (kIsWeb) {
+        _currentRecordingPath = ''; // ignored by record's web backend
+      } else {
+        final directory = await getApplicationDocumentsDirectory();
+        final uuid = const Uuid().v4();
+        _currentRecordingPath = '${directory.path}/voice_$uuid.m4a';
       }
-
-      // Generate unique file path
-      final directory = await getApplicationDocumentsDirectory();
-      final uuid = const Uuid().v4();
-      _currentRecordingPath = '${directory.path}/voice_$uuid.m4a';
 
       // Configure recording
       const config = RecordConfig(
@@ -107,7 +108,7 @@ class AudioRecordingService {
 
       // Start recording
       await _recorder.start(config, path: _currentRecordingPath!);
-      
+
       _isRecording = true;
       _recordingStartTime = DateTime.now();
 
@@ -133,10 +134,10 @@ class AudioRecordingService {
       if (!_isRecording) return null;
 
       _stopAmplitudeMonitoring();
-      
+
       final path = await _recorder.stop();
       _isRecording = false;
-      
+
       final duration = recordingDuration;
       _recordingStartTime = null;
 
@@ -144,17 +145,18 @@ class AudioRecordingService {
         print('⏹️ Recording stopped: $path (${duration.inSeconds}s)');
       }
 
-      // Check if file exists and has content
-      if (path != null) {
+      if (path != null && path.isNotEmpty) {
+        if (kIsWeb) {
+          // On web, path is a blob URL — no filesystem checks needed
+          return path;
+        }
         final file = File(path);
         if (await file.exists()) {
           final size = await file.length();
           if (AppConfig.debugMode) {
             print('📁 Recording file size: ${(size / 1024).toStringAsFixed(2)} KB');
           }
-          if (size > 0) {
-            return path;
-          }
+          if (size > 0) return path;
         }
       }
 
@@ -172,13 +174,13 @@ class AudioRecordingService {
   Future<void> cancelRecording() async {
     try {
       _stopAmplitudeMonitoring();
-      
+
       await _recorder.stop();
       _isRecording = false;
       _recordingStartTime = null;
 
-      // Delete the file if it exists
-      if (_currentRecordingPath != null) {
+      // Delete the file if it exists (mobile only; web uses blob URLs)
+      if (!kIsWeb && _currentRecordingPath != null && _currentRecordingPath!.isNotEmpty) {
         final file = File(_currentRecordingPath!);
         if (await file.exists()) {
           await file.delete();
@@ -187,7 +189,7 @@ class AudioRecordingService {
           }
         }
       }
-      
+
       _currentRecordingPath = null;
     } catch (e) {
       if (AppConfig.debugMode) {
@@ -218,15 +220,16 @@ class AudioRecordingService {
     // We'll use -50 to 0 for better visualization
     const minDb = -50.0;
     const maxDb = 0.0;
-    
+
     if (dB < minDb) return 0.0;
     if (dB > maxDb) return 1.0;
-    
+
     return (dB - minDb) / (maxDb - minDb);
   }
 
   /// Delete a recording file
   Future<void> deleteRecording(String path) async {
+    if (kIsWeb) return; // blob URLs are released automatically
     try {
       final file = File(path);
       if (await file.exists()) {
@@ -249,4 +252,3 @@ class AudioRecordingService {
     _recorder.dispose();
   }
 }
-

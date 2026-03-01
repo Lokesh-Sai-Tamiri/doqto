@@ -9,6 +9,7 @@ library;
 
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 import '../../../../core/services/api_service.dart';
@@ -746,17 +747,24 @@ class MessagingRepository {
     String? contentType,
   }) async {
     try {
-      final file = File(localFilePath);
-      if (!await file.exists()) {
-        throw Exception('File not found: $localFilePath');
+      late List<int> bytes;
+      late String mimeType;
+
+      if (kIsWeb) {
+        // On web, localFilePath is a blob URL — fetch bytes via http
+        final blobResponse = await http.get(Uri.parse(localFilePath));
+        bytes = blobResponse.bodyBytes;
+        mimeType = contentType ?? blobResponse.headers['content-type'] ?? 'audio/webm';
+        _log('📤 Uploading web blob to S3 (${bytes.length} bytes, $mimeType)');
+      } else {
+        final file = File(localFilePath);
+        if (!await file.exists()) {
+          throw Exception('File not found: $localFilePath');
+        }
+        bytes = await file.readAsBytes();
+        mimeType = contentType ?? lookupMimeType(localFilePath) ?? 'application/octet-stream';
+        _log('📤 Uploading file to S3: ${file.path} (${bytes.length} bytes, $mimeType)');
       }
-
-      final bytes = await file.readAsBytes();
-      final mimeType = contentType ??
-          lookupMimeType(localFilePath) ??
-          'application/octet-stream';
-
-      _log('📤 Uploading file to S3: ${file.path} (${bytes.length} bytes, $mimeType)');
 
       final response = await http.put(
         Uri.parse(uploadUrl),
@@ -790,16 +798,26 @@ class MessagingRepository {
     required int durationSeconds,
   }) async {
     try {
-      final file = File(localFilePath);
-      if (!await file.exists()) {
-        throw Exception('Audio file not found: $localFilePath');
+      late String fileName;
+      late int fileSize;
+      late String mimeType;
+
+      if (kIsWeb) {
+        // localFilePath is a blob URL; derive a sensible filename
+        fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.webm';
+        fileSize = 0; // unknown until we fetch the blob; metadata only
+        mimeType = 'audio/webm';
+      } else {
+        final file = File(localFilePath);
+        if (!await file.exists()) {
+          throw Exception('Audio file not found: $localFilePath');
+        }
+        fileName = localFilePath.split('/').last;
+        fileSize = await file.length();
+        mimeType = lookupMimeType(localFilePath) ?? 'audio/m4a';
       }
 
-      final fileName = localFilePath.split('/').last;
-      final fileSize = await file.length();
-      final mimeType = lookupMimeType(localFilePath) ?? 'audio/m4a';
-
-      _log('🎙️ Starting audio upload: $fileName ($fileSize bytes)');
+      _log('🎙️ Starting audio upload: $fileName (${kIsWeb ? 'web blob' : '$fileSize bytes'})');
 
       // Step 1: Get presigned upload URL
       final uploadInfo = await getUploadUrl(
@@ -846,6 +864,7 @@ class MessagingRepository {
       }());
     }
   }
+
 }
 
 /// File upload information

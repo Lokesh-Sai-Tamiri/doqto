@@ -3,14 +3,27 @@ HymnChat Backend
 FastAPI application with AI chat and HIPAA-compliant features.
 """
 
+import asyncio
+import logging
 import socketio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
+# Configuration
+from config import settings
+
 # Import existing chat routes
 from api.routes import router as chat_router
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+# Initialize limiter
+limiter = Limiter(key_func=get_remote_address, default_limits=[f"{settings.rate_limit_requests}/{settings.rate_limit_window} seconds"])
 
 # Import new API v1 routes
 from api.v1 import router as api_v1_router
@@ -20,9 +33,7 @@ from db.mongodb import MongoDB
 from db.collections import create_indexes
 from realtime.socket_manager import sio
 from realtime.events import register_events
-
-# Configuration
-from config import settings
+from services.messaging_service import MessagingService
 
 
 @asynccontextmanager
@@ -39,6 +50,19 @@ async def lifespan(app: FastAPI):
 
     # Register Socket.io events
     register_events()
+
+    # Background job: hard-delete expired disappearing messages every 5 minutes
+    async def _message_cleanup_loop():
+        while True:
+            await asyncio.sleep(300)
+            try:
+                n = await MessagingService.delete_expired_messages()
+                if n > 0:
+                    print(f"Deleted {n} expired messages")
+            except Exception as e:
+                logging.error(f"Message cleanup error: {e}")
+
+    asyncio.create_task(_message_cleanup_loop())
 
     print("✅ Application started successfully")
 
@@ -57,6 +81,10 @@ app = FastAPI(
     description="HymnChat API - Healthcare Communication Platform with AI",
     lifespan=lifespan,
 )
+
+# Apply rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configure CORS
 app.add_middleware(

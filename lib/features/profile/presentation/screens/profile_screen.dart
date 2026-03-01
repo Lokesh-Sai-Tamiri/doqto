@@ -354,7 +354,14 @@ class ProfileScreen extends ConsumerWidget {
                      "Help & Support",
                      "Get assistance",
                    ),
-                   
+                   _buildMenuItem(
+                     context,
+                     Icons.credit_card,
+                     "Billing & Plans",
+                     "Manage subscription",
+                     onTap: () => context.push('/billing'),
+                   ),
+
                    const SizedBox(height: 30),
                    
                    // Logout Button

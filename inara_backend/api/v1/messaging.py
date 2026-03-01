@@ -23,6 +23,7 @@ from api.models.messaging import (
 from services.messaging_service import MessagingService
 from services.storage_service import StorageService
 from services.connection_service import ConnectionService
+from services.audit_service import AuditService
 from realtime.events import (
     emit_new_message,
     emit_messages_read,
@@ -383,6 +384,15 @@ async def get_messages(
         limit,
         before
     )
+    
+    # Audit log: User accessed PHI
+    await AuditService.log_phi_access(
+        user_id=user.user_id,
+        resource_type="conversation",
+        target_id=actual_id,
+        action="read_messages",
+        metadata={"limit": limit, "count": len(messages)}
+    )
 
     return messages
 
@@ -438,6 +448,18 @@ async def send_message(
         actual_conversation_id,
         message.model_dump(mode='json'),
         user.user_id
+    )
+
+    # Audit log: User created PHI
+    await AuditService.log_phi_access(
+        user_id=user.user_id,
+        resource_type="message",
+        target_id=message.id,
+        action="send",
+        metadata={
+            "conversation_id": actual_conversation_id,
+            "message_type": message.message_type.value
+        }
     )
 
     return message

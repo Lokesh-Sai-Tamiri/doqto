@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     s3_bucket_org_logos: str = "hymnchat-org-logos"
     s3_presigned_url_expiry: int = 3600  # 1 hour
 
+    # Stripe
+    stripe_secret_key: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    stripe_publishable_key: Optional[str] = None
+
+    # Encryption
+    message_encryption_key: Optional[str] = None  # base64-encoded 32-byte AES-256 key
+
     # CORS
     cors_origins: list[str] = ["*"]
 

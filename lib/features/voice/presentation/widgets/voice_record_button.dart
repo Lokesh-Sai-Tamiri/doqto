@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,7 +23,6 @@ class _VoiceRecordButtonState extends ConsumerState<VoiceRecordButton>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-  bool _isPressed = false;
 
   @override
   void initState() {
@@ -44,35 +44,27 @@ class _VoiceRecordButtonState extends ConsumerState<VoiceRecordButton>
   }
 
   void _onPressStart() async {
-    setState(() => _isPressed = true);
-    
     // Haptic feedback
     HapticFeedback.mediumImpact();
-    
+
     // Start pulse animation
     _pulseController.repeat(reverse: true);
-    
+
     // Start recording
+    debugPrint('[VoiceBtn] Starting recording...');
     final success = await ref.read(voiceRecordingProvider.notifier).startRecording();
-    
+    debugPrint('[VoiceBtn] startRecording=$success');
+
     // If recording failed, check if permission was denied
     if (!success && mounted) {
       final voiceState = ref.read(voiceRecordingProvider);
-      
+
+      _pulseController.stop();
+      _pulseController.reset();
+
       if (voiceState.isPermissionPermanentlyDenied) {
-        // Stop animation since recording won't start
-        _pulseController.stop();
-        _pulseController.reset();
-        setState(() => _isPressed = false);
-        
-        // Show dialog to open settings
         _showPermissionDeniedDialog();
       } else if (!voiceState.hasPermission) {
-        // Permission was denied but not permanently
-        _pulseController.stop();
-        _pulseController.reset();
-        setState(() => _isPressed = false);
-        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Microphone permission is required to record voice messages'),
@@ -114,47 +106,18 @@ class _VoiceRecordButtonState extends ConsumerState<VoiceRecordButton>
   }
 
   void _onPressEnd() async {
-    if (!_isPressed) return;
-    
-    setState(() => _isPressed = false);
-    
     // Stop pulse animation
     _pulseController.stop();
     _pulseController.reset();
-    
+
     // Haptic feedback
     HapticFeedback.lightImpact();
-    
+
     // Stop recording and get the path
     final path = await ref.read(voiceRecordingProvider.notifier).stopRecording();
-    
-    if (path != null && mounted) {
-      // Navigate to friend selection with the recording path
-      _showSendToFriendsSheet(path);
-    }
-  }
 
-  void _onPressCancel() async {
-    if (!_isPressed) return;
-    
-    setState(() => _isPressed = false);
-    
-    // Stop pulse animation
-    _pulseController.stop();
-    _pulseController.reset();
-    
-    // Cancel recording
-    await ref.read(voiceRecordingProvider.notifier).cancelRecording();
-    
-    // Show cancelled feedback
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Recording cancelled'),
-          duration: Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (path != null && mounted) {
+      _showSendToFriendsSheet(path);
     }
   }
 
@@ -184,7 +147,10 @@ class _VoiceRecordButtonState extends ConsumerState<VoiceRecordButton>
           clipBehavior: Clip.hardEdge,
           decoration: const BoxDecoration(), // Required for clipBehavior
           child: isRecording
-              ? Padding(
+              ? OverflowBox(
+                  maxHeight: double.infinity,
+                  alignment: Alignment.topCenter,
+                  child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -211,17 +177,15 @@ class _VoiceRecordButtonState extends ConsumerState<VoiceRecordButton>
                       ),
                     ],
                   ),
-                )
+                ))
               : const SizedBox.shrink(),
         ),
         
         const SizedBox(height: 8),
         
-        // Record button
+        // Record button — tap to start, tap again to stop
         GestureDetector(
-          onLongPressStart: (_) => _onPressStart(),
-          onLongPressEnd: (_) => _onPressEnd(),
-          onLongPressCancel: () => _onPressCancel(),
+          onTap: () => isRecording ? _onPressEnd() : _onPressStart(),
           child: AnimatedBuilder(
             animation: _pulseAnimation,
             builder: (context, child) {
@@ -273,7 +237,7 @@ class _VoiceRecordButtonState extends ConsumerState<VoiceRecordButton>
           child: const Padding(
             padding: EdgeInsets.only(top: 8),
             child: Text(
-              'Hold to record',
+              'Tap to record',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
@@ -343,9 +307,16 @@ class _SendToFriendsSheetState extends ConsumerState<SendToFriendsSheet> {
 
     try {
       // Get file info
-      final file = File(widget.recordingPath);
-      final fileSize = await file.length();
-      final fileName = file.path.split('/').last;
+      final int fileSize;
+      final String fileName;
+      if (kIsWeb) {
+        fileSize = 0;
+        fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.webm';
+      } else {
+        final file = File(widget.recordingPath);
+        fileSize = await file.length();
+        fileName = file.path.split('/').last;
+      }
 
       // Get audio duration from the recording provider
       final voiceState = ref.read(voiceRecordingProvider);

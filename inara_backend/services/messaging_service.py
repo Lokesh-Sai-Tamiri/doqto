@@ -30,6 +30,8 @@ from api.models.messaging import (
     SystemEventData,
 )
 from services.profile_service import ProfileService
+from services.encryption_service import EncryptionService
+from services.storage_service import StorageService
 
 
 class MessagingService:
@@ -373,12 +375,16 @@ class MessagingService:
                 new_value=system_event_doc.get("new_value"),
             )
 
+        content = doc.get("content")
+        if doc.get("content_encrypted") and content:
+            content = EncryptionService.decrypt(content)
+
         return MessageModel(
             id=str(doc["_id"]),
             conversation_id=str(doc["conversation_id"]),
             sender_id=doc["sender_id"],
             message_type=MessageType(doc.get("message_type", "text")),
-            content=doc.get("content"),
+            content=content,
             file=doc.get("file"),
             audio=doc.get("audio"),
             saved_by=doc.get("saved_by"),
@@ -467,7 +473,8 @@ class MessagingService:
             "conversation_id": ObjectId(conversation_id),
             "sender_id": sender_id,
             "message_type": data.message_type.value,
-            "content": data.content,
+            "content": EncryptionService.encrypt(data.content),
+            "content_encrypted": True if data.content else False,
             "file": data.file.model_dump() if data.file else None,
             "audio": data.audio.model_dump() if data.audio else None,
             "status": MessageStatus.SENT.value,
@@ -1155,3 +1162,25 @@ class MessagingService:
             total_unread=total,
             by_conversation=by_conversation,
         )
+
+    @staticmethod
+    async def delete_expired_messages() -> int:
+        """Hard-delete messages whose disappears_at has passed and clean up S3 attachments.
+
+        Returns the number of messages deleted.
+        """
+        now = datetime.now(timezone.utc)
+        cursor = Collections.messages().find({
+            "disappears_at": {"$lte": now, "$ne": None}
+        })
+        deleted = 0
+        async for doc in cursor:
+            # Delete S3 attachment if present
+            if doc.get("file") and doc["file"].get("url"):
+                try:
+                    StorageService.delete_file_by_url(doc["file"]["url"])
+                except Exception:
+                    pass
+            await Collections.messages().delete_one({"_id": doc["_id"]})
+            deleted += 1
+        return deleted

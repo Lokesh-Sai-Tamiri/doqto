@@ -157,7 +157,7 @@ class SocketService {
       _socket = socket_io.io(
         AppConfig.socketUrl,
         socket_io.OptionBuilder()
-            .setTransports(['websocket'])
+            .setTransports(['polling', 'websocket'])
             .setAuth({'token': token})
             .enableAutoConnect()
             .enableReconnection()

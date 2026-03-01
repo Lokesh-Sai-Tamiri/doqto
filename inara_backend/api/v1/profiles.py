@@ -45,16 +45,27 @@ async def get_profile(
     user_id: str,
     user: AuthUser = Depends(get_current_user)
 ):
-    """Get a profile by user ID."""
-    profile = await ProfileService.get_by_user_id(user_id)
+    """Get a profile by user ID (org-isolated)."""
+    # Always allow self-access
+    if user.user_id == user_id:
+        profile = await ProfileService.get_by_user_id(user_id)
+        if not profile:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        return profile
 
-    if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profile not found"
-        )
+    # Cross-user access: enforce org isolation
+    requester_profile = await ProfileService.get_by_user_id(user.user_id)
+    target_profile = await ProfileService.get_by_user_id(user_id)
 
-    return profile
+    if not target_profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+    # Both must share the same non-null organization
+    requester_org = requester_profile.organization_id if requester_profile else None
+    if not requester_org or target_profile.organization_id != requester_org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")  # 404 avoids user enumeration
+
+    return target_profile
 
 
 @router.post("/me/avatar")
@@ -116,5 +127,9 @@ async def search_profiles(
     if len(q) < 2:
         return []
 
-    profiles = await ProfileService.search(q, limit, exclude_user_id=user.user_id)
+    # Get the searcher's profile to enforce tenant isolation
+    searcher_profile = await ProfileService.get_by_user_id(user.user_id)
+    org_id = searcher_profile.organization_id if searcher_profile else None
+    
+    profiles = await ProfileService.search(q, limit, exclude_user_id=user.user_id, organization_id=org_id)
     return profiles

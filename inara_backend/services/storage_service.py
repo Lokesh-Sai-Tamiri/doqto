@@ -4,6 +4,7 @@ Storage service for AWS S3 operations (presigned URLs, file management).
 
 from datetime import datetime, timezone
 from typing import Optional, Tuple
+from urllib.parse import urlparse
 import boto3
 from botocore.exceptions import ClientError
 import mimetypes
@@ -56,6 +57,7 @@ class StorageService:
         filename: str,
         content_type: Optional[str] = None,
         prefix: str = "",
+        expires_in: Optional[int] = None,
     ) -> Tuple[str, str]:
         """
         Generate a presigned URL for uploading a file.
@@ -74,14 +76,21 @@ class StorageService:
             content_type = content_type or "application/octet-stream"
 
         try:
+            # Determine expire time (HIPAA dictates strict timeouts for PHI)
+            expiry = expires_in if expires_in is not None else settings.s3_presigned_url_expiry
+            
+            # Enforce AES256 Server-Side Encryption for HIPAA compliance
+            params = {
+                "Bucket": bucket,
+                "Key": key,
+                "ContentType": content_type,
+                "ServerSideEncryption": "AES256"
+            }
+
             presigned_url = client.generate_presigned_url(
                 "put_object",
-                Params={
-                    "Bucket": bucket,
-                    "Key": key,
-                    "ContentType": content_type,
-                },
-                ExpiresIn=settings.s3_presigned_url_expiry,
+                Params=params,
+                ExpiresIn=expiry,
             )
 
             return presigned_url, key
@@ -90,9 +99,12 @@ class StorageService:
             raise Exception(f"Failed to generate upload URL: {str(e)}")
 
     @classmethod
-    def get_download_url(cls, bucket: str, key: str) -> str:
+    def get_download_url(cls, bucket: str, key: str, expires_in: Optional[int] = None) -> str:
         """Generate a presigned URL for downloading/viewing a file."""
         client = cls._get_client()
+        
+        # Determine expire time (e.g. 15 minutes max for PHI audio)
+        expiry = expires_in if expires_in is not None else settings.s3_presigned_url_expiry
 
         try:
             presigned_url = client.generate_presigned_url(
@@ -101,7 +113,7 @@ class StorageService:
                     "Bucket": bucket,
                     "Key": key,
                 },
-                ExpiresIn=settings.s3_presigned_url_expiry,
+                ExpiresIn=expiry,
             )
 
             return presigned_url
@@ -116,13 +128,38 @@ class StorageService:
 
     @classmethod
     def delete_file(cls, bucket: str, key: str) -> bool:
-        """Delete a file from S3."""
+        """Delete a file from S3 by bucket and key."""
         client = cls._get_client()
 
         try:
             client.delete_object(Bucket=bucket, Key=key)
             return True
         except ClientError:
+            return False
+
+    @classmethod
+    def delete_file_by_url(cls, url: str) -> bool:
+        """Delete an S3 attachment given its public or presigned URL.
+
+        Parses the bucket and key from the URL path so callers don't need
+        to store the bucket name separately.
+        """
+        try:
+            parsed = urlparse(url)
+            # Path is /<key> for path-style or just /<key> for virtual-hosted-style
+            key = parsed.path.lstrip("/")
+            # Virtual-hosted bucket: <bucket>.s3.<region>.amazonaws.com
+            host = parsed.hostname or ""
+            if ".s3." in host:
+                bucket = host.split(".s3.")[0]
+            else:
+                # Path-style: s3.<region>.amazonaws.com/<bucket>/<key>
+                parts = key.split("/", 1)
+                if len(parts) < 2:
+                    return False
+                bucket, key = parts[0], parts[1]
+            return cls.delete_file(bucket, key)
+        except Exception:
             return False
 
     # ==================== Avatar Operations ====================
@@ -168,10 +205,11 @@ class StorageService:
             filename=filename,
             content_type=content_type,
             prefix="attachments/",
+            expires_in=900, # 15 minutes strictly for PHI upload
         )
 
-        # For attachments, use presigned download URL (private bucket)
-        download_url = cls.get_download_url(settings.s3_bucket_attachments, key)
+        # For attachments, use presigned download URL (private bucket) with strict limits
+        download_url = cls.get_download_url(settings.s3_bucket_attachments, key, expires_in=900)
 
         return upload_url, key, download_url
 

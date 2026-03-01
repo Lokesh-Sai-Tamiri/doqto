@@ -55,7 +55,8 @@ class SocketManager:
         try:
             user = await verify_supabase_token(token)
             return user
-        except Exception:
+        except Exception as e:
+            print(f"❌ Socket auth failed: {e}")
             return None
 
     @classmethod

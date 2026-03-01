@@ -22,6 +22,7 @@ class ProfileBase(BaseModel):
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     display_name: Optional[str] = Field(None, max_length=200)
+    organization_id: Optional[str] = Field(None, description="Tenant ID for data isolation")
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(None, max_length=20)
     doctor_id: Optional[str] = Field(None, max_length=50)

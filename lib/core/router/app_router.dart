@@ -15,6 +15,7 @@ import '../../features/contacts/data/models/connection_model.dart';
 import '../../features/home/presentation/screens/main_screen.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../config/app_config.dart';
+import '../../features/billing/presentation/screens/plans_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -166,8 +167,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      GoRoute(
+        path: '/billing',
+        builder: (context, state) => const PlansScreen(),
+      ),
     ],
-    
+
     // DON'T use refreshListenable - it causes race conditions
     // Let each screen handle its own navigation
   );

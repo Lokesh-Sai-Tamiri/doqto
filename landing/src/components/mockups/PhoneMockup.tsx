@@ -62,7 +62,7 @@ export default function PhoneMockup({ children, className }: PhoneMockupProps) {
 
       {/* Screen content */}
       <div
-        className="absolute overflow-hidden bg-dark"
+        className="absolute z-20 overflow-hidden bg-dark"
         style={{
           top: 14,
           left: 14,
@@ -73,6 +73,12 @@ export default function PhoneMockup({ children, className }: PhoneMockupProps) {
       >
         {children}
       </div>
+
+      {/* Dynamic island (above screen content) */}
+      <div
+        className="absolute z-30 rounded-full bg-[#111]"
+        style={{ top: 22, left: 100, width: 80, height: 24 }}
+      />
     </div>
   );
 }

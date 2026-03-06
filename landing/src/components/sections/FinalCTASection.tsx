@@ -63,7 +63,7 @@ export default function FinalCTASection() {
 
         <p className="text-lg text-gray-400 leading-relaxed mb-10 max-w-2xl mx-auto">
           Join thousands of healthcare professionals who are transforming
-          how they communicate. Get early access to HymnChat.
+          how they communicate. Get early access to Dox2Dox.
         </p>
 
         <div className="max-w-lg mx-auto mb-10">

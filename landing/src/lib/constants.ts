@@ -160,7 +160,7 @@ export const TESTIMONIALS = [
     role: "Chief of Internal Medicine",
     org: "Pacific Health Group",
     quote:
-      "HymnChat replaced three different tools we were using. The AI assistant alone saves our team hours every week on drug interaction lookups.",
+      "Dox2Dox replaced three different tools we were using. The AI assistant alone saves our team hours every week on drug interaction lookups.",
     initials: "SC",
   },
   {

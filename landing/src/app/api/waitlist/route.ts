@@ -1,21 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
+import { getDb } from "@/lib/mongodb";
 
-const WAITLIST_FILE = path.join(process.cwd(), "waitlist.json");
-
-async function getWaitlist(): Promise<string[]> {
-  try {
-    const data = await fs.readFile(WAITLIST_FILE, "utf-8");
-    return JSON.parse(data);
-  } catch {
-    return [];
-  }
-}
-
-async function saveWaitlist(emails: string[]) {
-  await fs.writeFile(WAITLIST_FILE, JSON.stringify(emails, null, 2));
-}
+const COLLECTION = "waitlist";
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,23 +22,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const waitlist = await getWaitlist();
+    const db = await getDb();
+    const collection = db.collection(COLLECTION);
 
-    if (waitlist.includes(email.toLowerCase())) {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const existing = await collection.findOne({ email: normalizedEmail });
+    if (existing) {
       return NextResponse.json(
         { success: true, message: "You're already on the waitlist!" },
         { status: 200 }
       );
     }
 
-    waitlist.push(email.toLowerCase());
-    await saveWaitlist(waitlist);
+    await collection.insertOne({
+      email: normalizedEmail,
+      created_at: new Date(),
+      source: "landing_page",
+    });
 
     return NextResponse.json(
       { success: true, message: "Successfully joined the waitlist!" },
       { status: 200 }
     );
-  } catch {
+  } catch (error) {
+    console.error("Waitlist error:", error);
     return NextResponse.json(
       { success: false, message: "Something went wrong. Please try again." },
       { status: 500 }

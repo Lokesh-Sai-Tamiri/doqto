@@ -18,6 +18,7 @@ node_modules/
 *.iml
 *.ipr
 *.iws
+.env.local
 .idea/
 
 # The .vscode folder contains launch configuration and tasks you configure in

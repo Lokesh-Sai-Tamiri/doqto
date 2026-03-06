@@ -10,7 +10,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "HymnChat — Secure Healthcare Messaging with AI Clinical Assistant",
+  title: "Dox2Dox — Secure Healthcare Messaging with AI Clinical Assistant",
   description:
     "HIPAA-compliant messaging platform with E2E encryption, AI clinical assistant Inara, voice messaging, and organization management. Built for healthcare teams.",
   keywords: [
@@ -22,15 +22,15 @@ export const metadata: Metadata = {
     "secure healthcare chat",
   ],
   openGraph: {
-    title: "HymnChat — Secure Healthcare Messaging",
+    title: "Dox2Dox — Secure Healthcare Messaging",
     description:
       "HIPAA-compliant messaging with E2E encryption and AI clinical assistant. Built for healthcare teams.",
     type: "website",
-    siteName: "HymnChat",
+    siteName: "Dox2Dox",
   },
   twitter: {
     card: "summary_large_image",
-    title: "HymnChat — Secure Healthcare Messaging",
+    title: "Dox2Dox — Secure Healthcare Messaging",
     description:
       "HIPAA-compliant messaging with E2E encryption and AI clinical assistant.",
   },

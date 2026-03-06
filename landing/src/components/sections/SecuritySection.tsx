@@ -102,7 +102,7 @@ export default function SecuritySection() {
           <SectionHeading
             badge="Security"
             title="Enterprise-Grade Security, Built In"
-            subtitle="Every layer of HymnChat is designed with HIPAA compliance and data protection as the foundation — not an afterthought."
+            subtitle="Every layer of Dox2Dox is designed with HIPAA compliance and data protection as the foundation — not an afterthought."
           />
         </div>
 

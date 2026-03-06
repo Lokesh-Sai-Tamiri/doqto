@@ -55,7 +55,7 @@ export default function Navbar() {
                   scrolled ? "text-gray-900" : "text-gray-900"
                 )}
               >
-                HymnChat
+                Dox2Dox
               </span>
             </button>
 

@@ -32,7 +32,7 @@ export default function Footer() {
                   <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
                 </svg>
               </div>
-              <span className="text-white font-bold text-lg">HymnChat</span>
+              <span className="text-white font-bold text-lg">Dox2Dox</span>
             </div>
             <p className="text-sm leading-relaxed text-gray-500 max-w-xs">
               HIPAA-compliant healthcare messaging with E2E encryption and AI
@@ -101,7 +101,7 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-gray-600">
-            &copy; {new Date().getFullYear()} HymnChat. All rights reserved.
+            &copy; {new Date().getFullYear()} Dox2Dox. All rights reserved.
           </p>
           <div className="flex items-center gap-4 text-xs text-gray-600">
             <div className="flex items-center gap-1.5">

@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { NAV_LINKS } from "@/lib/constants";
 import { Menu, X } from "lucide-react";
 import Button from "@/components/ui/Button";
+import Logo from "@/components/ui/Logo";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -42,21 +43,9 @@ export default function Navbar() {
             {/* Logo */}
             <button
               onClick={() => scrollTo("#hero")}
-              className="flex items-center gap-2 cursor-pointer"
+              className="cursor-pointer"
             >
-              <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-md shadow-primary/20">
-                <svg className="w-5 h-5 text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-                </svg>
-              </div>
-              <span
-                className={cn(
-                  "text-xl font-bold tracking-tight transition-colors duration-300",
-                  scrolled ? "text-gray-900" : "text-gray-900"
-                )}
-              >
-                Dox2Dox
-              </span>
+              <Logo />
             </button>
 
             {/* Desktop nav */}

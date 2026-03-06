@@ -542,7 +542,13 @@ class _OrganizationScreenState extends ConsumerState<OrganizationScreen> {
                 IconButton(
                   onPressed: () {
                     HapticFeedback.selectionClick();
-                    context.push('/chat/${member.userId}');
+                    context.push(
+                      '/chat/${member.userId}',
+                      extra: {
+                        'userName': member.fullName,
+                        'otherUserId': member.userId,
+                      },
+                    );
                   },
                   icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
                   style: IconButton.styleFrom(
@@ -803,7 +809,10 @@ class _OrganizationScreenState extends ConsumerState<OrganizationScreen> {
                         .read(myOrganizationsProvider.notifier)
                         .createOrganization(
                           name: nameController.text.trim(),
-                          type: selectedType,
+                          type: OrganizationType.values.firstWhere(
+                            (t) => t.name == selectedType,
+                            orElse: () => OrganizationType.hospital,
+                          ),
                           city: cityController.text.isNotEmpty ? cityController.text.trim() : null,
                         );
 
@@ -1072,30 +1081,22 @@ class _OrganizationScreenState extends ConsumerState<OrganizationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      invite.organizationName,
+                      invite.organizationName ?? 'Unknown Organization',
                       style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
                     ),
-                    if (invite.location.isNotEmpty)
-                      Text(
-                        invite.location,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                        ),
-                      ),
                   ],
                 ),
               ),
             ],
           ),
-          if (invite.inviterFullName != null) ...[
+          if (invite.inviterName != null) ...[
             const SizedBox(height: 8),
             Text(
-              'Invited by ${invite.inviterFullName}',
+              'Invited by ${invite.inviterName}',
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
@@ -1121,14 +1122,14 @@ class _OrganizationScreenState extends ConsumerState<OrganizationScreen> {
                     Navigator.pop(context);
                     final result = await ref
                         .read(myOrganizationsProvider.notifier)
-                        .joinByCode(invite.inviteCode ?? '');
+                        .joinByCode(invite.inviteCode);
 
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
                             result != null
-                                ? 'Joined ${invite.organizationName}!'
+                                ? 'Joined ${invite.organizationName ?? 'organization'}!'
                                 : 'Failed to join organization',
                           ),
                           backgroundColor: result != null ? AppColors.success : AppColors.error,

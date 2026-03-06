@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
-import 'core/router/app_router.dart';
-import 'core/services/supabase_service.dart';
 import 'core/config/app_config.dart';
+import 'core/router/app_router.dart';
+import 'core/services/security_service.dart';
+import 'core/services/supabase_service.dart';
+import 'core/widgets/auto_logout_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,6 +13,18 @@ void main() async {
   try {
     // Initialize Supabase with Twilio Verify
     await SupabaseService.initialize();
+    
+    // Run Security Checks for HIPAA compliance
+    final securityFailures = await SecurityService.runStartupChecks();
+    if (securityFailures.isNotEmpty) {
+      if (AppConfig.debugMode) {
+        print('🔒 SECURITY WARNING: Device compromised!');
+        for(var f in securityFailures) {
+          print('🔒 $f');
+        }
+      }
+      // Note: In a production environment, you would navigate to a hard "Access Denied" screen here.
+    }
     
     if (AppConfig.debugMode) {
       print('🚀 HymnChat initialized successfully');
@@ -32,11 +46,14 @@ class HymnChatApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
 
-    return MaterialApp.router(
-      title: 'Hymn Chat',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
-      routerConfig: router,
+    return AutoLogoutWrapper(
+      timeoutDuration: const Duration(minutes: 15),
+      child: MaterialApp.router(
+        title: 'Hymn Chat',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.darkTheme,
+        routerConfig: router,
+      ),
     );
   }
 }

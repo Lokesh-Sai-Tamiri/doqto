@@ -2,7 +2,7 @@ from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Body
 from typing import Optional, List
 from services.llm_service import LLMService
 from services.session_service import SessionService
-from api.models import ChatResponse, SessionCreateRequest, SessionResponse, SessionListItem, DeleteResponse
+from api.chat_models import ChatResponse, SessionCreateRequest, SessionResponse, SessionListItem, DeleteResponse
 
 router = APIRouter()
 llm_service = LLMService()

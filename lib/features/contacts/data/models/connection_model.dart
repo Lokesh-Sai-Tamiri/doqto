@@ -25,7 +25,6 @@ class ConnectionModel {
   final ConnectionStatus status;
   final String? requestMessage;
   final DateTime createdAt;
-  final DateTime updatedAt;
   final DateTime? acceptedAt;
   final DateTime? deletedAt;
   final String? deletedBy;
@@ -37,7 +36,6 @@ class ConnectionModel {
     required this.status,
     this.requestMessage,
     required this.createdAt,
-    required this.updatedAt,
     this.acceptedAt,
     this.deletedAt,
     this.deletedBy,
@@ -50,16 +48,18 @@ class ConnectionModel {
       recipientId: json['recipient_id'] as String,
       status: _parseStatus(json['status'] as String?),
       requestMessage: json['request_message'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
-      acceptedAt: json['accepted_at'] != null
-          ? DateTime.parse(json['accepted_at'] as String)
-          : null,
-      deletedAt: json['deleted_at'] != null
-          ? DateTime.parse(json['deleted_at'] as String)
-          : null,
+      createdAt: _parseDateTime(json['created_at']) ?? DateTime.now(),
+      acceptedAt: _parseDateTime(json['accepted_at']),
+      deletedAt: _parseDateTime(json['deleted_at']),
       deletedBy: json['deleted_by'] as String?,
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 
   Map<String, dynamic> toJson() {
@@ -70,7 +70,6 @@ class ConnectionModel {
       'status': status.name,
       'request_message': requestMessage,
       'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
       'accepted_at': acceptedAt?.toIso8601String(),
       'deleted_at': deletedAt?.toIso8601String(),
       'deleted_by': deletedBy,
@@ -99,12 +98,13 @@ class ConnectionModel {
 }
 
 /// Model for a contact in the user's network (with profile info)
+/// Supports both Supabase view format and API response format
 class NetworkContactModel {
   final String connectionId;
   final String contactUserId;
   final ConnectionStatus status;
   final DateTime connectedSince;
-  
+
   // Profile information
   final String? firstName;
   final String? lastName;
@@ -131,11 +131,31 @@ class NetworkContactModel {
   });
 
   factory NetworkContactModel.fromJson(Map<String, dynamic> json) {
+    // Support both Supabase view format and API format
+    final isApiFormat = json.containsKey('user_id') && json.containsKey('connected_at');
+
+    if (isApiFormat) {
+      return NetworkContactModel(
+        connectionId: json['connection_id'] as String,
+        contactUserId: json['user_id'] as String,
+        status: ConnectionStatus.accepted,
+        connectedSince: ConnectionModel._parseDateTime(json['connected_at']) ?? DateTime.now(),
+        firstName: json['first_name'] as String?,
+        lastName: json['last_name'] as String?,
+        displayName: json['display_name'] as String?,
+        specialization: json['specialization'] as String?,
+        clinicName: json['clinic_name'] as String?,
+        avatarUrl: json['avatar_url'] as String?,
+        city: null,
+        state: null,
+      );
+    }
+
     return NetworkContactModel(
       connectionId: json['connection_id'] as String,
       contactUserId: json['contact_user_id'] as String,
       status: ConnectionModel._parseStatus(json['status'] as String?),
-      connectedSince: DateTime.parse(json['connected_since'] as String),
+      connectedSince: ConnectionModel._parseDateTime(json['connected_since']) ?? DateTime.now(),
       firstName: json['first_name'] as String?,
       lastName: json['last_name'] as String?,
       displayName: json['display_name'] as String?,
@@ -187,12 +207,13 @@ class NetworkContactModel {
 }
 
 /// Model for a pending connection request
+/// Supports both Supabase view format and API response format
 class PendingRequestModel {
   final String connectionId;
   final String requesterId;
   final String? requestMessage;
   final DateTime createdAt;
-  
+
   // Requester's profile information
   final String? firstName;
   final String? lastName;
@@ -223,7 +244,7 @@ class PendingRequestModel {
       connectionId: json['connection_id'] as String,
       requesterId: json['requester_id'] as String,
       requestMessage: json['request_message'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: ConnectionModel._parseDateTime(json['created_at']) ?? DateTime.now(),
       firstName: json['first_name'] as String?,
       lastName: json['last_name'] as String?,
       displayName: json['display_name'] as String?,
@@ -255,6 +276,7 @@ class PendingRequestModel {
 }
 
 /// Model for suggested connections (doctors not yet connected)
+/// Supports both Supabase view format and API response format
 class SuggestedContactModel {
   final String userId;
   final String? firstName;
@@ -266,6 +288,9 @@ class SuggestedContactModel {
   final String? city;
   final String? state;
   final bool profileCompleted;
+  final int mutualConnections;
+  final ConnectionStatus? requestStatus;
+  final bool requestSentByMe;
 
   const SuggestedContactModel({
     required this.userId,
@@ -278,6 +303,9 @@ class SuggestedContactModel {
     this.city,
     this.state,
     this.profileCompleted = false,
+    this.mutualConnections = 0,
+    this.requestStatus,
+    this.requestSentByMe = false,
   });
 
   factory SuggestedContactModel.fromJson(Map<String, dynamic> json) {
@@ -292,6 +320,11 @@ class SuggestedContactModel {
       city: json['city'] as String?,
       state: json['state'] as String?,
       profileCompleted: json['profile_completed'] as bool? ?? false,
+      mutualConnections: json['mutual_connections'] as int? ?? 0,
+      requestStatus: json['request_status'] != null
+          ? ConnectionModel._parseStatus(json['request_status'] as String?)
+          : null,
+      requestSentByMe: json['request_sent_by_me'] as bool? ?? false,
     );
   }
 

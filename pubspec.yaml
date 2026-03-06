@@ -53,7 +53,8 @@ dependencies:
   
   # HTTP Client
   http: ^1.2.0
-  
+  mime: ^1.0.6
+
   # Audio Recording & Playback
   record: ^6.0.0
   audioplayers: ^6.1.0
@@ -64,6 +65,14 @@ dependencies:
   
   # Speech to Text
   speech_to_text: ^7.0.0
+
+  # Browser URL launcher (for Stripe Checkout)
+  url_launcher: ^6.3.0
+
+  # Socket.io Client for real-time features
+  socket_io_client: ^2.0.3+1
+  flutter_secure_storage: ^10.0.0
+  flutter_jailbreak_detection: ^1.8.0
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# COPY this file to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — NEVER commit it.
+# ─────────────────────────────────────────────────────────────────────────────
+
+aws_region   = "us-east-1"
+project_name = "inara"
+
+# ── Domain ───────────────────────────────────────────────────────────────────
+# Your custom API domain. The hosted zone must already exist in Route 53.
+# If you registered your domain elsewhere (e.g. Namecheap), either:
+#   a) Transfer the domain to Route 53, OR
+#   b) Create a hosted zone in Route 53 and update your registrar's NS records.
+domain_name     = "api.yourdomain.com"
+route53_zone_id = "Z1234567890ABCDEFGHIJK"
+
+# ── Container image ──────────────────────────────────────────────────────────
+# Leave default on first terraform apply (it creates the ECR repo).
+# After running deploy.sh once, set this to your ECR URL:
+# container_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/inara:latest"
+
+# ── Non-sensitive environment variables ──────────────────────────────────────
+app_env_vars = {
+  DEBUG                   = "false"
+  HOST                    = "0.0.0.0"
+  PORT                    = "8000"
+  AWS_REGION              = "us-east-1"
+  S3_BUCKET_AVATARS       = "hymnchat-avatars"
+  S3_BUCKET_ATTACHMENTS   = "hymnchat-attachments"
+  S3_BUCKET_ORG_LOGOS     = "hymnchat-org-logos"
+  S3_PRESIGNED_URL_EXPIRY = "3600"
+  RATE_LIMIT_REQUESTS     = "100"
+  RATE_LIMIT_WINDOW       = "60"
+  MONGODB_DATABASE        = "hymn-chat"
+  # Replace with your actual Flutter app origin once known
+  CORS_ORIGINS = "[\"https://api.yourdomain.com\"]"
+}
+
+# ── Secrets (stored in AWS Secrets Manager, never in git) ────────────────────
+# These map 1:1 to environment variable names injected into your container.
+# NOTE: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are intentionally omitted —
+#       the ECS task IAM role grants S3 access instead (more secure).
+app_secrets = {
+  MONGO_URI              = "mongodb+srv://user:password@cluster.mongodb.net/hymn-chat?retryWrites=true&w=majority"
+  SUPABASE_URL           = "https://yourprojectref.supabase.co"
+  SUPABASE_JWT_SECRET    = "your-supabase-jwt-secret-from-dashboard"
+  SUPABASE_PROJECT_REF   = "yourprojectref"
+  GOOGLE_API_KEY         = "AIzaSy..."
+  OPENAI_API_KEY         = "sk-..."
+  STRIPE_SECRET_KEY      = "sk_live_..."
+  STRIPE_WEBHOOK_SECRET  = "whsec_..."
+  MESSAGE_ENCRYPTION_KEY = "base64-encoded-32-byte-aes-256-key"
+}

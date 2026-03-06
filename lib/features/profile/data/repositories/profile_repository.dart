@@ -1,191 +1,245 @@
 /// ============================================================================
 /// PROFILE REPOSITORY
 /// ============================================================================
+///
+/// Handles profile data operations via the HymnChat API backend.
+/// Provides methods for CRUD operations on user profiles.
+/// ============================================================================
 library;
 
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../core/services/supabase_service.dart';
+import '../../../../core/services/api_service.dart';
 import '../../../../core/config/app_config.dart';
 import '../models/profile_model.dart';
 
 class ProfileRepository {
-  final SupabaseClient _supabase = SupabaseService.client;
+  final ApiService _api = ApiService();
 
-  /// Get user profile
-  Future<ProfileModel?> getProfile(String userId) async {
+  /// Get current user's profile
+  Future<ProfileModel?> getMyProfile() async {
     try {
       if (AppConfig.debugMode) {
-        print('📋 Fetching profile for user: $userId');
+        _log('📋 Fetching current user profile');
       }
 
-      final response = await _supabase
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .maybeSingle();
+      final response = await _api.get<Map<String, dynamic>>(
+        '/profiles/me',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      if (response == null) {
+      if (response.success && response.data != null) {
+        final profile = ProfileModel.fromJson(response.data!);
         if (AppConfig.debugMode) {
-          print('⚠️ No profile found in profiles table, trying views...');
+          _log('✅ Profile loaded: ${profile.fullName}');
         }
-        
-        // Fallback 1: Try from user_network (for connected users)
-        final networkResponse = await _supabase
-            .from('user_network')
-            .select()
-            .eq('contact_user_id', userId)
-            .maybeSingle();
-            
-        if (networkResponse != null) {
-          // Map view columns to profile model keys
-          final viewData = Map<String, dynamic>.from(networkResponse);
-          viewData['id'] = viewData['contact_user_id']; // Remap ID
-          
-          final profile = ProfileModel.fromJson(viewData);
-          if (AppConfig.debugMode) print('✅ Profile loaded from user_network view');
-          return profile;
-        }
-
-        // Fallback 2: Try from suggested_connections (for non-connected users)
-        final suggestedResponse = await _supabase
-            .from('suggested_connections')
-            .select()
-            .eq('user_id', userId)
-            .maybeSingle();
-
-        if (suggestedResponse != null) {
-          // Map view columns to profile model keys
-          final viewData = Map<String, dynamic>.from(suggestedResponse);
-          viewData['id'] = viewData['user_id']; // Remap ID
-          
-          final profile = ProfileModel.fromJson(viewData);
-          if (AppConfig.debugMode) print('✅ Profile loaded from suggested_connections view');
-          return profile;
-        }
-
-        if (AppConfig.debugMode) {
-          print('❌ Profile truly not found anywhere');
-        }
-        return null;
+        return profile;
       }
-
-      final profile = ProfileModel.fromJson(response);
 
       if (AppConfig.debugMode) {
-        print('✅ Profile loaded: ${profile.fullName}');
-        print('📊 Profile completed: ${profile.profileCompleted}');
+        _log('⚠️ Failed to fetch profile: ${response.error}');
       }
-
-      return profile;
+      return null;
     } catch (e) {
       if (AppConfig.debugMode) {
-        print('❌ Error fetching profile: $e');
+        _log('❌ Error fetching profile: $e');
       }
       rethrow;
     }
   }
 
-  /// Create or update profile
-  Future<ProfileModel> upsertProfile(ProfileModel profile) async {
+  /// Get user profile by user ID
+  Future<ProfileModel?> getProfile(String userId) async {
     try {
       if (AppConfig.debugMode) {
-        print('💾 Saving profile for user: ${profile.id}');
+        _log('📋 Fetching profile for user: $userId');
       }
 
-      final data = profile.toJson();
+      final response = await _api.get<Map<String, dynamic>>(
+        '/profiles/$userId',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-      final response = await _supabase
-          .from('profiles')
-          .upsert(data)
-          .select()
-          .single();
+      if (response.success && response.data != null) {
+        final profile = ProfileModel.fromJson(response.data!);
+        if (AppConfig.debugMode) {
+          _log('✅ Profile loaded: ${profile.fullName}');
+        }
+        return profile;
+      }
 
-      final savedProfile = ProfileModel.fromJson(response);
+      if (response.statusCode == 404) {
+        if (AppConfig.debugMode) {
+          _log('⚠️ Profile not found for user: $userId');
+        }
+        return null;
+      }
 
       if (AppConfig.debugMode) {
-        print('✅ Profile saved successfully');
+        _log('⚠️ Failed to fetch profile: ${response.error}');
       }
-
-      return savedProfile;
+      return null;
     } catch (e) {
       if (AppConfig.debugMode) {
-        print('❌ Error saving profile: $e');
+        _log('❌ Error fetching profile: $e');
       }
       rethrow;
     }
+  }
+
+  /// Update current user's profile
+  Future<ProfileModel> updateProfile(ProfileModel profile) async {
+    try {
+      if (AppConfig.debugMode) {
+        _log('💾 Updating profile');
+      }
+
+      final response = await _api.put<Map<String, dynamic>>(
+        '/profiles/me',
+        body: profile.toJson(),
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        final updatedProfile = ProfileModel.fromJson(response.data!);
+        if (AppConfig.debugMode) {
+          _log('✅ Profile updated successfully');
+        }
+        return updatedProfile;
+      }
+
+      throw Exception(response.error ?? 'Failed to update profile');
+    } catch (e) {
+      if (AppConfig.debugMode) {
+        _log('❌ Error updating profile: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Create or update profile (upsert)
+  Future<ProfileModel> upsertProfile(ProfileModel profile) async {
+    // The API handles upsert automatically via PUT /profiles/me
+    return updateProfile(profile);
   }
 
   /// Check if profile is completed
   Future<bool> isProfileCompleted(String userId) async {
     try {
-      final profile = await getProfile(userId);
+      final response = await _api.get<bool>(
+        '/profiles/me/completed',
+        fromJson: (json) => json as bool,
+      );
 
-      if (profile == null) return false;
-
-      // Check if all required fields are filled
-      final isComplete =
-          profile.firstName != null &&
-          profile.firstName!.isNotEmpty &&
-          profile.lastName != null &&
-          profile.lastName!.isNotEmpty &&
-          profile.email != null &&
-          profile.email!.isNotEmpty;
-
-      return isComplete;
+      return response.data ?? false;
     } catch (e) {
       if (AppConfig.debugMode) {
-        print('❌ Error checking profile completion: $e');
+        _log('❌ Error checking profile completion: $e');
       }
       return false;
     }
   }
 
-  /// Update profile completion status
+  /// Mark profile as completed
   Future<void> markProfileAsCompleted(String userId) async {
     try {
-      await _supabase
-          .from('profiles')
-          .update({'profile_completed': true})
-          .eq('id', userId);
+      final response = await _api.post<Map<String, dynamic>>(
+        '/profiles/me/complete',
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
+
+      if (!response.success) {
+        throw Exception(response.error ?? 'Failed to mark profile as completed');
+      }
 
       if (AppConfig.debugMode) {
-        print('✅ Profile marked as completed');
+        _log('✅ Profile marked as completed');
       }
     } catch (e) {
       if (AppConfig.debugMode) {
-        print('❌ Error updating profile status: $e');
+        _log('❌ Error updating profile status: $e');
       }
       rethrow;
     }
   }
 
-  /// Update avatar (implement later with image picker)
-  // Future<String> uploadAvatar(String userId, File file) async {
-  //   try {
-  //     if (AppConfig.debugMode) {
-  //       print('📤 Uploading avatar for user: $userId');
-  //     }
+  /// Get avatar upload URL
+  Future<AvatarUploadInfo> getAvatarUploadUrl(String filename) async {
+    try {
+      if (AppConfig.debugMode) {
+        _log('📤 Getting avatar upload URL for: $filename');
+      }
 
-  //     final fileName = '$userId-${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final response = await _api.post<Map<String, dynamic>>(
+        '/profiles/me/avatar',
+        queryParams: {'filename': filename},
+        fromJson: (json) => json as Map<String, dynamic>,
+      );
 
-  //     await _supabase.storage
-  //         .from('avatars')
-  //         .upload(fileName, file);
+      if (response.success && response.data != null) {
+        return AvatarUploadInfo(
+          uploadUrl: response.data!['upload_url'] as String,
+          key: response.data!['key'] as String,
+          finalUrl: response.data!['final_url'] as String,
+        );
+      }
 
-  //     final avatarUrl = _supabase.storage
-  //         .from('avatars')
-  //         .getPublicUrl(fileName);
+      throw Exception(response.error ?? 'Failed to get upload URL');
+    } catch (e) {
+      if (AppConfig.debugMode) {
+        _log('❌ Error getting avatar upload URL: $e');
+      }
+      rethrow;
+    }
+  }
 
-  //     if (AppConfig.debugMode) {
-  //       print('✅ Avatar uploaded: $avatarUrl');
-  //     }
+  /// Search profiles
+  Future<List<ProfileModel>> searchProfiles(String query) async {
+    try {
+      if (AppConfig.debugMode) {
+        _log('🔍 Searching profiles: $query');
+      }
 
-  //     return avatarUrl;
-  //   } catch (e) {
-  //     if (AppConfig.debugMode) {
-  //       print('❌ Error uploading avatar: $e');
-  //     }
-  //     rethrow;
-  //   }
-  // }
+      final response = await _api.get<List<dynamic>>(
+        '/profiles/search/',
+        queryParams: {'q': query},
+        fromJson: (json) => json as List<dynamic>,
+      );
+
+      if (response.success && response.data != null) {
+        return response.data!
+            .map((json) => ProfileModel.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+
+      return [];
+    } catch (e) {
+      if (AppConfig.debugMode) {
+        _log('❌ Error searching profiles: $e');
+      }
+      return [];
+    }
+  }
+
+  void _log(String message) {
+    if (AppConfig.debugMode) {
+      // Production-safe logging
+      assert(() {
+        // ignore: avoid_print
+        print('[ProfileRepository] $message');
+        return true;
+      }());
+    }
+  }
+}
+
+/// Avatar upload information
+class AvatarUploadInfo {
+  final String uploadUrl;
+  final String key;
+  final String finalUrl;
+
+  AvatarUploadInfo({
+    required this.uploadUrl,
+    required this.key,
+    required this.finalUrl,
+  });
 }

@@ -936,7 +936,13 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> with SingleTick
                 onPressed: () {
                   HapticFeedback.selectionClick();
                   // Navigate to chat with this contact
-                  context.push('/chat/${contact.contactUserId}');
+                  context.push(
+                    '/chat/${contact.contactUserId}',
+                    extra: {
+                      'userName': contact.fullName,
+                      'otherUserId': contact.contactUserId,
+                    },
+                  );
                 },
                 icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
                 style: IconButton.styleFrom(

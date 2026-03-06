@@ -6,11 +6,16 @@ import '../../features/profile/presentation/screens/create_profile_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/chat_settings_screen.dart';
+import '../../features/chat/presentation/screens/create_group_screen.dart';
+import '../../features/chat/presentation/screens/group_info_screen.dart';
+import '../../features/chat/presentation/screens/add_members_screen.dart';
+import '../../features/chat/data/models/messaging_models.dart';
 import '../../features/contacts/presentation/screens/contact_profile_screen.dart';
 import '../../features/contacts/data/models/connection_model.dart';
 import '../../features/home/presentation/screens/main_screen.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../config/app_config.dart';
+import '../../features/billing/presentation/screens/plans_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -89,6 +94,36 @@ final routerProvider = Provider<GoRouter>((ref) {
             chatId: id,
             userName: extra?['userName'] ?? 'Chat',
             otherUserId: extra?['otherUserId'],
+            isGroup: extra?['isGroup'] ?? false,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/create-group',
+        builder: (context, state) => const CreateGroupScreen(),
+      ),
+      GoRoute(
+        path: '/group-info/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final extra = state.extra as Map<String, dynamic>?;
+          return GroupInfoScreen(
+            groupId: id,
+            groupName: extra?['groupName'],
+          );
+        },
+      ),
+      GoRoute(
+        path: '/add-members/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final extra = state.extra as Map<String, dynamic>?;
+          final existingMembers = extra?['existingMembers'];
+          return AddMembersScreen(
+            groupId: id,
+            existingMembers: existingMembers is List<ParticipantInfo>
+                ? existingMembers
+                : null,
           );
         },
       ),
@@ -132,8 +167,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      GoRoute(
+        path: '/billing',
+        builder: (context, state) => const PlansScreen(),
+      ),
     ],
-    
+
     // DON'T use refreshListenable - it causes race conditions
     // Let each screen handle its own navigation
   );

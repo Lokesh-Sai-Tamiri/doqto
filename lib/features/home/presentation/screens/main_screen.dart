@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/colors.dart';
@@ -155,6 +156,21 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             physics: const BouncingScrollPhysics(), // Better feel on iOS/Android
             children: screens,
           ),
+
+          // Create Group FAB (only on Chats tab)
+          if (_currentIndex == 0)
+            Positioned(
+              right: 16,
+              bottom: MediaQuery.of(context).padding.bottom + 180,
+              child: FloatingActionButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  context.push('/create-group');
+                },
+                backgroundColor: AppColors.primary,
+                child: const Icon(Icons.group_add, color: AppColors.textInverse),
+              ),
+            ),
 
           // Custom Bottom Bar (Hidden when on AI Tab)
           if (_currentIndex != 3)

@@ -5,10 +5,12 @@ library;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/services/supabase_service.dart';
+import '../../../../core/services/api_service.dart';
 import '../../../../core/config/app_config.dart';
 
 class AuthRepository {
   final SupabaseClient _supabase = SupabaseService.client;
+  final ApiService _api = ApiService();
 
   /// Execute API call with automatic token refresh on expiry
   Future<T> _executeWithRefresh<T>(Future<T> Function() operation) async {
@@ -183,40 +185,41 @@ class AuthRepository {
         final user = getCurrentUser();
         if (user == null) return false;
 
-        // Query profiles table
-        final response = await _supabase
-            .from('profiles')
-            .select('first_name, last_name, email, profile_completed')
-            .eq('id', user.id)
-            .maybeSingle();
+        // Query profile via API backend
+        final response = await _api.get<Map<String, dynamic>>(
+          '/profiles/me',
+          fromJson: (json) => json as Map<String, dynamic>,
+        );
 
-        if (response == null) {
+        if (!response.success || response.data == null) {
           if (AppConfig.debugMode) {
             print('⚠️ No profile found - needs to create profile');
           }
           return false;
         }
 
+        final profile = response.data!;
+
         // Check if profile is marked as completed
-        if (response['profile_completed'] == true) {
+        if (profile['profile_completed'] == true) {
           return true;
         }
 
         // Check if required fields are filled
         final hasRequiredFields =
-            response['first_name'] != null &&
-            response['first_name'].toString().isNotEmpty &&
-            response['last_name'] != null &&
-            response['last_name'].toString().isNotEmpty &&
-            response['email'] != null &&
-            response['email'].toString().isNotEmpty;
+            profile['first_name'] != null &&
+            profile['first_name'].toString().isNotEmpty &&
+            profile['last_name'] != null &&
+            profile['last_name'].toString().isNotEmpty &&
+            profile['email'] != null &&
+            profile['email'].toString().isNotEmpty;
 
         if (AppConfig.debugMode) {
           print('📊 Profile completion check:');
-          print('   - Has first name: ${response['first_name'] != null}');
-          print('   - Has last name: ${response['last_name'] != null}');
-          print('   - Has email: ${response['email'] != null}');
-          print('   - Profile completed: ${response['profile_completed']}');
+          print('   - Has first name: ${profile['first_name'] != null}');
+          print('   - Has last name: ${profile['last_name'] != null}');
+          print('   - Has email: ${profile['email'] != null}');
+          print('   - Profile completed: ${profile['profile_completed']}');
           print('   - Result: $hasRequiredFields');
         }
 

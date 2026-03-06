@@ -1,6 +1,5 @@
-import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:root_check/root_check.dart';
+import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
 
 /// Service responsible for mobile device security checks (HIPAA Compliance).
 class SecurityService {
@@ -8,14 +7,8 @@ class SecurityService {
   /// Under HIPAA policies, PHI should not be accessed on compromised devices.
   static Future<bool> isDeviceCompromised() async {
     try {
-      bool isRooted = await RootCheck.isRooted ?? false;
-
-      // In the root_check package, 'isRooted' usually encapsulates both 
-      // Android root checks and iOS jailbreak checks via native channels.
-      return isRooted;
+      return await FlutterJailbreakDetection.jailbroken;
     } on PlatformException {
-      // If we can't determine, assume safe to avoid breaking the app unnecessarily,
-      // but in a strict zero-trust model, you might returning true here.
       return false;
     } catch (e) {
       return false;

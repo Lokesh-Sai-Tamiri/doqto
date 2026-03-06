@@ -72,7 +72,7 @@ dependencies:
   # Socket.io Client for real-time features
   socket_io_client: ^2.0.3+1
   flutter_secure_storage: ^10.0.0
-  root_check: ^0.0.2+1
+  flutter_jailbreak_detection: ^1.8.0
 
 dev_dependencies:
   flutter_test:

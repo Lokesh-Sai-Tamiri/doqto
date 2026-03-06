@@ -326,6 +326,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.5.2"
+  flutter_jailbreak_detection:
+    dependency: "direct main"
+    description:
+      name: flutter_jailbreak_detection
+      sha256: "67ff11ea41965152d24db7104da1f9b343f94ada64c2a9e309ec4d753a12d281"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.10.0"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -976,14 +984,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.3"
-  root_check:
-    dependency: "direct main"
-    description:
-      name: root_check
-      sha256: "8fa824bc0467a7633d4195d4037d233a92662e4a16c5f668d894bfca3113295f"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.2+1"
   rxdart:
     dependency: transitive
     description:
@@ -1254,7 +1254,7 @@ packages:
     source: hosted
     version: "1.4.0"
   url_launcher:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: url_launcher
       sha256: f6a7e5c4835bb4e3026a04793a4199ca2d14c739ec378fdfe23fc8075d0439f8

@@ -1,4 +1,5 @@
 import { SECTION_IDS } from "@/lib/constants";
+import Logo from "@/components/ui/Logo";
 
 const footerLinks = {
   product: [
@@ -26,13 +27,8 @@ export default function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <svg className="w-4 h-4 text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-                </svg>
-              </div>
-              <span className="text-white font-bold text-lg">Dox2Dox</span>
+            <div className="mb-4">
+              <Logo size="sm" dark />
             </div>
             <p className="text-sm leading-relaxed text-gray-500 max-w-xs">
               HIPAA-compliant healthcare messaging with E2E encryption and AI

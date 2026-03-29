@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SECTION_IDS } from "@/lib/constants";
 import Logo from "@/components/ui/Logo";
 
@@ -9,10 +10,10 @@ const footerLinks = {
     { label: "How It Works", href: `#${SECTION_IDS.howItWorks}` },
   ],
   legal: [
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms of Service", href: "#" },
-    { label: "BAA", href: "#" },
-    { label: "HIPAA Compliance", href: "#" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms of Service", href: "/terms" },
+    { label: "BAA", href: "/baa" },
+    { label: "HIPAA Compliance", href: "/hipaa" },
   ],
   contact: [
     { label: "hello@hymnchat.com", href: "mailto:hello@hymnchat.com" },
@@ -63,12 +64,12 @@ export default function Footer() {
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.label}>
-                  <a
+                  <Link
                     href={link.href}
                     className="text-sm hover:text-primary transition-colors duration-300"
                   >
                     {link.label}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>

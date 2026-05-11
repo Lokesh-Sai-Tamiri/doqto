@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* Dox2Dox design tokens — mirrors docs/design.md on the mobile app.
+   Never inline hex colors anywhere in the app — always reference these. */
+@theme inline {
+  --color-primary: #1A56DB;
+  --color-primary-dark: #0F3499;
+  --color-primary-mid: #5B8FFF;
+  --color-primary-light: #EBF3FF;
+
+  --color-teal: #0ABFAD;
+  --color-teal-light: #E0FAF7;
+
+  --color-surface: #F8FAFD;
+  --color-surface-alt: #EEF2F8;
+
+  --color-gray-50: #F8FAFD;
+  --color-gray-100: #EEF2F8;
+  --color-gray-200: #D6DDF0;
+  --color-gray-400: #8A9CC4;
+  --color-gray-600: #4A5E8C;
+  --color-gray-800: #1C2B4A;
+  --color-gray-900: #0D1829;
+
+  --color-success: #22C55E;
+  --color-success-light: #DCFCE7;
+  --color-warning: #F59E0B;
+  --color-warning-light: #FEF3C7;
+  --color-danger: #EF4444;
+  --color-danger-light: #FEF2F2;
+  --color-purple: #7C3AED;
+  --color-purple-light: #F3E8FF;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+
+  --font-sans: var(--font-dm-sans), system-ui, sans-serif;
+  --font-display: var(--font-sora), system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-surface);
+  color: var(--color-gray-800);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}

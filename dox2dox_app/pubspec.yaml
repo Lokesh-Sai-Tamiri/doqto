@@ -1,0 +1,70 @@
+name: dox2dox_app
+description: "Dox2Dox — secure doctor-to-doctor communication."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State + routing
+  flutter_riverpod: ^2.5.1
+  go_router: ^13.2.0
+
+  # HTTP + auth storage
+  dio: ^5.4.0
+  flutter_secure_storage: ^9.0.0
+
+  # Realtime
+  web_socket_channel: ^2.4.0
+
+  # Models + codegen
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.9.0
+
+  # Fonts + UI
+  google_fonts: ^6.1.0
+  cached_network_image: ^3.3.0
+
+  # Media
+  record: ^5.1.2
+  just_audio: ^0.9.36
+  file_picker: ^6.1.1
+
+  # Local cache
+  hive_flutter: ^1.1.0
+
+  # Utilities
+  intl: ^0.19.0
+  permission_handler: ^11.3.0
+  get_it: ^7.6.7
+
+  # Phone input (flag/code picker + E.164 validation)
+  country_picker: ^2.0.26
+  phone_numbers_parser: ^9.0.0
+
+  # Image picker for profile avatar
+  image_picker: ^1.0.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.8
+  freezed: ^2.4.7
+  json_serializable: ^6.7.1
+  hive_generator: ^2.0.1
+
+flutter:
+  uses-material-design: true
+
+# Workaround: record_linux 0.7.2 has a broken interface against
+# record_platform_interface 1.5.0. We only target iOS + Android, so pin
+# record_linux to a working version to unblock resolver.
+dependency_overrides:
+  record_linux: ^1.0.0
+

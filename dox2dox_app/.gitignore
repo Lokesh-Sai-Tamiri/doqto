@@ -1,7 +1,6 @@
 # Miscellaneous
 *.class
 *.log
-logs/
 *.pyc
 *.swp
 .DS_Store
@@ -10,16 +9,13 @@ logs/
 .buildlog/
 .history
 .svn/
-.next
 .swiftpm/
-.env
 migrate_working_dir/
-node_modules/
+
 # IntelliJ related
 *.iml
 *.ipr
 *.iws
-.env.local
 .idea/
 
 # The .vscode folder contains launch configuration and tasks you configure in

@@ -19,6 +19,7 @@ import '../../ui/screens/org/pending_verification_screen.dart';
 import '../../ui/screens/profile/profile_edit_screen.dart';
 import '../../ui/screens/profile/profile_screen.dart';
 import '../../ui/screens/settings/settings_screen.dart';
+import '../../ui/screens/voice_broadcast/voice_broadcast_screen.dart';
 import '../../ui/screens/splash/splash_screen.dart';
 
 class AppRoutes {
@@ -41,6 +42,7 @@ class AppRoutes {
   static const settings = '/settings';
   static const profile = '/profile';
   static const profileEdit = '/profile/edit';
+  static const record = '/record';
 }
 
 /// Re-evaluates redirects whenever AuthStage changes.
@@ -84,6 +86,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) => ProfileScreen(user: state.extra as User?),
       ),
       GoRoute(path: AppRoutes.profileEdit, builder: (_, __) => const ProfileEditScreen()),
+      GoRoute(path: AppRoutes.record, builder: (_, __) => const VoiceBroadcastScreen()),
     ],
     refreshListenable: _authListenable(ref),
     redirect: (context, state) {

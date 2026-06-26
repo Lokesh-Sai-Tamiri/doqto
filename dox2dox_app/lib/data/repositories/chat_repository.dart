@@ -61,13 +61,17 @@ class ChatRepository {
     required List<int> bytes,
     required String filename,
     required int durationSec,
+    String? transcript,
   }) async {
     final j = await _api.postMultipart(
       ApiRoutes.messageVoiceNote(conversationId),
       fileField: 'file',
       bytes: bytes,
       filename: filename,
-      fields: {'duration_sec': durationSec},
+      fields: {
+        'duration_sec': durationSec,
+        if (transcript != null && transcript.isNotEmpty) 'transcript': transcript,
+      },
     );
     return Message.fromJson(j);
   }

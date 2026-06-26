@@ -40,3 +40,5 @@ app.include_router(ws_router.router)
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "env": settings.ENVIRONMENT}
+
+

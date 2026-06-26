@@ -49,5 +49,9 @@
 	<string>Dox2Dox needs access to your photo library so you can set a profile photo.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Dox2Dox needs access to your camera so you can take a profile photo.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Dox2Dox needs microphone access to record voice notes.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Dox2Dox uses speech recognition to transcribe your voice notes.</string>
 </dict>
 </plist>

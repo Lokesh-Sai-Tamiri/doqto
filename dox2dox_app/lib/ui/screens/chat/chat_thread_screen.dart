@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:go_router/go_router.dart';
 
+import '../../../core/di/providers.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/enums/app_enums.dart';
 import '../../../core/router/app_router.dart';
@@ -17,6 +18,7 @@ import '../../widgets/doctor_avatar.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/voice_note_bubble.dart';
 import '_conversation_display.dart';
+import 'voice_recorder_panel.dart';
 
 class ChatThreadScreen extends ConsumerStatefulWidget {
   final String conversationId;
@@ -28,6 +30,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
 
 class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _input = TextEditingController();
+  bool _showRecorder = false;
 
   Future<void> _send() async {
     final text = _input.text.trim();
@@ -99,6 +102,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       durationSec: m.voiceDurationSec ?? 0,
                       transcript: m.transcript,
                       isMine: isMine,
+                      getAudioUrl: () => ref.read(chatRepositoryProvider).fileUrl(m.id),
                     );
                   }
                   return MessageBubble(
@@ -110,35 +114,46 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               ),
             ),
           ),
-          SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              color: AppColors.white,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _input,
-                      decoration: InputDecoration(
-                        hintText: Strings.chatMessageHint,
-                        border: OutlineInputBorder(borderRadius: AppRadii.rFull),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md + 2,
-                          vertical: AppSpacing.sm + 1,
+          if (_showRecorder)
+            VoiceRecorderPanel(
+              conversationId: widget.conversationId,
+              onSent: () => setState(() => _showRecorder = false),
+              onCancel: () => setState(() => _showRecorder = false),
+            )
+          else
+            SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                color: AppColors.white,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _input,
+                        decoration: InputDecoration(
+                          hintText: Strings.chatMessageHint,
+                          border: OutlineInputBorder(borderRadius: AppRadii.rFull),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md + 2,
+                            vertical: AppSpacing.sm + 1,
+                          ),
                         ),
+                        onSubmitted: (_) => _send(),
                       ),
-                      onSubmitted: (_) => _send(),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: _send,
-                    icon: const Icon(Icons.send, color: AppColors.medBlue),
-                  ),
-                ],
+                    IconButton(
+                      onPressed: _send,
+                      icon: const Icon(Icons.send, color: AppColors.medBlue),
+                    ),
+                    IconButton(
+                      onPressed: () => setState(() => _showRecorder = true),
+                      icon: const Icon(Icons.mic, color: AppColors.medBlue),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

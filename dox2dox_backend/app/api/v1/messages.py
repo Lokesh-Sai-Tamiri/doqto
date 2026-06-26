@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -91,7 +91,8 @@ async def upload_file(
 async def upload_voice_note(
     conversation_id: uuid.UUID,
     file: UploadFile,
-    duration_sec: int = 0,
+    duration_sec: int = Form(default=0),
+    transcript: str = Form(default=""),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageOut:
@@ -100,6 +101,8 @@ async def upload_voice_note(
     if len(data) > VOICE_NOTE_MAX_FILE_BYTES:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="voice_note_too_large")
 
+    client_transcript = transcript.strip() if transcript else ""
+
     msg = Message(
         conversation_id=conversation_id,
         sender_id=user.id,
@@ -107,12 +110,14 @@ async def upload_voice_note(
         file_name=file.filename,
         file_size_bytes=len(data),
         voice_duration_sec=duration_sec,
-        transcript_status=TranscriptStatus.PENDING,
+        transcript=client_transcript or None,
+        transcript_status=TranscriptStatus.COMPLETED if client_transcript else TranscriptStatus.PENDING,
     )
     db.add(msg)
     await db.flush()
     key = FileService.key_for_voice_note(org_id=conv.org_id, message_id=msg.id)
-    await FileService.upload_bytes(key=key, data=data, content_type="audio/mp4")
+    content_type = file.content_type or "audio/wav"
+    await FileService.upload_bytes(key=key, data=data, content_type=content_type)
     msg.s3_key = key
     await AuditService.log(
         db,
@@ -123,22 +128,21 @@ async def upload_voice_note(
     )
     await db.commit()
 
-    # Kick off transcription (fake in local env).
-    await TranscriptionService.start(message_id=str(msg.id), s3_key=key)
-
     out = MessageService.to_out(msg)
     await ws_manager.broadcast_org(conv.org_id, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json"))
 
-    # In local/dev the fake returns a transcript synchronously — complete it immediately.
-    transcript = await TranscriptionService.fetch(message_id=str(msg.id))
-    msg.transcript = transcript
-    msg.transcript_status = TranscriptStatus.COMPLETED
-    await db.commit()
-    await ws_manager.broadcast_org(
-        conv.org_id,
-        WsEventServer.TRANSCRIPT_READY,
-        {"message_id": str(msg.id), "transcript": transcript},
-    )
+    if not client_transcript:
+        await TranscriptionService.start(message_id=str(msg.id), s3_key=key)
+        server_transcript = await TranscriptionService.fetch(message_id=str(msg.id))
+        if server_transcript:
+            msg.transcript = server_transcript
+            msg.transcript_status = TranscriptStatus.COMPLETED
+            await db.commit()
+            await ws_manager.broadcast_org(
+                conv.org_id,
+                WsEventServer.TRANSCRIPT_READY,
+                {"message_id": str(msg.id), "transcript": server_transcript},
+            )
     return MessageService.to_out(msg)
 
 

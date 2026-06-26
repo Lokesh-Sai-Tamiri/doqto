@@ -12,6 +12,7 @@ class DoctorAvatar extends StatelessWidget {
   final AvatarSize size;
   final PresenceStatusDot? presence;
   final String? imageUrl;
+  final bool isSelected;
 
   const DoctorAvatar({
     super.key,
@@ -20,6 +21,7 @@ class DoctorAvatar extends StatelessWidget {
     this.size = AvatarSize.lg,
     this.presence,
     this.imageUrl,
+    this.isSelected = false,
   });
 
   @override
@@ -76,7 +78,22 @@ class DoctorAvatar extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           picture,
-          if (presence != null)
+          if (isSelected)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: AppColors.medBlue,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.white, width: 2),
+                ),
+                child: const Icon(Icons.check, size: 10, color: AppColors.white),
+              ),
+            )
+          else if (presence != null)
             Positioned(bottom: -1, right: -1, child: presence!),
         ],
       ),

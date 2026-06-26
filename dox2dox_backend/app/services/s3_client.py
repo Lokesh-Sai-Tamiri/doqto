@@ -1,0 +1,78 @@
+"""Real AWS S3 client using boto3. Creates the bucket on first use if it doesn't exist."""
+
+from __future__ import annotations
+
+import logging
+
+import boto3
+from botocore.config import Config
+from botocore.exceptions import ClientError
+
+from app.core.config import settings
+from app.core.constants import PRESIGNED_URL_TTL_SECONDS
+
+log = logging.getLogger("dox2dox.s3")
+
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        _client = boto3.client(
+            "s3",
+            region_name=settings.AWS_REGION,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            config=Config(signature_version="s3v4"),
+        )
+        try:
+            _ensure_bucket()
+        except Exception as e:
+            log.warning("[S3] bucket check failed (%s) — proceeding anyway", e)
+    return _client
+
+
+def _ensure_bucket() -> None:
+    bucket = settings.AWS_S3_BUCKET_NAME
+    try:
+        _client.head_bucket(Bucket=bucket)
+        log.info("[S3] bucket '%s' exists", bucket)
+    except ClientError as e:
+        error_code = str(e.response.get("Error", {}).get("Code", ""))
+        if error_code in ("404", "NoSuchBucket", "400"):
+            log.info("[S3] bucket '%s' not accessible (code=%s), attempting create in %s", bucket, error_code, settings.AWS_REGION)
+            try:
+                if settings.AWS_REGION == "us-east-1":
+                    _client.create_bucket(Bucket=bucket)
+                else:
+                    _client.create_bucket(
+                        Bucket=bucket,
+                        CreateBucketConfiguration={"LocationConstraint": settings.AWS_REGION},
+                    )
+            except ClientError as create_err:
+                if "BucketAlreadyOwnedByYou" in str(create_err) or "BucketAlreadyExists" in str(create_err):
+                    log.info("[S3] bucket '%s' already exists", bucket)
+                else:
+                    raise
+        else:
+            raise
+
+
+class RealS3Client:
+    async def upload_bytes(self, *, key: str, data: bytes, content_type: str) -> None:
+        _get_client().put_object(
+            Bucket=settings.AWS_S3_BUCKET_NAME,
+            Key=key,
+            Body=data,
+            ContentType=content_type,
+        )
+        log.info("[S3] uploaded %d bytes to %s", len(data), key)
+
+    async def presigned_url(self, *, key: str, expires_in: int = PRESIGNED_URL_TTL_SECONDS) -> str:
+        url = _get_client().generate_presigned_url(
+            "get_object",
+            Params={"Bucket": settings.AWS_S3_BUCKET_NAME, "Key": key},
+            ExpiresIn=expires_in,
+        )
+        return url

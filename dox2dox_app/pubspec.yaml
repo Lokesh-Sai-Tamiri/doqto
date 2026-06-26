@@ -50,6 +50,12 @@ dependencies:
   # Image picker for profile avatar
   image_picker: ^1.0.7
 
+  # Speech-to-text for live voice note transcription
+  speech_to_text: ^7.0.0
+
+  # Temp directory for voice recordings
+  path_provider: ^2.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

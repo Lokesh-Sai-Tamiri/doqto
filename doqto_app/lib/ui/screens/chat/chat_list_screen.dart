@@ -124,7 +124,11 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               ],
             )
           : AppBar(
-              title: const Text(Strings.appName),
+              toolbarHeight: 64,
+              title: Text(
+                Strings.appName,
+                style: AppText.display.copyWith(fontSize: 28),
+              ),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.add_circle_outline),
@@ -221,7 +225,11 @@ class _ConversationList extends ConsumerWidget {
                 )
               : ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  // extendBody: keep last row clear of the floating nav bar.
+                  padding: EdgeInsets.only(
+                    top: AppSpacing.sm,
+                    bottom: MediaQuery.paddingOf(context).bottom + AppSpacing.sm,
+                  ),
                   itemCount: list.length,
                   separatorBuilder: (ctx, i) => const Divider(indent: AppSpacing.xxl + AppSpacing.lg, height: 0),
                   itemBuilder: (ctx, i) {
@@ -329,7 +337,10 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
     }
 
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      padding: EdgeInsets.only(
+        top: AppSpacing.sm,
+        bottom: MediaQuery.paddingOf(context).bottom + AppSpacing.sm,
+      ),
       children: [
         if (matchingConvs.isNotEmpty) ...[
           Padding(

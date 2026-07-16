@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // --- Primary palette (med-blue) ---
-  static const Color medBlue = Color(0xFF1A56DB);
-  static const Color medBlueDark = Color(0xFF0F3499);
-  static const Color medBlueMid = Color(0xFF5B8FFF);
-  static const Color medBlueLight = Color(0xFFEBF3FF);
+  // --- Primary palette (brand teal — matches logo + landing --color-primary) ---
+  static const Color medBlue = Color(0xFF35878F); // brand teal: primary actions, nav bar, sent bubbles
+  static const Color medBlueDark = Color(0xFF1E2A5A); // brand navy: headings, pressed states
+  static const Color medBlueMid = Color(0xFF5FA5AB); // lighter teal: focused inputs, secondary highlights
+  static const Color medBlueLight = Color(0xFFE6F1F2); // pale teal tint: input bg, tinted surfaces
 
   // --- Accent (med-teal) ---
   static const Color medTeal = Color(0xFF0ABFAD);
@@ -52,12 +52,13 @@ class AppColors {
   static Color get onPrimary => white;
 
   // --- Avatar color cycle — index 0..4 ---
+  // Order avoids two teals adjacent (medBlue + medTeal are both teal now).
   static const List<Color> avatarCycle = [
-    medBlue,
-    medTeal,
+    medBlueDark, // navy
+    medTeal, // bright teal
     purple,
-    medBlueDark,
     amber,
+    medBlue, // brand teal
   ];
 
   static Color avatarColorFor(int index) => avatarCycle[index % avatarCycle.length];

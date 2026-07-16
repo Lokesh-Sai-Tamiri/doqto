@@ -72,7 +72,7 @@ class _AppSearchBarState extends State<AppSearchBar> {
           hintText: widget.hint,
           hintStyle: AppText.body.copyWith(color: AppColors.textMuted),
           filled: true,
-          fillColor: AppColors.gray50,
+          fillColor: AppColors.white,
           prefixIcon: Icon(Icons.search, color: AppColors.textMuted, size: 20),
           suffixIcon: hasText
               ? IconButton(
@@ -90,7 +90,7 @@ class _AppSearchBarState extends State<AppSearchBar> {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: AppRadii.rFull,
-            borderSide: BorderSide.none,
+            borderSide: const BorderSide(color: AppColors.gray100),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: AppRadii.rFull,

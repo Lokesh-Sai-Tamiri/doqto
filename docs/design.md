@@ -48,9 +48,9 @@ colors:
   background: '#faf8ff'
   on-background: '#191b23'
   surface-variant: '#e2e1ed'
-  med-blue-dark: '#0F3499'
-  med-blue-mid: '#5B8FFF'
-  med-blue-light: '#EBF3FF'
+  med-blue-dark: '#1E2A5A'
+  med-blue-mid: '#5FA5AB'
+  med-blue-light: '#E6F1F2'
   med-teal-light: '#E0FAF7'
   gray-50: '#F8FAFD'
   gray-100: '#EEF2F8'
@@ -141,7 +141,7 @@ spacing:
 Two circular doctor symbols with bidirectional arrows and a stethoscope element connecting them. The mark communicates peer-to-peer clinical communication at a glance.
 
 ### App Icon
-- Background: `#1A56DB` (primary blue)
+- Background: `#35878F` (primary blue)
 - Icon: White logo mark centered
 - Corner radius: iOS/Android standard (continuous curve)
 
@@ -153,10 +153,10 @@ Two circular doctor symbols with bidirectional arrows and a stethoscope element 
 
 | Token | Hex | Usage |
 |---|---|---|
-| `--med-blue` | `#1A56DB` | Primary actions, nav bar, sent bubbles, CTAs |
-| `--med-blue-dark` | `#0F3499` | Hover states, headings on white |
-| `--med-blue-mid` | `#5B8FFF` | Focused inputs, secondary highlights |
-| `--med-blue-light` | `#EBF3FF` | Input backgrounds, badge fills, tinted surfaces |
+| `--med-blue` | `#35878F` | Primary actions, nav bar, sent bubbles, CTAs |
+| `--med-blue-dark` | `#1E2A5A` | Hover states, headings on white |
+| `--med-blue-mid` | `#5FA5AB` | Focused inputs, secondary highlights |
+| `--med-blue-light` | `#E6F1F2` | Input backgrounds, badge fills, tinted surfaces |
 | `--med-teal` | `#0ABFAD` | Accent, mic button, voice note elements, teal badges |
 | `--med-teal-light` | `#E0FAF7` | Teal surface backgrounds |
 
@@ -188,10 +188,10 @@ Avatars use initials with colored circle backgrounds. Cycle through these in ord
 
 | Index | Color | Hex |
 |---|---|---|
-| 0 | Blue | `#1A56DB` |
+| 0 | Blue | `#35878F` |
 | 1 | Teal | `#0ABFAD` |
 | 2 | Purple | `#7C3AED` |
-| 3 | Dark Blue | `#0F3499` |
+| 3 | Dark Blue | `#1E2A5A` |
 | 4 | Amber | `#F59E0B` |
 
 ---
@@ -210,8 +210,8 @@ Avatars use initials with colored circle backgrounds. Cycle through these in ord
 | Subheading | DM Sans | 500 | 15px | `#1C2B4A` | Specialty, subtitle rows |
 | Body | DM Sans | 400 | 14px | `#4A5E8C` | Message content, descriptions |
 | Caption | DM Sans | 400 | 12px | `#8A9CC4` | Timestamps, file size, read receipts |
-| Label | DM Sans | 600 | 11px | `#1A56DB` | Section labels, uppercase tags |
-| Code / Invite | Sora | 700 | 20px | `#0F3499` | Invite code display (letter-spacing: 4px) |
+| Label | DM Sans | 600 | 11px | `#35878F` | Section labels, uppercase tags |
+| Code / Invite | Sora | 700 | 20px | `#1E2A5A` | Invite code display (letter-spacing: 4px) |
 
 ### Rules
 - Never use font sizes below 11px
@@ -273,11 +273,11 @@ Base unit: **4px**. All spacing is a multiple of 4.
 
 | Variant | Background | Text | Border | Usage |
 |---|---|---|---|---|
-| Primary | `#1A56DB` | `#FFFFFF` | None | Main CTAs: Join, Send, Continue |
-| Secondary | `#EBF3FF` | `#0F3499` | None | Invite, secondary actions |
+| Primary | `#35878F` | `#FFFFFF` | None | Main CTAs: Join, Send, Continue |
+| Secondary | `#E6F1F2` | `#1E2A5A` | None | Invite, secondary actions |
 | Ghost | Transparent | `#4A5E8C` | `1.5px #D6DDF0` | Cancel, back actions |
 | Danger | `#FEF2F2` | `#EF4444` | None | Leave org, remove doctor |
-| Icon (blue) | `#EBF3FF` | — | None | Add, new chat |
+| Icon (blue) | `#E6F1F2` | — | None | Add, new chat |
 | Icon (teal) | `#E0FAF7` | — | None | Mic, voice actions |
 
 All buttons: `border-radius: 999px` (pill), `font: DM Sans 600 14px`, `padding: 10px 20px`  
@@ -294,13 +294,13 @@ Icon buttons: `40px × 40px`, `border-radius: 999px`
 - Padding: `11px 14px`
 - Font: DM Sans 400 14px, color `#1C2B4A`
 - Placeholder: `#8A9CC4`
-- Focus border: `1.5px solid #1A56DB`
+- Focus border: `1.5px solid #35878F`
 
 **Invite code input:**
-- Background: `#EBF3FF`
-- Border: `1.5px solid #5B8FFF`
+- Background: `#E6F1F2`
+- Border: `1.5px solid #5FA5AB`
 - Border radius: `12px`
-- Font: Sora 700 15px, color `#0F3499`
+- Font: Sora 700 15px, color `#1E2A5A`
 - Letter spacing: `3px`
 - Placeholder: `APOL·4827`
 
@@ -336,7 +336,7 @@ All avatars display the user's initials (first + last name). No photo default �
 
 | Variant | Background | Text Color | Usage |
 |---|---|---|---|
-| Role | `#EBF3FF` | `#0F3499` | "Doctor" |
+| Role | `#E6F1F2` | `#1E2A5A` | "Doctor" |
 | Admin | `#FEF3C7` | `#92400E` | "Admin" |
 | Org | `#E0FAF7` | `#0D6B62` | Hospital name |
 | Online | `#DCFCE7` | `#15803D` | "Online" |
@@ -375,7 +375,7 @@ Group chats do not have a single avatar. Instead, display a 2×2 stacked grid of
 │                              [  Copy  ] │  ← Ghost button white
 └─────────────────────────────────────────┘
 ```
-- Background: `#1A56DB`
+- Background: `#35878F`
 - Border radius: `16px`
 - Padding: `14px 16px`
 
@@ -391,7 +391,7 @@ Group chats do not have a single avatar. Instead, display a 2×2 stacked grid of
 - Timestamp: 10px `#8A9CC4`, bottom-right
 
 **Sent bubble:**
-- Background: `#1A56DB`
+- Background: `#35878F`
 - Text: DM Sans 400 13px `#FFFFFF`
 - Timestamp + read receipts: 10px `rgba(255,255,255,0.55)`, bottom-right
 - Max width: 72% of screen width
@@ -435,7 +435,7 @@ Inside a received bubble, shown above message text:
 ### 7.10 Navigation Bar
 
 **Top nav (blue):**
-- Background: `#1A56DB`
+- Background: `#35878F`
 - Title: Sora 700 17px white
 - Back button: `30×30px` circle, `rgba(255,255,255,0.15)` bg
 - Status bar: extends blue upward
@@ -443,7 +443,7 @@ Inside a received bubble, shown above message text:
 **Tab bar (bottom):**
 - Background: `#FFFFFF`
 - Border top: `1px solid #EEF2F8`
-- Active tab: `#1A56DB`, 2px bottom indicator
+- Active tab: `#35878F`, 2px bottom indicator
 - Inactive tab: `#8A9CC4`
 - Font: Sora 600 12px
 - Tabs: Chats / Doctors / My Org
@@ -453,11 +453,11 @@ Inside a received bubble, shown above message text:
 ## 8. Screen Specifications
 
 ### 8.1 Splash / Onboarding
-- Full blue background: `#1A56DB`
+- Full blue background: `#35878F`
 - Centered logo mark (white, 80px)
 - App name: Sora 700 32px white
 - Tagline: DM Sans 400 14px `rgba(255,255,255,0.65)`
-- CTA button: white background, `#1A56DB` text (inverted primary)
+- CTA button: white background, `#35878F` text (inverted primary)
 
 ---
 
@@ -581,7 +581,7 @@ Entry point: tap `[+]` icon in Chat List nav bar → bottom sheet appears with t
 - Doctor list shows only members of the same org, sorted alphabetically
 - Search filters list in real time
 - Selected doctors shown as chips below the list: avatar (SM) + first name + `×` remove button
-- Chip: `#EBF3FF` bg, `#0F3499` text, `border-radius: 999px`, `DM Sans 500 12px`, `padding: 4px 10px`
+- Chip: `#E6F1F2` bg, `#1E2A5A` text, `border-radius: 999px`, `DM Sans 500 12px`, `padding: 4px 10px`
 
 ---
 

@@ -34,7 +34,14 @@ class MyOrgScreen extends ConsumerWidget {
                       members.any((m) =>
                           m.user.id == me.id && m.orgRole == OrgRole.admin);
                   return ListView(
-                    padding: const EdgeInsets.all(AppSpacing.screenHorizontal),
+                    // extendBody: keep last row clear of the floating nav bar.
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.screenHorizontal,
+                      AppSpacing.screenHorizontal,
+                      AppSpacing.screenHorizontal,
+                      MediaQuery.paddingOf(context).bottom +
+                          AppSpacing.screenHorizontal,
+                    ),
                     children: [
                       if (isAdmin) ...[
                         InviteCodeCard(code: org.inviteCode),

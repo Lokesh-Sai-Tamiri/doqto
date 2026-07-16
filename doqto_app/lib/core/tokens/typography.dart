@@ -27,7 +27,7 @@ class AppText {
     fontSize: 17,
     fontWeight: FontWeight.w700,
     height: 1.3,
-    color: AppColors.white,
+    color: AppColors.gray900, // app bars are light chrome; dark title
   );
 
   static TextStyle inviteCode = GoogleFonts.sora(

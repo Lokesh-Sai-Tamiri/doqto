@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'tokens/colors.dart';
@@ -29,12 +30,15 @@ class AppTheme {
         bodyColor: AppColors.textPrimary,
         displayColor: AppColors.textDisplay,
       ),
+      // Chrome blends with the scaffold — no solid color slab under the notch.
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.medBlue,
-        foregroundColor: AppColors.white,
+        backgroundColor: AppColors.appBg,
+        foregroundColor: AppColors.textDisplay,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: AppText.navTitle,
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,

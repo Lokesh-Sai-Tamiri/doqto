@@ -52,6 +52,8 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: AppSpacing.xl),
+            Center(child: Image.asset('logo.png', width: 72, height: 72)),
+            const SizedBox(height: AppSpacing.lg),
             Text(Strings.authPhoneTitle, style: AppText.display),
             const SizedBox(height: AppSpacing.lg),
             PhoneField(

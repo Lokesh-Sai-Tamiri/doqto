@@ -67,9 +67,18 @@ dev_dependencies:
   freezed: ^2.4.7
   json_serializable: ^6.7.1
   hive_generator: ^2.0.1
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
+  assets:
+    - logo.png
+
+flutter_launcher_icons:
+  image_path: "logo.png"
+  android: true
+  ios: true
+  remove_alpha_ios: true # iOS icons must be opaque; logo is RGBA
 
 # Workaround: record_linux 0.7.2 has a broken interface against
 # record_platform_interface 1.5.0. We only target iOS + Android, so pin

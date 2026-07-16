@@ -44,7 +44,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.local_hospital_rounded, size: 80, color: AppColors.white),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Image.asset('logo.png', width: 96, height: 96),
+            ),
             const SizedBox(height: AppSpacing.lg),
             Text(
               Strings.appName,

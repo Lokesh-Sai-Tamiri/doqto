@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dox2Dox one-shot dev startup.
+# Doqto one-shot dev startup.
 #
 #   ./scripts/dev.sh                → infra + backend + admin (default)
 #   ./scripts/dev.sh --flutter      → also runs flutter on the booted iOS sim
@@ -12,9 +12,9 @@ set -euo pipefail
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-BACKEND_DIR="$REPO_ROOT/dox2dox_backend"
-ADMIN_DIR="$REPO_ROOT/dox2dox_admin"
-APP_DIR="$REPO_ROOT/dox2dox_app"
+BACKEND_DIR="$REPO_ROOT/doqto_backend"
+ADMIN_DIR="$REPO_ROOT/doqto_admin"
+APP_DIR="$REPO_ROOT/doqto_app"
 LOG_DIR="$REPO_ROOT/logs"
 mkdir -p "$LOG_DIR"
 
@@ -76,7 +76,7 @@ if [[ "$RUN_BACKEND" -eq 1 ]]; then
     [[ -d "$BACKEND_DIR/venv" ]] || die "missing $BACKEND_DIR/venv — run: python3 -m venv venv && pip install -r requirements.txt"
 fi
 if [[ "$RUN_ADMIN" -eq 1 ]]; then
-    [[ -d "$ADMIN_DIR/node_modules" ]] || die "missing $ADMIN_DIR/node_modules — run: cd dox2dox_admin && npm install"
+    [[ -d "$ADMIN_DIR/node_modules" ]] || die "missing $ADMIN_DIR/node_modules — run: cd doqto_admin && npm install"
 fi
 if [[ "$RUN_FLUTTER" -eq 1 ]]; then
     command -v flutter >/dev/null || die "flutter not on PATH"
@@ -187,7 +187,7 @@ fi
 # Ready banner + log stream
 # -----------------------------------------------------------------------------
 echo
-ok "dox2dox is up"
+ok "doqto is up"
 [[ "$RUN_BACKEND" -eq 1 ]] && printf "     %sbackend%s  http://localhost:8000/docs\n" "$BLUE" "$RESET"
 [[ "$RUN_ADMIN"   -eq 1 ]] && printf "     %sadmin%s    http://localhost:3001\n"      "$BLUE" "$RESET"
 [[ "$RUN_FLUTTER" -eq 1 ]] && printf "     %sflutter%s  see logs/flutter.log\n"        "$BLUE" "$RESET"

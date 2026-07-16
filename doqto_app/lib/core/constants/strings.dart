@@ -4,7 +4,7 @@ class Strings {
   Strings._();
 
   // Brand
-  static const String appName = 'Dox2Dox';
+  static const String appName = 'Doqto';
   static const String tagline = 'Secure doctor-to-doctor communication';
 
   // Auth

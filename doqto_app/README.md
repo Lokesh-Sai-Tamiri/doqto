@@ -1,4 +1,4 @@
-# dox2dox_app
+# doqto_app
 
 A new Flutter project.
 

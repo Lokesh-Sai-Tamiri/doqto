@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_S3_BUCKET_NAME: str = "dox2dox"
+    AWS_S3_BUCKET_NAME: str = "doqto"
 
     JWT_SECRET: str
     MESSAGE_ENCRYPTION_KEY: str

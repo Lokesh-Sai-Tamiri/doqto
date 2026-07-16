@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #FFFC00;
-  --color-primary-dark: #FFD700;
+  --color-primary: #35878F;
+  --color-primary-dark: #1E2A5A;
   --color-surface: #18181F;
   --color-surface-light: #2A2A35;
   --color-dark: #0A0A0A;
@@ -56,7 +56,7 @@ html.lenis body {
 
 /* Gradient text utility */
 .gradient-text {
-  background: linear-gradient(135deg, #FFFC00, #FFD700);
+  background: linear-gradient(135deg, #35878F, #1E2A5A);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

@@ -1,5 +1,5 @@
 ---
-name: Dox2Dox Design System
+name: Doqto Design System
 colors:
   surface: '#faf8ff'
   surface-dim: '#d9d9e4'
@@ -124,7 +124,7 @@ spacing:
   space-10: 40px
 ---
 
-# Dox2Dox — Design System
+# Doqto — Design System
 
 > Version 1.1 · May 2026 · Light theme only · Mobile-first · Flutter (iOS + Android)
 
@@ -132,7 +132,7 @@ spacing:
 
 ## 1. Brand Identity
 
-**App name:** Dox2Dox  
+**App name:** Doqto  
 **Tagline:** Secure doctor-to-doctor communication  
 **Category:** B2B Healthcare Communication  
 **Theme:** Light only. Clean, clinical, trustworthy. No dark mode.
@@ -729,4 +729,4 @@ Example: `APOL·4827`, `MEDC·7731`
 
 ---
 
-*Dox2Dox Design System v1.1 — Group Chat Update — Confidential — May 2026*
+*Doqto Design System v1.1 — Group Chat Update — Confidential — May 2026*

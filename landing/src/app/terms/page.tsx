@@ -3,9 +3,9 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "Terms of Service | Dox2Dox",
+  title: "Terms of Service | Doqto",
   description:
-    "Terms of Service for Dox2Dox — HIPAA-compliant healthcare messaging platform with E2E encryption and AI clinical assistance.",
+    "Terms of Service for Doqto — HIPAA-compliant healthcare messaging platform with E2E encryption.",
 };
 
 export default function TermsPage() {
@@ -25,11 +25,11 @@ export default function TermsPage() {
               <span className="text-primary mr-2">1.</span>Acceptance of Terms
             </h2>
             <p className="text-gray-400 leading-relaxed">
-              By accessing or using the Dox2Dox platform (&quot;Service&quot;),
+              By accessing or using the Doqto platform (&quot;Service&quot;),
               you agree to be bound by these Terms of Service
               (&quot;Terms&quot;). If you do not agree to all of these Terms, do
               not use the Service. These Terms constitute a legally binding
-              agreement between you and Dox2Dox, Inc. (&quot;Company,&quot;
+              agreement between you and Doqto, Inc. (&quot;Company,&quot;
               &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). Your continued
               use of the Service following any modifications to these Terms
               constitutes acceptance of those changes.
@@ -43,7 +43,7 @@ export default function TermsPage() {
               Service
             </h2>
             <p className="text-gray-400 leading-relaxed mb-4">
-              Dox2Dox is a HIPAA-compliant healthcare messaging platform
+              Doqto is a HIPAA-compliant healthcare messaging platform
               designed for healthcare professionals and organizations. The
               Service includes:
             </p>
@@ -51,10 +51,6 @@ export default function TermsPage() {
               <li>
                 End-to-end encrypted messaging for secure clinical
                 communications
-              </li>
-              <li>
-                AI-powered clinical assistant (&quot;Inara&quot;) for
-                decision support
               </li>
               <li>Organization and department management tools</li>
               <li>Secure file sharing and media exchange</li>
@@ -153,7 +149,7 @@ export default function TermsPage() {
               Obligations
             </h2>
             <p className="text-gray-400 leading-relaxed mb-4">
-              Dox2Dox operates as a Business Associate under HIPAA. We will
+              Doqto operates as a Business Associate under HIPAA. We will
               enter into a Business Associate Agreement (BAA) with each Covered
               Entity that uses our Service. You acknowledge and agree that:
             </p>
@@ -180,48 +176,12 @@ export default function TermsPage() {
           {/* 7 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">7.</span>AI Clinical Assistant
-              Disclaimer
-            </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
-              The Dox2Dox AI clinical assistant (&quot;Inara&quot;) is designed
-              to support — not replace — clinical decision-making. By using
-              Inara, you acknowledge and agree that:
-            </p>
-            <ul className="list-disc list-inside text-gray-400 space-y-2 ml-4">
-              <li>
-                Inara&apos;s outputs are informational and should not be
-                considered medical advice, diagnosis, or treatment
-                recommendations
-              </li>
-              <li>
-                All clinical decisions remain the sole responsibility of the
-                licensed healthcare professional
-              </li>
-              <li>
-                Inara may produce inaccurate or incomplete information and
-                should always be verified against authoritative clinical sources
-              </li>
-              <li>
-                Dox2Dox is not liable for any clinical outcomes resulting from
-                reliance on AI-generated content
-              </li>
-              <li>
-                PHI shared with Inara is processed in accordance with our
-                Privacy Policy and BAA obligations
-              </li>
-            </ul>
-          </section>
-
-          {/* 8 */}
-          <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">8.</span>Intellectual Property
+              <span className="text-primary mr-2">7.</span>Intellectual Property
             </h2>
             <p className="text-gray-400 leading-relaxed">
               All rights, title, and interest in the Service, including but not
               limited to software, design, text, graphics, logos, and
-              trademarks, are owned by Dox2Dox, Inc. or its licensors. You are
+              trademarks, are owned by Doqto, Inc. or its licensors. You are
               granted a limited, non-exclusive, non-transferable, revocable
               license to use the Service in accordance with these Terms. You may
               not copy, modify, distribute, sell, or lease any part of the
@@ -231,14 +191,14 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 9 */}
+          {/* 8 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">9.</span>Data Security &
+              <span className="text-primary mr-2">8.</span>Data Security &
               Encryption
             </h2>
             <p className="text-gray-400 leading-relaxed">
-              Dox2Dox employs industry-leading security measures, including
+              Doqto employs industry-leading security measures, including
               AES-256 end-to-end encryption for all messages and file transfers.
               While we take every reasonable precaution to protect your data, no
               method of electronic transmission or storage is 100% secure. You
@@ -249,14 +209,14 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 10 */}
+          {/* 9 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">10.</span>Limitation of
+              <span className="text-primary mr-2">9.</span>Limitation of
               Liability
             </h2>
             <p className="text-gray-400 leading-relaxed">
-              To the maximum extent permitted by applicable law, Dox2Dox, Inc.,
+              To the maximum extent permitted by applicable law, Doqto, Inc.,
               its officers, directors, employees, and agents shall not be liable
               for any indirect, incidental, special, consequential, or punitive
               damages, including but not limited to loss of profits, data, or
@@ -269,13 +229,13 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 11 */}
+          {/* 10 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">11.</span>Indemnification
+              <span className="text-primary mr-2">10.</span>Indemnification
             </h2>
             <p className="text-gray-400 leading-relaxed">
-              You agree to indemnify, defend, and hold harmless Dox2Dox, Inc.
+              You agree to indemnify, defend, and hold harmless Doqto, Inc.
               and its affiliates, officers, directors, employees, and agents
               from and against any and all claims, liabilities, damages, losses,
               costs, and expenses (including reasonable attorneys&apos; fees)
@@ -285,10 +245,10 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 12 */}
+          {/* 11 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">12.</span>Termination
+              <span className="text-primary mr-2">11.</span>Termination
             </h2>
             <p className="text-gray-400 leading-relaxed">
               We may suspend or terminate your access to the Service at any time
@@ -303,10 +263,10 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 13 */}
+          {/* 12 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">13.</span>Governing Law
+              <span className="text-primary mr-2">12.</span>Governing Law
             </h2>
             <p className="text-gray-400 leading-relaxed">
               These Terms shall be governed by and construed in accordance with
@@ -318,10 +278,10 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 14 */}
+          {/* 13 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">14.</span>Changes to Terms
+              <span className="text-primary mr-2">13.</span>Changes to Terms
             </h2>
             <p className="text-gray-400 leading-relaxed">
               We reserve the right to modify these Terms at any time. We will
@@ -333,32 +293,32 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 15 */}
+          {/* 14 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">15.</span>Contact Information
+              <span className="text-primary mr-2">14.</span>Contact Information
             </h2>
             <p className="text-gray-400 leading-relaxed">
               If you have any questions about these Terms, please contact us at:
             </p>
             <div className="mt-4 text-gray-400">
-              <p className="text-white font-medium">Dox2Dox, Inc.</p>
+              <p className="text-white font-medium">Doqto, Inc.</p>
               <p>
                 Email:{" "}
                 <a
-                  href="mailto:legal@dox2dox.com"
+                  href="mailto:legal@doqto.com"
                   className="text-primary hover:underline"
                 >
-                  legal@dox2dox.com
+                  legal@doqto.com
                 </a>
               </p>
               <p>
                 General:{" "}
                 <a
-                  href="mailto:hello@hymnchat.com"
+                  href="mailto:hello@doqto.com"
                   className="text-primary hover:underline"
                 >
-                  hello@hymnchat.com
+                  hello@doqto.com
                 </a>
               </p>
             </div>

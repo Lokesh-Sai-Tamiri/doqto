@@ -79,7 +79,7 @@ class _VoiceBroadcastScreenState extends ConsumerState<VoiceBroadcastScreen> {
         builder: (ctx) => AlertDialog(
           title: const Text('Microphone access needed'),
           content: const Text(
-            'Dox2Dox needs microphone permission to record voice notes. '
+            'Doqto needs microphone permission to record voice notes. '
             'Tap "Open Settings" to enable it.',
           ),
           actions: [

@@ -1,6 +1,6 @@
-# Dox2Dox Admin
+# Doqto Admin
 
-Super-admin console for the Dox2Dox platform. Approves or rejects new
+Super-admin console for the Doqto platform. Approves or rejects new
 organizations from the mobile app.
 
 ## Quick start
@@ -11,17 +11,17 @@ npm install
 npm run dev   # http://localhost:3001
 ```
 
-The backend must be running separately (`dox2dox_backend/` on port 8000). CORS
+The backend must be running separately (`doqto_backend/` on port 8000). CORS
 is already configured to allow `http://localhost:3001`.
 
 ## Login
 
 Default dev credentials (seeded from the backend `.env`):
 
-- email: `admin@dox2dox.app`
+- email: `admin@doqto.app`
 - password: `ChangeMe123!`
 
-Rotate both values in `dox2dox_backend/.env` (`SUPER_ADMIN_EMAIL`,
+Rotate both values in `doqto_backend/.env` (`SUPER_ADMIN_EMAIL`,
 `SUPER_ADMIN_PASSWORD`) and re-run the `0005_seed_admin_creds` migration
 to change them.
 

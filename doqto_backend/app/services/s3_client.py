@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError
 from app.core.config import settings
 from app.core.constants import PRESIGNED_URL_TTL_SECONDS
 
-log = logging.getLogger("dox2dox.s3")
+log = logging.getLogger("doqto.s3")
 
 _client = None
 

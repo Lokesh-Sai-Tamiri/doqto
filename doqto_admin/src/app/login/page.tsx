@@ -14,7 +14,7 @@ export default async function LoginPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-white text-2xl font-bold">
             D2D
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Dox2Dox Admin</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Doqto Admin</h1>
           <p className="mt-1 text-sm text-gray-600">
             Platform administrators only.
           </p>

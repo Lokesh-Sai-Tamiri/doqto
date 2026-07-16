@@ -7,11 +7,11 @@ import 'core/theme.dart';
 import 'state/notification_state.dart';
 
 void main() {
-  runApp(const ProviderScope(child: Dox2DoxApp()));
+  runApp(const ProviderScope(child: DoqtoApp()));
 }
 
-class Dox2DoxApp extends ConsumerWidget {
-  const Dox2DoxApp({super.key});
+class DoqtoApp extends ConsumerWidget {
+  const DoqtoApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

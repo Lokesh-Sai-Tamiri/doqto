@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """CI gate — enforces enum wire-value parity across three sources of truth:
   1. docs/enums.md                                   (human-readable contract)
-  2. dox2dox_backend/app/core/enums.py               (Python StrEnum)
-  3. dox2dox_app/lib/core/enums/app_enums.dart       (Dart enum .wire)
+  2. doqto_backend/app/core/enums.py               (Python StrEnum)
+  3. doqto_app/lib/core/enums/app_enums.dart       (Dart enum .wire)
 
 Fails with non-zero exit code if any set differs. Parses text — no Python/Dart
 toolchain required.
@@ -18,8 +18,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs" / "enums.md"
-PY = ROOT / "dox2dox_backend" / "app" / "core" / "enums.py"
-DART = ROOT / "dox2dox_app" / "lib" / "core" / "enums" / "app_enums.dart"
+PY = ROOT / "doqto_backend" / "app" / "core" / "enums.py"
+DART = ROOT / "doqto_app" / "lib" / "core" / "enums" / "app_enums.dart"
 
 # Enum names that appear in all three sources and must match.
 SHARED = {

@@ -2,7 +2,6 @@ import Navbar from "@/components/layout/Navbar";
 import HeroSection from "@/components/sections/HeroSection";
 import ProblemSection from "@/components/sections/ProblemSection";
 import FeaturesSection from "@/components/sections/FeaturesSection";
-import AIShowcaseSection from "@/components/sections/AIShowcaseSection";
 import SecuritySection from "@/components/sections/SecuritySection";
 import HowItWorksSection from "@/components/sections/HowItWorksSection";
 import AudienceSection from "@/components/sections/AudienceSection";
@@ -18,7 +17,6 @@ export default function Home() {
         <HeroSection />
         <ProblemSection />
         <FeaturesSection />
-        <AIShowcaseSection />
         <SecuritySection />
         <HowItWorksSection />
         <AudienceSection />

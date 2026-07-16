@@ -16,7 +16,7 @@ from app.db.postgres import SessionLocal
 from app.db.redis import close_redis
 from app.services.message_service import MessageService
 
-logger = logging.getLogger("dox2dox")
+logger = logging.getLogger("doqto")
 
 
 async def _purge_expired_loop() -> None:
@@ -41,7 +41,7 @@ async def lifespan(_: FastAPI):
     await close_redis()
 
 
-app = FastAPI(title="Dox2Dox API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Doqto API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

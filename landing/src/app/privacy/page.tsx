@@ -3,9 +3,9 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | Dox2Dox",
+  title: "Privacy Policy | Doqto",
   description:
-    "Privacy Policy for Dox2Dox — learn how we protect your data with HIPAA-compliant practices, E2E encryption, and strict data handling policies.",
+    "Privacy Policy for Doqto — learn how we protect your data with HIPAA-compliant practices, E2E encryption, and strict data handling policies.",
 };
 
 export default function PrivacyPage() {
@@ -25,12 +25,12 @@ export default function PrivacyPage() {
               <span className="text-primary mr-2">1.</span>Introduction
             </h2>
             <p className="text-gray-400 leading-relaxed">
-              Dox2Dox, Inc. (&quot;Company,&quot; &quot;we,&quot; &quot;us,&quot;
+              Doqto, Inc. (&quot;Company,&quot; &quot;we,&quot; &quot;us,&quot;
               or &quot;our&quot;) is committed to protecting the privacy and
               security of your personal information and any Protected Health
               Information (PHI) processed through our platform. This Privacy
               Policy explains how we collect, use, disclose, and safeguard your
-              information when you use the Dox2Dox platform (&quot;Service&quot;).
+              information when you use the Doqto platform (&quot;Service&quot;).
               By using our Service, you consent to the practices described in
               this policy.
             </p>
@@ -91,9 +91,6 @@ export default function PrivacyPage() {
                 professionals
               </li>
               <li>
-                To provide AI clinical assistant functionality through Inara
-              </li>
-              <li>
                 To send service-related notifications and security alerts
               </li>
               <li>To comply with legal and regulatory obligations</li>
@@ -148,52 +145,21 @@ export default function PrivacyPage() {
               <span className="text-primary mr-2">5.</span>End-to-End Encryption
             </h2>
             <p className="text-gray-400 leading-relaxed">
-              All messages and file transfers on Dox2Dox are protected with
+              All messages and file transfers on Doqto are protected with
               AES-256 end-to-end encryption. This means that only the sender and
-              intended recipients can read message content. Dox2Dox servers
+              intended recipients can read message content. Doqto servers
               cannot decrypt your messages. Encryption keys are generated and
               managed on your device and are never transmitted to or stored on
               our servers. Even in the event of a server breach, your message
               content remains unreadable to any unauthorized party, including
-              Dox2Dox.
+              Doqto.
             </p>
           </section>
 
           {/* 6 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">6.</span>AI Clinical Assistant
-              Data Processing
-            </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
-              When you interact with Inara, our AI clinical assistant:
-            </p>
-            <ul className="list-disc list-inside text-gray-400 space-y-2 ml-4">
-              <li>
-                Queries are processed in real-time and are not stored after the
-                response is generated
-              </li>
-              <li>
-                No PHI is used to train or improve AI models
-              </li>
-              <li>
-                AI processing occurs within our HIPAA-compliant infrastructure
-              </li>
-              <li>
-                You can use Inara without sharing any patient-identifiable
-                information
-              </li>
-              <li>
-                All AI interactions are subject to the same encryption and
-                security standards as other communications
-              </li>
-            </ul>
-          </section>
-
-          {/* 7 */}
-          <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">7.</span>Data Sharing & Third
+              <span className="text-primary mr-2">6.</span>Data Sharing & Third
               Parties
             </h2>
             <p className="text-gray-400 leading-relaxed mb-4">
@@ -213,7 +179,7 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <span className="text-white">Safety & security:</span> To
-                protect the rights, safety, and property of Dox2Dox, our users,
+                protect the rights, safety, and property of Doqto, our users,
                 or the public
               </li>
               <li>
@@ -224,10 +190,10 @@ export default function PrivacyPage() {
             </ul>
           </section>
 
-          {/* 8 */}
+          {/* 7 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">8.</span>Data Retention
+              <span className="text-primary mr-2">7.</span>Data Retention
             </h2>
             <p className="text-gray-400 leading-relaxed">
               We retain your account information for as long as your account is
@@ -241,10 +207,10 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 9 */}
+          {/* 8 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">9.</span>Your Rights
+              <span className="text-primary mr-2">8.</span>Your Rights
             </h2>
             <p className="text-gray-400 leading-relaxed mb-4">
               Depending on your jurisdiction, you may have the following rights:
@@ -280,19 +246,19 @@ export default function PrivacyPage() {
             <p className="text-gray-400 leading-relaxed mt-4">
               To exercise any of these rights, contact us at{" "}
               <a
-                href="mailto:privacy@dox2dox.com"
+                href="mailto:privacy@doqto.com"
                 className="text-primary hover:underline"
               >
-                privacy@dox2dox.com
+                privacy@doqto.com
               </a>
               .
             </p>
           </section>
 
-          {/* 10 */}
+          {/* 9 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">10.</span>Security Measures
+              <span className="text-primary mr-2">9.</span>Security Measures
             </h2>
             <p className="text-gray-400 leading-relaxed">
               We implement comprehensive security measures to protect your data,
@@ -308,10 +274,10 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 11 */}
+          {/* 10 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">11.</span>Cookies & Tracking
+              <span className="text-primary mr-2">10.</span>Cookies & Tracking
             </h2>
             <p className="text-gray-400 leading-relaxed">
               We use essential cookies to maintain your session and
@@ -324,10 +290,10 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 12 */}
+          {/* 11 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">12.</span>Children&apos;s
+              <span className="text-primary mr-2">11.</span>Children&apos;s
               Privacy
             </h2>
             <p className="text-gray-400 leading-relaxed">
@@ -339,10 +305,10 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 13 */}
+          {/* 12 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">13.</span>International Data
+              <span className="text-primary mr-2">12.</span>International Data
               Transfers
             </h2>
             <p className="text-gray-400 leading-relaxed">
@@ -355,10 +321,10 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 14 */}
+          {/* 13 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">14.</span>Changes to This
+              <span className="text-primary mr-2">13.</span>Changes to This
               Privacy Policy
             </h2>
             <p className="text-gray-400 leading-relaxed">
@@ -372,10 +338,10 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 15 */}
+          {/* 14 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">15.</span>Contact Information
+              <span className="text-primary mr-2">14.</span>Contact Information
             </h2>
             <p className="text-gray-400 leading-relaxed">
               If you have questions about this Privacy Policy or wish to
@@ -383,24 +349,24 @@ export default function PrivacyPage() {
             </p>
             <div className="mt-4 text-gray-400">
               <p className="text-white font-medium">
-                Dox2Dox, Inc. — Data Protection Officer
+                Doqto, Inc. — Data Protection Officer
               </p>
               <p>
                 Email:{" "}
                 <a
-                  href="mailto:privacy@dox2dox.com"
+                  href="mailto:privacy@doqto.com"
                   className="text-primary hover:underline"
                 >
-                  privacy@dox2dox.com
+                  privacy@doqto.com
                 </a>
               </p>
               <p>
                 General:{" "}
                 <a
-                  href="mailto:hello@hymnchat.com"
+                  href="mailto:hello@doqto.com"
                   className="text-primary hover:underline"
                 >
-                  hello@hymnchat.com
+                  hello@doqto.com
                 </a>
               </p>
             </div>

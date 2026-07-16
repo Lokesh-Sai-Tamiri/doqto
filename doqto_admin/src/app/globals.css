@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Dox2Dox design tokens — mirrors docs/design.md on the mobile app.
+/* Doqto design tokens — mirrors docs/design.md on the mobile app.
    Never inline hex colors anywhere in the app — always reference these. */
 @theme inline {
   --color-primary: #1A56DB;

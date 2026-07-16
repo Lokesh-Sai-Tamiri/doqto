@@ -1,4 +1,4 @@
-# Dox2Dox — Cross-Stack Enum Contract
+# Doqto — Cross-Stack Enum Contract
 
 > Single source of truth for every enum shared between Flutter and FastAPI.
 > Wire values (right column) are the JSON representation — these MUST match exactly on both sides.

@@ -6,9 +6,9 @@ import logging
 import os
 from pathlib import Path
 
-log = logging.getLogger("dox2dox.fakes")
+log = logging.getLogger("doqto.fakes")
 
-_FAKE_S3_DIR = Path(os.environ.get("FAKE_S3_DIR", "/tmp/dox2dox_fake_s3"))
+_FAKE_S3_DIR = Path(os.environ.get("FAKE_S3_DIR", "/tmp/doqto_fake_s3"))
 
 
 class FakeSNSClient:

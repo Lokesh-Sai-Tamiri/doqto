@@ -68,7 +68,7 @@ export default function HeroSection() {
             </h1>
 
             <p className="hero-subtitle text-lg sm:text-xl text-gray-500 leading-relaxed mb-8">
-              End-to-end encrypted communication with an AI clinical assistant.
+              End-to-end encrypted communication for healthcare teams.
               Replace fragmented tools with one HIPAA-compliant platform.
             </p>
 

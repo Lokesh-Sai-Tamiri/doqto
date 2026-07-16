@@ -1,4 +1,4 @@
-# Dox2Dox — Run Reference
+# Doqto — Run Reference
 
 All commands assume you're at the repo root (`HymnChat/`).
 
@@ -38,7 +38,7 @@ If `dev.sh` was `kill -9`'d and left stragglers:
 ### Backend
 
 ```bash
-cd dox2dox_backend
+cd doqto_backend
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
@@ -55,14 +55,14 @@ alembic upgrade head
 ### Admin panel
 
 ```bash
-cd dox2dox_admin
+cd doqto_admin
 npm install
 ```
 
 ### Flutter app
 
 ```bash
-cd dox2dox_app
+cd doqto_app
 flutter pub get
 
 # First time only — iOS pods
@@ -78,7 +78,7 @@ Useful when you want each service in its own terminal for debugging.
 ### Infra (Postgres + Redis)
 
 ```bash
-cd dox2dox_backend
+cd doqto_backend
 docker compose up -d           # start
 docker compose ps              # status
 docker compose logs -f postgres
@@ -89,7 +89,7 @@ docker compose down -v         # DESTROY data (super-admin, orgs)
 ### Backend (FastAPI)
 
 ```bash
-cd dox2dox_backend
+cd doqto_backend
 source venv/bin/activate
 alembic upgrade head
 uvicorn main:app --reload --port 8000
@@ -99,7 +99,7 @@ uvicorn main:app --reload --port 8000
 ### Admin panel (Next.js)
 
 ```bash
-cd dox2dox_admin
+cd doqto_admin
 npm run dev
 # http://localhost:3001
 ```
@@ -107,7 +107,7 @@ npm run dev
 ### Flutter app
 
 ```bash
-cd dox2dox_app
+cd doqto_app
 flutter run -d "iPhone 17" \
   --dart-define=API_BASE_URL=http://localhost:8000 \
   --dart-define=WS_BASE_URL=ws://localhost:8000
@@ -119,17 +119,17 @@ flutter run -d "iPhone 17" \
 
 ```bash
 # Postgres shell
-psql postgresql://dox2dox:dox2dox@localhost:5432/dox2dox
+psql postgresql://doqto:doqto@localhost:5432/doqto
 
 # Redis shell
 redis-cli -u redis://localhost:6379/0
 
 # Autogenerate a new migration
-cd dox2dox_backend && source venv/bin/activate
+cd doqto_backend && source venv/bin/activate
 alembic revision --autogenerate -m "describe change"
 
 # Clear Flutter build cache
-cd dox2dox_app && flutter clean && flutter pub get
+cd doqto_app && flutter clean && flutter pub get
 
 # List booted iOS simulators
 xcrun simctl list devices booted
@@ -144,7 +144,7 @@ tail -F logs/*.log
 
 | Service | Port | URL |
 |---|---|---|
-| Postgres | 5432 | `postgresql://dox2dox:dox2dox@localhost:5432/dox2dox` |
+| Postgres | 5432 | `postgresql://doqto:doqto@localhost:5432/doqto` |
 | Redis | 6379 | `redis://localhost:6379/0` |
 | Backend API | 8000 | http://localhost:8000 |
 | Backend Swagger | 8000 | http://localhost:8000/docs |
@@ -157,13 +157,13 @@ tail -F logs/*.log
 
 | What | Value |
 |---|---|
-| Super-admin email | `admin@dox2dox.app` |
+| Super-admin email | `admin@doqto.app` |
 | Super-admin password | `ChangeMe123!` |
 | Super-admin phone | `+15555550100` |
 | Super-admin NPI | `0000000001` |
 | Dev-only OTP (any phone) | `777777` |
 
-Sourced from `dox2dox_backend/.env`. Rotate there and re-run alembic to change.
+Sourced from `doqto_backend/.env`. Rotate there and re-run alembic to change.
 
 ---
 
@@ -184,7 +184,7 @@ xcrun simctl shutdown all
 
 **Backend fails migrations / schema drift**
 ```bash
-cd dox2dox_backend
+cd doqto_backend
 docker compose down -v            # wipes DB (destroys super-admin + orgs)
 docker compose up -d
 alembic upgrade head               # seeds super-admin again

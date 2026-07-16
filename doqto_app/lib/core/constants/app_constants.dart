@@ -29,8 +29,8 @@ class AppConstants {
   static const int messagesPageSize = 50;
 
   // Storage keys
-  static const String kAccessToken = 'dox2dox_access_token';
-  static const String kRefreshToken = 'dox2dox_refresh_token';
+  static const String kAccessToken = 'doqto_access_token';
+  static const String kRefreshToken = 'doqto_refresh_token';
 
   // Invite code format (visual)
   static const String inviteCodeSeparator = '·';

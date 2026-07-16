@@ -89,7 +89,7 @@ export default function WaitlistForm({
         disabled={status === "loading"}
         className={cn(
           "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all duration-300 cursor-pointer",
-          "bg-primary text-black hover:bg-primary-dark shadow-lg shadow-primary/20",
+          "bg-primary text-white hover:bg-primary-dark shadow-lg shadow-primary/20",
           "hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5",
           "disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0",
           "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2",

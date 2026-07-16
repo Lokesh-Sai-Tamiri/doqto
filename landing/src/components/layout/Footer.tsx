@@ -6,7 +6,6 @@ const footerLinks = {
   product: [
     { label: "Features", href: `#${SECTION_IDS.features}` },
     { label: "Security", href: `#${SECTION_IDS.security}` },
-    { label: "AI Assistant", href: `#${SECTION_IDS.ai}` },
     { label: "How It Works", href: `#${SECTION_IDS.howItWorks}` },
   ],
   legal: [
@@ -16,7 +15,7 @@ const footerLinks = {
     { label: "HIPAA Compliance", href: "/hipaa" },
   ],
   contact: [
-    { label: "hello@hymnchat.com", href: "mailto:hello@hymnchat.com" },
+    { label: "hello@doqto.com", href: "mailto:hello@doqto.com" },
     { label: "Support", href: "#" },
   ],
 };
@@ -98,7 +97,7 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-gray-600">
-            &copy; {new Date().getFullYear()} Dox2Dox. All rights reserved.
+            &copy; {new Date().getFullYear()} Doqto. All rights reserved.
           </p>
           <div className="flex items-center gap-4 text-xs text-gray-600">
             <div className="flex items-center gap-1.5">

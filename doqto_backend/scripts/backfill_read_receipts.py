@@ -3,7 +3,7 @@
 Makes historical messages render with the double-check (read) tick by default.
 Safe to re-run — skips messages that already have a read receipt for that user.
 
-    cd dox2dox_backend && source venv/bin/activate
+    cd doqto_backend && source venv/bin/activate
     python -m scripts.backfill_read_receipts
 """
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Admin — Dox2Dox Waitlist",
+  title: "Admin — Doqto Waitlist",
   robots: { index: false, follow: false },
 };
 

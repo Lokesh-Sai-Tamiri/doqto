@@ -3,9 +3,9 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "Business Associate Agreement | Dox2Dox",
+  title: "Business Associate Agreement | Doqto",
   description:
-    "Business Associate Agreement (BAA) for Dox2Dox — HIPAA-compliant terms governing the handling of Protected Health Information.",
+    "Business Associate Agreement (BAA) for Doqto — HIPAA-compliant terms governing the handling of Protected Health Information.",
 };
 
 export default function BAAPage() {
@@ -23,7 +23,7 @@ export default function BAAPage() {
             <p className="text-gray-400 leading-relaxed text-sm">
               This Business Associate Agreement (&quot;BAA&quot;) is entered
               into by and between the healthcare organization or provider using
-              the Dox2Dox platform (&quot;Covered Entity&quot;) and Dox2Dox,
+              the Doqto platform (&quot;Covered Entity&quot;) and Doqto,
               Inc. (&quot;Business Associate&quot;). This BAA supplements and is
               made part of the Terms of Service between the parties.
             </p>
@@ -44,11 +44,11 @@ export default function BAAPage() {
               <li>
                 <span className="text-white">Covered Entity:</span> The
                 healthcare organization, provider, or health plan that uses the
-                Dox2Dox platform and is subject to HIPAA
+                Doqto platform and is subject to HIPAA
               </li>
               <li>
                 <span className="text-white">Business Associate:</span>{" "}
-                Dox2Dox, Inc., which creates, receives, maintains, or transmits
+                Doqto, Inc., which creates, receives, maintains, or transmits
                 Protected Health Information on behalf of the Covered Entity
               </li>
               <li>
@@ -387,24 +387,24 @@ export default function BAAPage() {
             </p>
             <div className="mt-4 text-gray-400">
               <p className="text-white font-medium">
-                Dox2Dox, Inc. — Privacy Officer
+                Doqto, Inc. — Privacy Officer
               </p>
               <p>
                 Email:{" "}
                 <a
-                  href="mailto:privacy@dox2dox.com"
+                  href="mailto:privacy@doqto.com"
                   className="text-primary hover:underline"
                 >
-                  privacy@dox2dox.com
+                  privacy@doqto.com
                 </a>
               </p>
               <p>
                 General:{" "}
                 <a
-                  href="mailto:hello@hymnchat.com"
+                  href="mailto:hello@doqto.com"
                   className="text-primary hover:underline"
                 >
-                  hello@hymnchat.com
+                  hello@doqto.com
                 </a>
               </p>
             </div>

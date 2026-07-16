@@ -3,9 +3,9 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "HIPAA Compliance | Dox2Dox",
+  title: "HIPAA Compliance | Doqto",
   description:
-    "Learn how Dox2Dox maintains HIPAA compliance through administrative, physical, and technical safeguards, E2E encryption, and rigorous security practices.",
+    "Learn how Doqto maintains HIPAA compliance through administrative, physical, and technical safeguards, E2E encryption, and rigorous security practices.",
 };
 
 export default function HIPAAPage() {
@@ -26,7 +26,7 @@ export default function HIPAAPage() {
               HIPAA
             </h2>
             <p className="text-gray-400 leading-relaxed">
-              At Dox2Dox, HIPAA compliance is not an afterthought — it is
+              At Doqto, HIPAA compliance is not an afterthought — it is
               foundational to everything we build. As a Business Associate under
               HIPAA, we are committed to protecting the privacy and security of
               Protected Health Information (PHI) entrusted to us by healthcare
@@ -186,7 +186,7 @@ export default function HIPAAPage() {
               </li>
               <li>
                 <span className="text-white">Zero-Knowledge Architecture:</span>{" "}
-                Dox2Dox servers never have access to encryption keys or
+                Doqto servers never have access to encryption keys or
                 plaintext message content. Even in the event of a server
                 compromise, data remains encrypted and unreadable
               </li>
@@ -196,50 +196,11 @@ export default function HIPAAPage() {
           {/* 6 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">6.</span>AI Clinical Assistant
-              & PHI
-            </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
-              Our AI clinical assistant, Inara, is designed with privacy by
-              default:
-            </p>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
-              <li>
-                <span className="text-white">No PHI Storage:</span> Inara does
-                not store patient-identifiable information. Queries are
-                processed in real-time and discarded after generating a response
-              </li>
-              <li>
-                <span className="text-white">No Model Training on PHI:</span>{" "}
-                Patient data is never used to train, fine-tune, or improve AI
-                models
-              </li>
-              <li>
-                <span className="text-white">Isolated Processing:</span> AI
-                processing occurs within our HIPAA-compliant infrastructure with
-                strict network segmentation
-              </li>
-              <li>
-                <span className="text-white">Audit Trail:</span> All AI
-                interactions are logged for compliance auditing purposes
-                (metadata only, not content)
-              </li>
-              <li>
-                <span className="text-white">User Control:</span> Healthcare
-                professionals maintain full control over what information, if
-                any, they share with Inara
-              </li>
-            </ul>
-          </section>
-
-          {/* 7 */}
-          <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">7.</span>Breach Notification
+              <span className="text-primary mr-2">6.</span>Breach Notification
               Procedures
             </h2>
             <p className="text-gray-400 leading-relaxed mb-4">
-              In the event of a breach of unsecured PHI, Dox2Dox will:
+              In the event of a breach of unsecured PHI, Doqto will:
             </p>
             <ul className="list-decimal list-inside text-gray-400 space-y-3 ml-4">
               <li>
@@ -269,14 +230,14 @@ export default function HIPAAPage() {
             </ul>
           </section>
 
-          {/* 8 */}
+          {/* 7 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">8.</span>Business Associate
+              <span className="text-primary mr-2">7.</span>Business Associate
               Agreements
             </h2>
             <p className="text-gray-400 leading-relaxed">
-              Dox2Dox enters into Business Associate Agreements (BAAs) with all
+              Doqto enters into Business Associate Agreements (BAAs) with all
               Covered Entities that use our platform. We also maintain BAAs with
               our own subcontractors and service providers who may have access to
               PHI. Our BAA outlines the permitted uses and disclosures of PHI,
@@ -289,10 +250,10 @@ export default function HIPAAPage() {
             </p>
           </section>
 
-          {/* 9 */}
+          {/* 8 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">9.</span>Employee Training &
+              <span className="text-primary mr-2">8.</span>Employee Training &
               Awareness
             </h2>
             <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
@@ -317,10 +278,10 @@ export default function HIPAAPage() {
             </ul>
           </section>
 
-          {/* 10 */}
+          {/* 9 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">10.</span>Regular Audits &
+              <span className="text-primary mr-2">9.</span>Regular Audits &
               Risk Assessments
             </h2>
             <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
@@ -348,10 +309,10 @@ export default function HIPAAPage() {
             </ul>
           </section>
 
-          {/* 11 */}
+          {/* 10 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">11.</span>Data Backup &
+              <span className="text-primary mr-2">10.</span>Data Backup &
               Disaster Recovery
             </h2>
             <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
@@ -376,10 +337,10 @@ export default function HIPAAPage() {
             </ul>
           </section>
 
-          {/* 12 */}
+          {/* 11 */}
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-white mb-4">
-              <span className="text-primary mr-2">12.</span>Contact Information
+              <span className="text-primary mr-2">11.</span>Contact Information
             </h2>
             <p className="text-gray-400 leading-relaxed">
               For questions about our HIPAA compliance practices or to report a
@@ -387,33 +348,33 @@ export default function HIPAAPage() {
             </p>
             <div className="mt-4 text-gray-400">
               <p className="text-white font-medium">
-                Dox2Dox, Inc. — Compliance Officer
+                Doqto, Inc. — Compliance Officer
               </p>
               <p>
                 Email:{" "}
                 <a
-                  href="mailto:compliance@dox2dox.com"
+                  href="mailto:compliance@doqto.com"
                   className="text-primary hover:underline"
                 >
-                  compliance@dox2dox.com
+                  compliance@doqto.com
                 </a>
               </p>
               <p>
                 Security:{" "}
                 <a
-                  href="mailto:security@dox2dox.com"
+                  href="mailto:security@doqto.com"
                   className="text-primary hover:underline"
                 >
-                  security@dox2dox.com
+                  security@doqto.com
                 </a>
               </p>
               <p>
                 General:{" "}
                 <a
-                  href="mailto:hello@hymnchat.com"
+                  href="mailto:hello@doqto.com"
                   className="text-primary hover:underline"
                 >
-                  hello@hymnchat.com
+                  hello@doqto.com
                 </a>
               </p>
             </div>

@@ -62,7 +62,7 @@ export default function TestimonialsSection() {
           <SectionHeading
             badge="Testimonials"
             title="Trusted by Healthcare Professionals"
-            subtitle="See what early access users are saying about Dox2Dox."
+            subtitle="See what early access users are saying about Doqto."
           />
         </div>
 

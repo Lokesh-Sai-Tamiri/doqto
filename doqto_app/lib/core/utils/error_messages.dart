@@ -40,7 +40,7 @@ class ErrorMessages {
 
     // Registration
     'npi_already_registered':
-        'This NPI is already on Dox2Dox. Sign in from the previous screen, or contact your admin.',
+        'This NPI is already on Doqto. Sign in from the previous screen, or contact your admin.',
     'npi_invalid': 'NPI must be exactly 10 digits.',
 
     // Organizations
@@ -100,7 +100,7 @@ class ErrorMessages {
         case 429:
           return 'Too many requests — please slow down and try again.';
         case null:
-          return 'Couldn\'t reach Dox2Dox. Check your connection and try again.';
+          return 'Couldn\'t reach Doqto. Check your connection and try again.';
         default:
           return 'Something went wrong. Please try again.';
       }

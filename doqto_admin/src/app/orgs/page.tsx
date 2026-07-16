@@ -35,7 +35,7 @@ export default async function OrgsPage({ searchParams }: PageProps) {
       <header className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Organizations</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Review and approve new organizations joining Dox2Dox.
+          Review and approve new organizations joining Doqto.
         </p>
       </header>
 

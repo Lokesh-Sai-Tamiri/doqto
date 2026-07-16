@@ -25,7 +25,7 @@ export function Sidebar() {
           D2D
         </div>
         <div>
-          <div className="font-bold text-gray-900">Dox2Dox</div>
+          <div className="font-bold text-gray-900">Doqto</div>
           <div className="text-xs text-gray-400 flex items-center gap-1">
             <ShieldCheck size={12} /> Admin
           </div>

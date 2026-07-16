@@ -50,7 +50,7 @@ export function LoginForm() {
           id="email"
           type="email"
           autoComplete="email"
-          placeholder="admin@dox2dox.app"
+          placeholder="admin@doqto.app"
           value={email}
           onChange={(e) => {
             setEmail(e.target.value);

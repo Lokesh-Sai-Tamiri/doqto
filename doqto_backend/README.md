@@ -1,4 +1,4 @@
-# Dox2Dox Backend
+# Doqto Backend
 
 FastAPI + PostgreSQL 15 + Redis 7 + AWS (S3, Transcribe Medical, SNS).
 

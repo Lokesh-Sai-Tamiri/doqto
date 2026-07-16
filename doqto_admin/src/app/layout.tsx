@@ -18,8 +18,8 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Dox2Dox Admin",
-  description: "Super-admin console for Dox2Dox",
+  title: "Doqto Admin",
+  description: "Super-admin console for Doqto",
 };
 
 export default function RootLayout({

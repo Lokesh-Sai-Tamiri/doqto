@@ -1,6 +1,6 @@
 export const COLORS = {
-  primary: "#FFFC00",
-  primaryDark: "#FFD700",
+  primary: "#35878F",
+  primaryDark: "#1E2A5A",
   background: "#000000",
   surface: "#18181F",
   surfaceLight: "#2A2A35",
@@ -16,7 +16,6 @@ export const SECTION_IDS = {
   hero: "hero",
   problem: "problem",
   features: "features",
-  ai: "ai-assistant",
   security: "security",
   howItWorks: "how-it-works",
   audience: "who-its-for",
@@ -27,7 +26,6 @@ export const SECTION_IDS = {
 export const NAV_LINKS = [
   { label: "Features", href: `#${SECTION_IDS.features}` },
   { label: "Security", href: `#${SECTION_IDS.security}` },
-  { label: "AI Assistant", href: `#${SECTION_IDS.ai}` },
   { label: "How It Works", href: `#${SECTION_IDS.howItWorks}` },
 ] as const;
 
@@ -43,12 +41,6 @@ export const FEATURES = [
     description:
       "AES-256-GCM field-level encryption with zero-knowledge architecture. Your messages are encrypted before they leave your device.",
     icon: "Shield",
-  },
-  {
-    title: "AI Clinical Assistant",
-    description:
-      "Meet Inara — powered by GPT-5.2 with strict medical guardrails. Get differential diagnoses, drug interactions, and clinical guideline lookups.",
-    icon: "Brain",
   },
   {
     title: "Voice Messaging",
@@ -74,15 +66,6 @@ export const FEATURES = [
       "Configurable auto-delete for sensitive discussions. Set retention policies that match your compliance requirements.",
     icon: "Timer",
   },
-] as const;
-
-export const AI_CAPABILITIES = [
-  "Medical Image Analysis",
-  "Drug Interactions",
-  "Differential Diagnosis",
-  "Clinical Guidelines",
-  "Lab Results",
-  "Medical Research",
 ] as const;
 
 export const SECURITY_FEATURES = [
@@ -141,7 +124,7 @@ export const STEPS = [
     step: 3,
     title: "Start Communicating",
     description:
-      "Send encrypted messages, voice notes, and consult Inara. Everything HIPAA-compliant from message one.",
+      "Send encrypted messages and voice notes. Everything HIPAA-compliant from message one.",
   },
 ] as const;
 
@@ -160,7 +143,7 @@ export const TESTIMONIALS = [
     role: "Chief of Internal Medicine",
     org: "Pacific Health Group",
     quote:
-      "Dox2Dox replaced three different tools we were using. The AI assistant alone saves our team hours every week on drug interaction lookups.",
+      "Doqto replaced three different tools we were using. Secure messaging, voice notes, and transcription in one place saves our team hours every week.",
     initials: "SC",
   },
   {

@@ -62,7 +62,7 @@ export default function AudienceSection() {
           <SectionHeading
             badge="Who It's For"
             title="Built for Every Healthcare Team"
-            subtitle="From solo practitioners to large health networks — Dox2Dox scales with your organization."
+            subtitle="From solo practitioners to large health networks — Doqto scales with your organization."
           />
         </div>
 

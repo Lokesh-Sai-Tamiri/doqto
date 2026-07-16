@@ -67,6 +67,7 @@ async def upload_file(
         type=MessageType.FILE if not (file.content_type or "").startswith("image/") else MessageType.IMAGE,
         file_name=file.filename,
         file_size_bytes=len(data),
+        expires_at=MessageService.expiry_for(conv),
     )
     db.add(msg)
     await db.flush()
@@ -112,6 +113,7 @@ async def upload_voice_note(
         voice_duration_sec=duration_sec,
         transcript=client_transcript or None,
         transcript_status=TranscriptStatus.COMPLETED if client_transcript else TranscriptStatus.PENDING,
+        expires_at=MessageService.expiry_for(conv),
     )
     db.add(msg)
     await db.flush()
@@ -162,7 +164,11 @@ async def mark_read(
         await ws_manager.broadcast_org(
             conv.org_id,
             WsEventServer.MESSAGE_READ,
-            {"message_id": str(message_id), "user_id": str(user.id)},
+            {
+                "message_id": str(message_id),
+                "conversation_id": str(msg.conversation_id),
+                "user_id": str(user.id),
+            },
         )
     return OkResponse()
 

@@ -65,6 +65,8 @@ class WsEventServer(StrEnum):
     MEMBER_ADDED = "member_added"
     MEMBER_REMOVED = "member_removed"
     SYSTEM_MESSAGE = "system_message"
+    TYPING_START = "typing_start"
+    TYPING_STOP = "typing_stop"
 
 
 class WsEventClient(StrEnum):

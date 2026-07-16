@@ -8,10 +8,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.ws_manager import ws_manager
-from app.core.constants import CHAT_LIST_PREVIEW_MAX_LEN, MESSAGES_PAGE_SIZE
+from app.core.constants import (
+    CHAT_LIST_PREVIEW_MAX_LEN,
+    DISAPPEAR_OPTIONS_SEC,
+    MESSAGES_PAGE_SIZE,
+)
 from app.core.security import decrypt_message
 from app.core.dependencies import get_current_user
-from app.core.enums import MessageType, WsEventServer
+from app.core.enums import ConversationType, MessageType, WsEventServer
 from app.core.routes import ApiRoutes
 from app.db.postgres import get_db
 from app.models import Conversation, ConversationMember, Message, OrgMember, User
@@ -44,7 +48,10 @@ async def _assert_member(conversation_id: uuid.UUID, user_id: uuid.UUID, db: Asy
 
 
 def _preview_for(msg: Message | None) -> str | None:
-    if msg is None or msg.type != MessageType.TEXT or msg.content_encrypted is None:
+    if msg is None or msg.content_encrypted is None or msg.type not in (
+        MessageType.TEXT,
+        MessageType.SYSTEM,
+    ):
         return None
     try:
         text = decrypt_message(msg.content_encrypted)
@@ -80,9 +87,30 @@ async def list_conversations(
         conversation_ids=[c.id for c in convs], db=db
     )
     out: list[ConversationOut] = []
+    conv_members: dict[uuid.UUID, list[uuid.UUID]] = {}
+    other_ids: set[uuid.UUID] = set()
     for c in convs:
         members = await MessageService.conversation_members(conversation_id=c.id, db=db)
-        out.append(_to_out(c, [m.user_id for m in members], latest.get(c.id)))
+        conv_members[c.id] = [m.user_id for m in members]
+        if c.type == ConversationType.DIRECT:
+            other_ids.update(uid for uid in conv_members[c.id] if uid != user.id)
+    names: dict[uuid.UUID, str] = {}
+    if other_ids:
+        rows = await db.execute(
+            select(User.id, User.full_name).where(User.id.in_(other_ids))
+        )
+        names = dict(rows.all())
+    for c in convs:
+        o = _to_out(c, conv_members[c.id], latest.get(c.id))
+        if c.type == ConversationType.DIRECT:
+            o.display_name = next(
+                (names[uid] for uid in conv_members[c.id] if uid != user.id and uid in names),
+                None,
+            )
+        o.unread_count = await MessageService.unread_count(
+            conversation_id=c.id, user_id=user.id, db=db
+        )
+        out.append(o)
     return out
 
 
@@ -112,7 +140,14 @@ async def create_conversation(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     members = await MessageService.conversation_members(conversation_id=conv.id, db=db)
-    return _to_out(conv, [m.user_id for m in members])
+    out = _to_out(conv, [m.user_id for m in members])
+    if conv.type == ConversationType.DIRECT:
+        other_id = next((m.user_id for m in members if m.user_id != user.id), None)
+        if other_id is not None:
+            out.display_name = await db.scalar(
+                select(User.full_name).where(User.id == other_id)
+            )
+    return out
 
 
 @router.get(ApiRoutes.CONVERSATIONS_MESSAGES, response_model=list[MessageOut])
@@ -127,7 +162,10 @@ async def list_messages(
     msgs = await MessageService.list_messages(
         conversation_id=conversation_id, before=before, limit=limit, db=db
     )
-    return [MessageService.to_out(m) for m in msgs]
+    read_ids = await MessageService.read_message_ids(
+        message_ids=[m.id for m in msgs], db=db
+    )
+    return [MessageService.to_out(m, read=m.id in read_ids) for m in msgs]
 
 
 @router.post(ApiRoutes.CONVERSATIONS_MESSAGES, response_model=MessageOut)
@@ -156,6 +194,26 @@ async def send_message(
         out.model_dump(mode="json"),
     )
     return out
+
+
+@router.post(ApiRoutes.CONVERSATIONS_READ, response_model=OkResponse)
+async def mark_conversation_read(
+    conversation_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OkResponse:
+    conv = await _assert_member(conversation_id, user.id, db)
+    await MessageService.mark_conversation_read(
+        conversation_id=conversation_id, user_id=user.id, db=db
+    )
+    await db.commit()
+    # One conversation-level event: senders flip all their ticks to read.
+    await ws_manager.broadcast_org(
+        conv.org_id,
+        WsEventServer.MESSAGE_READ,
+        {"conversation_id": str(conversation_id), "user_id": str(user.id)},
+    )
+    return OkResponse()
 
 
 @router.patch(ApiRoutes.CONVERSATIONS_MEMBERS, response_model=OkResponse)
@@ -216,5 +274,28 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
 ) -> OkResponse:
     conv = await _assert_member(conversation_id, user.id, db)
-    conv.disappear_after_sec = body.disappear_after_sec
+    val = body.disappear_after_sec
+    if val is not None and val not in DISAPPEAR_OPTIONS_SEC:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid_disappear_after_sec"
+        )
+    if conv.disappear_after_sec == val:
+        return OkResponse()  # idempotent — no duplicate banner
+    conv.disappear_after_sec = val
+
+    if val is None:
+        text = f"{user.full_name} turned off disappearing messages."
+    else:
+        text = (
+            f"{user.full_name} turned on disappearing messages. New messages will "
+            f"disappear from this chat {DISAPPEAR_OPTIONS_SEC[val]} after they're sent."
+        )
+    msg = await MessageService.send_system(conv=conv, sender_id=user.id, content=text, db=db)
+    out = MessageService.to_out(msg)
+    await db.commit()  # flush before broadcasting so receivers can query
+    # Broadcast as NEW_MESSAGE: clients already insert it into the open thread and
+    # refresh the conversation list (which refetches disappear_after_sec).
+    await ws_manager.broadcast_org(
+        conv.org_id, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
+    )
     return OkResponse()

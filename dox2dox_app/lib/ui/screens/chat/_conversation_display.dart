@@ -19,6 +19,13 @@ class ConversationDisplay {
   });
 }
 
+String _initialsFor(String name) {
+  final parts = name.trim().split(RegExp(r'\s+'));
+  return parts.length >= 2
+      ? (parts[0][0] + parts[1][0]).toUpperCase()
+      : name.substring(0, name.length.clamp(0, 2)).toUpperCase();
+}
+
 /// Derive a display-ready title/avatar bundle for a conversation.
 ///
 /// - Direct: finds the OTHER member in `orgMembers` and uses their profile.
@@ -56,6 +63,17 @@ ConversationDisplay conversationDisplay({
         initials: u.initials,
       );
     }
+    // Server-resolved peer name — covers peers missing from the org-members cache.
+    final serverName = c.displayName?.trim();
+    if (serverName != null && serverName.isNotEmpty) {
+      return ConversationDisplay(
+        title: serverName,
+        otherUser: null,
+        isDirect: true,
+        colorIndex: fallbackColorIndex,
+        initials: _initialsFor(serverName),
+      );
+    }
     return ConversationDisplay(
       title: 'Direct chat',
       otherUser: null,
@@ -66,10 +84,7 @@ ConversationDisplay conversationDisplay({
   }
   // Group (or anything else).
   final name = (c.name == null || c.name!.trim().isEmpty) ? 'Group' : c.name!;
-  final parts = name.trim().split(RegExp(r'\s+'));
-  final initials = parts.length >= 2
-      ? (parts[0][0] + parts[1][0]).toUpperCase()
-      : name.substring(0, name.length.clamp(0, 2)).toUpperCase();
+  final initials = _initialsFor(name);
   return ConversationDisplay(
     title: name,
     otherUser: null,

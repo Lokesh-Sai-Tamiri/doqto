@@ -7,6 +7,7 @@ import '../../state/auth_state.dart';
 import '../../ui/screens/auth/otp_screen.dart';
 import '../../ui/screens/auth/phone_screen.dart';
 import '../../ui/screens/auth/registration_screen.dart';
+import '../../ui/screens/chat/chat_details_screen.dart';
 import '../../ui/screens/chat/chat_list_screen.dart';
 import '../../ui/screens/chat/chat_thread_screen.dart';
 import '../../ui/screens/chat/create_group_screen.dart';
@@ -38,6 +39,7 @@ class AppRoutes {
   // swallow "create-group".
   static const createGroup = '/new-group';
   static String chat(String convId) => '/chat/$convId';
+  static String chatDetails(String convId) => '/chat/$convId/details';
   static const myOrg = '/my-org';
   static const settings = '/settings';
   static const profile = '/profile';
@@ -76,6 +78,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       // More specific routes MUST come before the generic /chats/:id matcher.
       GoRoute(path: AppRoutes.createGroup, builder: (_, __) => const CreateGroupScreen()),
+      GoRoute(
+        path: '/chat/:id/details',
+        builder: (_, state) => ChatDetailsScreen(conversationId: state.pathParameters['id']!),
+      ),
       GoRoute(
         path: '/chat/:id',
         builder: (_, state) => ChatThreadScreen(conversationId: state.pathParameters['id']!),

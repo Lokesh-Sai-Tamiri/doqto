@@ -46,12 +46,15 @@ class ChatRepository {
     required String conversationId,
     required List<int> bytes,
     required String filename,
+    String? contentType,
   }) async {
     final j = await _api.postMultipart(
       ApiRoutes.messageUpload(conversationId),
       fileField: 'file',
       bytes: bytes,
       filename: filename,
+      // Server classifies IMAGE vs FILE from this MIME type.
+      contentType: contentType,
     );
     return Message.fromJson(j);
   }
@@ -78,6 +81,10 @@ class ChatRepository {
 
   Future<void> markRead(String messageId) async {
     await _api.post(ApiRoutes.messageRead(messageId));
+  }
+
+  Future<void> markConversationRead(String conversationId) async {
+    await _api.post(ApiRoutes.conversationRead(conversationId));
   }
 
   Future<String> fileUrl(String messageId) async {

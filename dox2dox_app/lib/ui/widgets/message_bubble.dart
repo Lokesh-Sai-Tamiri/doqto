@@ -6,12 +6,45 @@ import '../../core/tokens/radii.dart';
 import '../../core/tokens/spacing.dart';
 import '../../core/tokens/typography.dart';
 
+/// Centered pill for in-chat system banners (e.g. disappearing-messages
+/// changes). No timestamp, no read ticks.
+class SystemMessageBubble extends StatelessWidget {
+  final String text;
+  const SystemMessageBubble({super.key, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+      child: Center(
+        child: Container(
+          constraints:
+              BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.8),
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md, vertical: AppSpacing.xs + 2),
+          decoration: BoxDecoration(
+            color: AppColors.gray100,
+            borderRadius: AppRadii.rFull,
+          ),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: AppText.timestamp.copyWith(color: AppColors.textMuted),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class MessageBubble extends StatelessWidget {
   final String text;
   final bool isMine;
   final DateTime timestamp;
   final String? senderName;
   final int senderColorIndex;
+  final bool read;
 
   const MessageBubble({
     super.key,
@@ -20,6 +53,7 @@ class MessageBubble extends StatelessWidget {
     required this.timestamp,
     this.senderName,
     this.senderColorIndex = 0,
+    this.read = false,
   });
 
   @override
@@ -56,9 +90,22 @@ class MessageBubble extends StatelessWidget {
           const SizedBox(height: 2),
           Align(
             alignment: Alignment.bottomRight,
-            child: Text(
-              DateFormat.Hm().format(timestamp),
-              style: AppText.timestamp.copyWith(color: timeColor),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  DateFormat.Hm().format(timestamp),
+                  style: AppText.timestamp.copyWith(color: timeColor),
+                ),
+                if (isMine) ...[
+                  const SizedBox(width: 3),
+                  Icon(
+                    read ? Icons.done_all : Icons.check,
+                    size: 15,
+                    color: read ? const Color(0xFF7FC8FF) : AppColors.white.withValues(alpha: 0.55),
+                  ),
+                ],
+              ],
             ),
           ),
         ],

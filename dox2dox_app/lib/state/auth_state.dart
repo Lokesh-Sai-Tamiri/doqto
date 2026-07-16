@@ -78,10 +78,12 @@ class AuthNotifier extends Notifier<AuthState> {
       // orgs can switch in a later release.
       final org = orgs.first;
       ref.read(orgProvider.notifier).setCurrent(org);
-      return switch (org.status) {
+      final stage = switch (org.status) {
         OrgStatus.active => AuthStage.signedIn,
         OrgStatus.pending || OrgStatus.suspended => AuthStage.pendingVerification,
       };
+      if (stage == AuthStage.signedIn) await _connectWs(org.id);
+      return stage;
     } catch (_) {
       // If we can't reach the backend right now, assume needs-org so the user
       // isn't stuck on a broken chats screen.
@@ -97,6 +99,14 @@ class AuthNotifier extends Notifier<AuthState> {
     if (user == null) return;
     final nextStage = await _resolveStageForRegisteredUser();
     state = AuthState(nextStage, user);
+  }
+
+  /// Open the realtime socket for the signed-in user's org. Drives instant
+  /// message delivery, read receipts, and typing indicators.
+  Future<void> _connectWs(String orgId) async {
+    final token = await ref.read(tokenStorageProvider).accessToken;
+    if (token == null || token.isEmpty) return;
+    ref.read(websocketClientProvider).connect(orgId: orgId, token: token);
   }
 
   Future<void> requestOtp(String phone) async {
@@ -135,6 +145,7 @@ class AuthNotifier extends Notifier<AuthState> {
 
   Future<void> signOut() async {
     await ref.read(authRepositoryProvider).logout();
+    await ref.read(websocketClientProvider).close();
     ref.read(orgProvider.notifier).clear();
     state = const AuthState(AuthStage.signedOut, null);
   }

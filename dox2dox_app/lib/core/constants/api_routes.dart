@@ -27,6 +27,7 @@ class ApiRoutes {
   // Conversations
   static const String conversations = '$apiV1/conversations';
   static String conversationMessages(String id) => '$apiV1/conversations/$id/messages';
+  static String conversationRead(String id) => '$apiV1/conversations/$id/read';
   static String conversationMembers(String id) => '$apiV1/conversations/$id/members';
   static String conversationMember(String convId, String userId) =>
       '$apiV1/conversations/$convId/members/$userId';

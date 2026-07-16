@@ -88,6 +88,8 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `null` | `off` | Disappearing disabled |
 | `86400` | `day` | 24 hours |
 | `604800` | `week` | 7 days |
+| `2592000` | `month` | 30 days |
+| `7776000` | `quarter` | 90 days |
 
 ## WsEventServer (server → client)
 
@@ -101,14 +103,16 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `member_added` | `conversation_id, user_id, user_name` |
 | `member_removed` | `conversation_id, user_id` |
 | `system_message` | `conversation_id, text` |
+| `typing_start` | `conversation_id, user_id` |
+| `typing_stop` | `conversation_id, user_id` |
 
 ## WsEventClient (client → server)
 
 | Wire value | Payload |
 |---|---|
 | `heartbeat` | `{}` — sent every 60s |
-| `typing_start` | `conversation_id` — deferred post-MVP |
-| `typing_stop` | `conversation_id` — deferred post-MVP |
+| `typing_start` | `conversation_id` |
+| `typing_stop` | `conversation_id` |
 
 ## JwtTokenType
 

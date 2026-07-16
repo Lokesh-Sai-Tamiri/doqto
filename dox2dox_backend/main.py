@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,13 +10,34 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import websocket as ws_router
 from app.api.v1 import admin, auth, conversations, messages, orgs, users
 from app.core.config import settings
+from app.core.constants import DISAPPEAR_PURGE_INTERVAL_SEC
 from app.core.routes import ApiPrefix
+from app.db.postgres import SessionLocal
 from app.db.redis import close_redis
+from app.services.message_service import MessageService
+
+logger = logging.getLogger("dox2dox")
+
+
+async def _purge_expired_loop() -> None:
+    """Soft-delete disappearing messages past their expiry, forever."""
+    while True:
+        try:
+            async with SessionLocal() as db:
+                purged = await MessageService.purge_expired(db)
+                await db.commit()
+                if purged:
+                    logger.info("purged %d expired messages", purged)
+        except Exception:
+            logger.exception("purge_expired failed")
+        await asyncio.sleep(DISAPPEAR_PURGE_INTERVAL_SEC)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    purge_task = asyncio.create_task(_purge_expired_loop())
     yield
+    purge_task.cancel()
     await close_redis()
 
 

@@ -32,6 +32,7 @@ class ApiRoutes:
     CONVERSATIONS_LIST = ""
     CONVERSATIONS_CREATE = ""
     CONVERSATIONS_MESSAGES = "/{conversation_id}/messages"
+    CONVERSATIONS_READ = "/{conversation_id}/read"
     CONVERSATIONS_UPLOAD = "/{conversation_id}/messages/upload"
     CONVERSATIONS_VOICE_NOTE = "/{conversation_id}/voice-notes"
     CONVERSATIONS_MEMBERS = "/{conversation_id}/members"

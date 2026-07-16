@@ -155,7 +155,9 @@ enum WsEventServer {
   presenceUpdate,
   memberAdded,
   memberRemoved,
-  systemMessage;
+  systemMessage,
+  typingStart,
+  typingStop;
 
   String get wire => switch (this) {
         WsEventServer.newMessage => 'new_message',
@@ -166,6 +168,8 @@ enum WsEventServer {
         WsEventServer.memberAdded => 'member_added',
         WsEventServer.memberRemoved => 'member_removed',
         WsEventServer.systemMessage => 'system_message',
+        WsEventServer.typingStart => 'typing_start',
+        WsEventServer.typingStop => 'typing_stop',
       };
 
   static WsEventServer? fromWire(String s) => switch (s) {
@@ -177,6 +181,8 @@ enum WsEventServer {
         'member_added' => WsEventServer.memberAdded,
         'member_removed' => WsEventServer.memberRemoved,
         'system_message' => WsEventServer.systemMessage,
+        'typing_start' => WsEventServer.typingStart,
+        'typing_stop' => WsEventServer.typingStop,
         _ => null,
       };
 }

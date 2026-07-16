@@ -61,6 +61,12 @@ OTP_RESEND_COOLDOWN_SECONDS = 30
 # Chat list preview
 CHAT_LIST_PREVIEW_MAX_LEN = 140
 
-# Disappearing messages
-DISAPPEAR_24H_SECONDS = 60 * 60 * 24
-DISAPPEAR_7D_SECONDS = 60 * 60 * 24 * 7
+# Disappearing messages — allowed timer values (seconds → human label).
+# Mirror of the option list in the Flutter chat details screen.
+DISAPPEAR_OPTIONS_SEC = {
+    60 * 60 * 24: "24 hours",
+    60 * 60 * 24 * 7: "7 days",
+    60 * 60 * 24 * 30: "30 days",
+    60 * 60 * 24 * 90: "90 days",
+}
+DISAPPEAR_PURGE_INTERVAL_SEC = 60

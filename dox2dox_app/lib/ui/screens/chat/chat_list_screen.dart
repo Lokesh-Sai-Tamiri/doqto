@@ -19,6 +19,7 @@ import '../../../state/chat_state.dart';
 import '../../../state/org_state.dart';
 import '../../widgets/doctor_avatar.dart';
 import '../../widgets/search_bar.dart';
+import '../../widgets/typing_indicator.dart';
 import '_conversation_display.dart';
 
 class ChatListScreen extends ConsumerStatefulWidget {
@@ -395,7 +396,7 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
   }
 }
 
-class _ChatRow extends StatelessWidget {
+class _ChatRow extends ConsumerWidget {
   final Conversation conversation;
   final ConversationDisplay display;
   final List<OrgMember> orgMembers;
@@ -457,12 +458,29 @@ class _ChatRow extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = conversation;
     final hasMsg = c.lastMessageType != null;
-    final previewStyle = hasMsg
-        ? AppText.caption.copyWith(color: AppColors.textSecondary)
-        : AppText.caption.copyWith(fontStyle: FontStyle.italic);
+    final isUnread = c.unreadCount > 0;
+    final isTyping = ref.watch(typingProvider(c.id));
+    final titleStyle = isUnread
+        ? AppText.heading.copyWith(fontWeight: FontWeight.w700)
+        : AppText.heading;
+    final previewStyle = isUnread
+        ? AppText.caption.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)
+        : hasMsg
+            ? AppText.caption.copyWith(color: AppColors.textSecondary)
+            : AppText.caption.copyWith(fontStyle: FontStyle.italic);
+    final subtitle = isTyping
+        ? Row(
+            children: [
+              Text('typing', style: AppText.caption.copyWith(
+                color: AppColors.medBlue, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 5),
+              const TypingDots(color: AppColors.medBlue, size: 6),
+            ],
+          )
+        : Text(_previewText(), style: previewStyle, maxLines: 1, overflow: TextOverflow.ellipsis);
     return ListTile(
       onTap: () {
         if (isSelecting) {
@@ -479,8 +497,8 @@ class _ChatRow extends StatelessWidget {
         imageUrl: display.otherUser?.avatarPresignedUrl,
         isSelected: isSelected,
       ),
-      title: Text(display.title, style: AppText.heading, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(_previewText(), style: previewStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Text(display.title, style: titleStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: subtitle,
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,

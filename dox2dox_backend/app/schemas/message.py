@@ -27,6 +27,7 @@ class MessageOut(BaseModel):
     transcript_status: TranscriptStatus
     expires_at: datetime | None
     created_at: datetime
+    read: bool = False  # read by a recipient (drives the double-check tick)
 
 
 class FileUrlOut(BaseModel):

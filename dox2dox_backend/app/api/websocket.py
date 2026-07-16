@@ -55,9 +55,21 @@ async def websocket_endpoint(
     try:
         while True:
             msg = await websocket.receive_json()
-            if msg.get("type") == WsEventClient.HEARTBEAT.value:
+            msg_type = msg.get("type")
+            if msg_type == WsEventClient.HEARTBEAT.value:
                 await redis.setex(
                     presence_key(user_id), PRESENCE_ONLINE_TTL_SECONDS, PresenceStatus.ONLINE.value
+                )
+            elif msg_type in (WsEventClient.TYPING_START.value, WsEventClient.TYPING_STOP.value):
+                event = (
+                    WsEventServer.TYPING_START
+                    if msg_type == WsEventClient.TYPING_START.value
+                    else WsEventServer.TYPING_STOP
+                )
+                await ws_manager.broadcast_org(
+                    org_id,
+                    event,
+                    {"conversation_id": msg.get("conversation_id"), "user_id": str(user_id)},
                 )
     except WebSocketDisconnect:
         pass

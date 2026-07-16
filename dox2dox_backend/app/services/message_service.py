@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import MESSAGES_PAGE_SIZE
@@ -102,6 +102,54 @@ class MessageService:
         return list(rows.scalars().all())
 
     @staticmethod
+    def expiry_for(conv: Conversation) -> datetime | None:
+        """When a message sent NOW in this conversation should disappear (None = never)."""
+        if conv.disappear_after_sec:
+            return datetime.now(tz=timezone.utc) + timedelta(seconds=conv.disappear_after_sec)
+        return None
+
+    @staticmethod
+    def _not_expired():
+        """Filter clause: message has no expiry or hasn't reached it yet."""
+        return or_(Message.expires_at.is_(None), Message.expires_at > func.now())
+
+    @staticmethod
+    async def send_system(
+        *,
+        conv: Conversation,
+        sender_id: uuid.UUID,
+        content: str,
+        db: AsyncSession,
+    ) -> Message:
+        """Persist an in-chat system banner (e.g. disappearing-messages change). Never expires."""
+        msg = Message(
+            conversation_id=conv.id,
+            sender_id=sender_id,
+            type=MessageType.SYSTEM,
+            content_encrypted=encrypt_message(content),
+            transcript_status=TranscriptStatus.NONE,
+            expires_at=None,
+        )
+        db.add(msg)
+        conv.updated_at = datetime.now(tz=timezone.utc)
+        await db.flush()
+        return msg
+
+    @staticmethod
+    async def purge_expired(db: AsyncSession) -> int:
+        """Soft-delete every message past its expiry. Idempotent; safe to run concurrently."""
+        result = await db.execute(
+            update(Message)
+            .where(
+                Message.is_deleted.is_(False),
+                Message.expires_at.is_not(None),
+                Message.expires_at <= func.now(),
+            )
+            .values(is_deleted=True)
+        )
+        return result.rowcount or 0
+
+    @staticmethod
     async def send_text(
         *,
         conversation_id: uuid.UUID,
@@ -113,17 +161,13 @@ class MessageService:
         if conv is None:
             raise MessageError("conversation_not_found")
 
-        expires_at: datetime | None = None
-        if conv.disappear_after_sec:
-            expires_at = datetime.now(tz=timezone.utc) + timedelta(seconds=conv.disappear_after_sec)
-
         msg = Message(
             conversation_id=conversation_id,
             sender_id=sender_id,
             type=MessageType.TEXT,
             content_encrypted=encrypt_message(content),
             transcript_status=TranscriptStatus.NONE,
-            expires_at=expires_at,
+            expires_at=MessageService.expiry_for(conv),
         )
         db.add(msg)
         conv.updated_at = datetime.now(tz=timezone.utc)
@@ -146,7 +190,9 @@ class MessageService:
         db: AsyncSession,
     ) -> list[Message]:
         stmt = select(Message).where(
-            Message.conversation_id == conversation_id, Message.is_deleted.is_(False)
+            Message.conversation_id == conversation_id,
+            Message.is_deleted.is_(False),
+            MessageService._not_expired(),
         )
         if before is not None:
             stmt = stmt.where(Message.created_at < before)
@@ -168,6 +214,7 @@ class MessageService:
             select(Message)
             .where(Message.conversation_id.in_(conversation_ids))
             .where(Message.is_deleted.is_(False))
+            .where(MessageService._not_expired())
             .order_by(Message.conversation_id, Message.created_at.desc())
             .distinct(Message.conversation_id)
         )
@@ -175,7 +222,7 @@ class MessageService:
         return {m.conversation_id: m for m in rows.scalars().all()}
 
     @staticmethod
-    def to_out(msg: Message) -> MessageOut:
+    def to_out(msg: Message, read: bool = False) -> MessageOut:
         content = decrypt_message(msg.content_encrypted) if msg.content_encrypted else None
         return MessageOut(
             id=msg.id,
@@ -191,7 +238,75 @@ class MessageService:
             transcript_status=msg.transcript_status,
             expires_at=msg.expires_at,
             created_at=msg.created_at,
+            read=read,
         )
+
+    @staticmethod
+    async def read_message_ids(
+        *, message_ids: list[uuid.UUID], db: AsyncSession
+    ) -> set[uuid.UUID]:
+        """Subset of the given message ids that have been read by a recipient."""
+        if not message_ids:
+            return set()
+        rows = await db.execute(
+            select(MessageReceipt.message_id).where(
+                MessageReceipt.message_id.in_(message_ids),
+                MessageReceipt.read_at.is_not(None),
+            )
+        )
+        return set(rows.scalars().all())
+
+    @staticmethod
+    async def unread_count(
+        *, conversation_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
+    ) -> int:
+        """Messages from other senders this user hasn't read yet."""
+        read_subq = select(MessageReceipt.message_id).where(
+            MessageReceipt.user_id == user_id,
+            MessageReceipt.read_at.is_not(None),
+        )
+        count = await db.scalar(
+            select(func.count())
+            .select_from(Message)
+            .where(
+                Message.conversation_id == conversation_id,
+                Message.sender_id != user_id,
+                Message.is_deleted.is_(False),
+                Message.type != MessageType.SYSTEM,
+                MessageService._not_expired(),
+                Message.id.not_in(read_subq),
+            )
+        )
+        return count or 0
+
+    @staticmethod
+    async def mark_conversation_read(
+        *, conversation_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
+    ) -> None:
+        """Mark every message from other senders in this conversation as read by user_id."""
+        now = datetime.now(tz=timezone.utc)
+        unread = await db.execute(
+            select(Message.id).where(
+                Message.conversation_id == conversation_id,
+                Message.sender_id != user_id,
+                Message.is_deleted.is_(False),
+            )
+        )
+        for (message_id,) in unread.all():
+            existing = await db.scalar(
+                select(MessageReceipt).where(
+                    MessageReceipt.message_id == message_id,
+                    MessageReceipt.user_id == user_id,
+                )
+            )
+            if existing is None:
+                db.add(
+                    MessageReceipt(
+                        message_id=message_id, user_id=user_id, delivered_at=now, read_at=now
+                    )
+                )
+            elif existing.read_at is None:
+                existing.read_at = now
 
     @staticmethod
     async def mark_read(

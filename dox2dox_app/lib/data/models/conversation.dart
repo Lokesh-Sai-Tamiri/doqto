@@ -10,6 +10,7 @@ class Conversation {
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<String> memberIds;
+  final String? displayName; // direct chats: the other member's full name (server-resolved)
   final DateTime? lastMessageAt;
   final String? lastMessagePreview;
   final String? lastMessageSenderId;
@@ -26,6 +27,7 @@ class Conversation {
     required this.createdAt,
     required this.updatedAt,
     required this.memberIds,
+    this.displayName,
     required this.lastMessageAt,
     required this.lastMessagePreview,
     required this.lastMessageSenderId,
@@ -43,6 +45,7 @@ class Conversation {
         createdAt: DateTime.parse(j['created_at'] as String),
         updatedAt: DateTime.parse(j['updated_at'] as String),
         memberIds: ((j['member_ids'] ?? []) as List).map((e) => e.toString()).toList(),
+        displayName: j['display_name'] as String?,
         lastMessageAt: j['last_message_at'] != null
             ? DateTime.parse(j['last_message_at'] as String)
             : null,

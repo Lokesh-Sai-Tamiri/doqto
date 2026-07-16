@@ -58,6 +58,13 @@ class WebsocketClient {
     });
   }
 
+  /// Fire-and-forget client → server message (typing, heartbeat, …).
+  void send(Map<String, dynamic> data) {
+    try {
+      _channel?.sink.add(jsonEncode(data));
+    } catch (_) {}
+  }
+
   void _scheduleReconnect() {
     if (_orgId == null || _token == null) return;
     Timer(AppConstants.wsReconnectBackoff, () {

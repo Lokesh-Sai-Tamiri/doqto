@@ -33,6 +33,7 @@ class ConversationOut(ORMModel):
     created_at: datetime
     updated_at: datetime
     member_ids: list[uuid.UUID] = []
+    display_name: str | None = None  # direct chats: the other member's full name
     last_message_at: datetime | None = None
     last_message_preview: str | None = None
     last_message_sender_id: uuid.UUID | None = None

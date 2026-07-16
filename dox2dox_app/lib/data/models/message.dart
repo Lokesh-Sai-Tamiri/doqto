@@ -14,6 +14,7 @@ class Message {
   final TranscriptStatus transcriptStatus;
   final DateTime? expiresAt;
   final DateTime createdAt;
+  final bool read;
 
   const Message({
     required this.id,
@@ -29,6 +30,7 @@ class Message {
     required this.transcriptStatus,
     required this.expiresAt,
     required this.createdAt,
+    this.read = false,
   });
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
@@ -46,11 +48,13 @@ class Message {
             TranscriptStatus.fromWire((j['transcript_status'] as String?) ?? 'none'),
         expiresAt: j['expires_at'] != null ? DateTime.parse(j['expires_at'] as String) : null,
         createdAt: DateTime.parse(j['created_at'] as String),
+        read: (j['read'] as bool?) ?? false,
       );
 
   Message copyWith({
     String? transcript,
     TranscriptStatus? transcriptStatus,
+    bool? read,
   }) =>
       Message(
         id: id,
@@ -66,5 +70,6 @@ class Message {
         transcriptStatus: transcriptStatus ?? this.transcriptStatus,
         expiresAt: expiresAt,
         createdAt: createdAt,
+        read: read ?? this.read,
       );
 }

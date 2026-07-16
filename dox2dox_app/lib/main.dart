@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/strings.dart';
 import 'core/router/app_router.dart';
 import 'core/theme.dart';
+import 'state/notification_state.dart';
 
 void main() {
   runApp(const ProviderScope(child: Dox2DoxApp()));
@@ -15,6 +16,8 @@ class Dox2DoxApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    // Activate WS → banner notifications for incoming messages.
+    ref.watch(notificationListenerProvider);
     return MaterialApp.router(
       title: Strings.appName,
       debugShowCheckedModeBanner: false,

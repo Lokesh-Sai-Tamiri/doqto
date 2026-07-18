@@ -97,7 +97,7 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 |---|---|
 | `new_message` | `message_id, conversation_id, sender_id, type, content, created_at` |
 | `transcript_ready` | `message_id, transcript` |
-| `message_delivered` | `message_id, user_id, delivered_at` |
+| `message_delivered` | `conversation_id, user_id` (conversation-level ack) |
 | `message_read` | `message_id, user_id, read_at` |
 | `presence_update` | `user_id, status` |
 | `member_added` | `conversation_id, user_id, user_name` |

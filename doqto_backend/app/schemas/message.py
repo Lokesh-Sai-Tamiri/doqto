@@ -11,6 +11,9 @@ from app.core.enums import MessageType, TranscriptStatus
 class MessageSendIn(BaseModel):
     type: MessageType = MessageType.TEXT
     content: str = Field(min_length=1, max_length=5000)
+    # Idempotency key (uuid from the client outbox); retries return the
+    # original message instead of creating a duplicate.
+    client_id: str | None = Field(default=None, max_length=64)
 
 
 class MessageOut(BaseModel):
@@ -27,7 +30,9 @@ class MessageOut(BaseModel):
     transcript_status: TranscriptStatus
     expires_at: datetime | None
     created_at: datetime
-    read: bool = False  # read by a recipient (drives the double-check tick)
+    read: bool = False  # read by a recipient (blue double-check)
+    delivered: bool = False  # delivered to a recipient (gray double-check)
+    client_id: str | None = None  # echoes the sender's idempotency key
 
 
 class FileUrlOut(BaseModel):

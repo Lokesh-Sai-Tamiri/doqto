@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import time
 import uuid
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
@@ -14,8 +16,28 @@ from app.core.security import TokenError, decode_token
 from app.db.postgres import SessionLocal
 from app.db.redis import get_redis
 from app.models import OrgMember
+from app.services.message_service import MessageService
 
 router = APIRouter()
+
+# Typing fires per keystroke — cache conversation membership briefly so we
+# don't hit Postgres on every event.
+# ponytail: in-process TTL dict; move to Redis if membership churn matters.
+_MEMBERS_TTL_SEC = 60
+_members_cache: dict[str, tuple[float, list[uuid.UUID]]] = {}
+
+
+async def _cached_member_ids(conversation_id: str) -> list[uuid.UUID]:
+    hit = _members_cache.get(conversation_id)
+    now = time.monotonic()
+    if hit is not None and hit[0] > now:
+        return hit[1]
+    async with SessionLocal() as db:
+        ids = await MessageService.member_ids(
+            conversation_id=uuid.UUID(conversation_id), db=db
+        )
+    _members_cache[conversation_id] = (now + _MEMBERS_TTL_SEC, ids)
+    return ids
 
 
 async def _authorize(token: str, org_id: uuid.UUID) -> uuid.UUID:
@@ -34,19 +56,31 @@ async def _authorize(token: str, org_id: uuid.UUID) -> uuid.UUID:
 async def websocket_endpoint(
     websocket: WebSocket,
     org_id: uuid.UUID,
-    token: str = Query(...),
+    token: str | None = Query(default=None),
 ) -> None:
-    try:
-        user_id = await _authorize(token, org_id)
-    except TokenError:
-        await websocket.close(code=4401)
-        return
-
-    await websocket.accept()
+    # Preferred: token in a first `auth` frame (query strings end up in proxy
+    # logs). `?token=` remains as a fallback for one release.
+    if token is None:
+        await websocket.accept()
+        try:
+            first = await asyncio.wait_for(websocket.receive_json(), timeout=5)
+            if first.get("type") != "auth" or not isinstance(first.get("token"), str):
+                raise TokenError("missing_auth_frame")
+            user_id = await _authorize(first["token"], org_id)
+        except Exception:
+            await websocket.close(code=4401)
+            return
+    else:
+        try:
+            user_id = await _authorize(token, org_id)
+        except TokenError:
+            await websocket.close(code=4401)
+            return
+        await websocket.accept()
     await ws_manager.connect(org_id, user_id, websocket)
     redis: Redis = await get_redis()
     await redis.setex(presence_key(user_id), PRESENCE_ONLINE_TTL_SECONDS, PresenceStatus.ONLINE.value)
-    await ws_manager.broadcast_org(
+    await ws_manager.publish_org(
         org_id,
         WsEventServer.PRESENCE_UPDATE,
         {"user_id": str(user_id), "status": PresenceStatus.ONLINE.value},
@@ -66,17 +100,27 @@ async def websocket_endpoint(
                     if msg_type == WsEventClient.TYPING_START.value
                     else WsEventServer.TYPING_STOP
                 )
-                await ws_manager.broadcast_org(
+                conv_id = msg.get("conversation_id")
+                if not isinstance(conv_id, str):
+                    continue
+                try:
+                    recipients = await _cached_member_ids(conv_id)
+                except Exception:
+                    continue  # malformed/unknown conversation id
+                if user_id not in recipients:
+                    continue  # not a member: drop, don't leak typing signals
+                await ws_manager.publish_to_users(
                     org_id,
+                    recipients,
                     event,
-                    {"conversation_id": msg.get("conversation_id"), "user_id": str(user_id)},
+                    {"conversation_id": conv_id, "user_id": str(user_id)},
                 )
     except WebSocketDisconnect:
         pass
     finally:
         await ws_manager.disconnect(org_id, user_id, websocket)
         await redis.setex(presence_key(user_id), PRESENCE_AWAY_TTL_SECONDS, PresenceStatus.AWAY.value)
-        await ws_manager.broadcast_org(
+        await ws_manager.publish_org(
             org_id,
             WsEventServer.PRESENCE_UPDATE,
             {"user_id": str(user_id), "status": PresenceStatus.AWAY.value},

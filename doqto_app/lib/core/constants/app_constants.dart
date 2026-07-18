@@ -17,9 +17,10 @@ class AppConstants {
   static const int otpLength = 6;
   static const Duration otpResendCooldown = Duration(seconds: 30);
 
-  // WebSocket
+  // WebSocket — exponential backoff with jitter, base doubling up to the cap.
   static const Duration wsHeartbeatInterval = Duration(seconds: 60);
-  static const Duration wsReconnectBackoff = Duration(seconds: 3);
+  static const Duration wsReconnectBaseBackoff = Duration(seconds: 1);
+  static const Duration wsReconnectMaxBackoff = Duration(seconds: 30);
 
   // Voice notes
   static const Duration voiceNoteMaxDuration = Duration(minutes: 5);

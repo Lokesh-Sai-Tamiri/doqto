@@ -16,12 +16,14 @@ import '../../../core/tokens/radii.dart';
 import '../../../core/tokens/spacing.dart';
 import '../../../core/tokens/typography.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../../data/models/message.dart';
 import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
 import '../../../state/notification_state.dart';
 import '../../../state/org_state.dart';
 import '../../widgets/attachment_bubbles.dart';
+import '../../widgets/connectivity_banner.dart';
 import '../../widgets/doctor_avatar.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/typing_indicator.dart';
@@ -39,6 +41,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
 
 class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _input = TextEditingController();
+  final _scroll = ScrollController();
   bool _showRecorder = false;
   bool _typing = false;
   bool _hasText = false;
@@ -48,6 +51,14 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   @override
   void initState() {
     super.initState();
+    // Infinite scroll-back: nearing the top (= end of the reversed list)
+    // pulls the next older page.
+    _scroll.addListener(() {
+      if (_scroll.position.pixels >
+          _scroll.position.maxScrollExtent - 400) {
+        ref.read(messagesProvider(widget.conversationId).notifier).loadOlder();
+      }
+    });
     // Opening the thread = reading it: flip the sender's ticks to double-check.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
@@ -69,7 +80,35 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
     _stopTyping();
     _input.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  /// Tap on a failed bubble: offer retry / discard.
+  Future<void> _onFailedTap(String clientId) async {
+    final notifier = ref.read(messagesProvider(widget.conversationId).notifier);
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.refresh, color: AppColors.medBlue),
+              title: const Text('Retry send'),
+              onTap: () => Navigator.pop(ctx, 'retry'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: AppColors.red),
+              title: const Text('Delete message'),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action == 'retry') await notifier.retry(clientId);
+    if (action == 'delete') await notifier.discard(clientId);
   }
 
   void _wsTyping(bool typing) {
@@ -322,6 +361,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ),
       body: Column(
         children: [
+          const ConnectivityBanner(),
           Expanded(
             child: async.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -335,11 +375,27 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       (m) => m.expiresAt == null || m.expiresAt!.isAfter(now),
                     )
                     .toList();
+                final notifier =
+                    ref.read(messagesProvider(widget.conversationId).notifier);
                 return ListView.builder(
+                  controller: _scroll,
                   reverse: true,
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  itemCount: msgs.length,
+                  // +1 row at the top (list end) for the older-page spinner.
+                  itemCount: msgs.length + (notifier.loadingOlder ? 1 : 0),
                   itemBuilder: (_, i) {
+                    if (i >= msgs.length) {
+                      return const Padding(
+                        padding: EdgeInsets.all(AppSpacing.md),
+                        child: Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      );
+                    }
                     final m = msgs[i];
                     final isMine = me?.id == m.senderId;
                     if (m.type == MessageType.system) {
@@ -367,6 +423,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         isMine: isMine,
                         timestamp: m.createdAt.toLocal(),
                         read: m.read,
+                        delivered: m.delivered,
                       );
                     }
                     if (m.type == MessageType.file) {
@@ -378,14 +435,24 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         isMine: isMine,
                         timestamp: m.createdAt.toLocal(),
                         read: m.read,
+                        delivered: m.delivered,
                       );
                     }
-                    return MessageBubble(
+                    final bubble = MessageBubble(
                       text: m.content ?? '[${m.type.wire}]',
                       isMine: isMine,
                       timestamp: m.createdAt.toLocal(),
                       read: m.read,
+                      delivered: m.delivered,
+                      status: m.status,
                     );
+                    if (m.status == MessageStatus.failed && m.clientId != null) {
+                      return GestureDetector(
+                        onTap: () => _onFailedTap(m.clientId!),
+                        child: bubble,
+                      );
+                    }
+                    return bubble;
                   },
                 );
               },

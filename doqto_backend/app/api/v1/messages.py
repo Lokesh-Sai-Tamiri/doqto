@@ -20,6 +20,8 @@ from app.core.enums import (
     WsEventServer,
 )
 from app.core.routes import ApiRoutes
+from app.core.rate_limit import enforce_rate_limit
+from app.core.security import encrypt_message
 from app.db.postgres import get_db
 from app.models import Conversation, ConversationMember, Message, User
 from app.schemas.common import OkResponse
@@ -56,6 +58,7 @@ async def upload_file(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageOut:
+    await enforce_rate_limit(user.id, "upload_file")
     conv = await _assert_conv_member(conversation_id, user.id, db)
     data = await file.read()
     if len(data) > FILE_MAX_BYTES:
@@ -81,10 +84,13 @@ async def upload_file(
         resource_type="message",
         resource_id=msg.id,
     )
+    recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
     await db.commit()
 
     out = MessageService.to_out(msg)
-    await ws_manager.broadcast_org(conv.org_id, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json"))
+    await ws_manager.publish_to_users(
+        conv.org_id, recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
+    )
     return out
 
 
@@ -97,6 +103,7 @@ async def upload_voice_note(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageOut:
+    await enforce_rate_limit(user.id, "upload_voice_note")
     conv = await _assert_conv_member(conversation_id, user.id, db)
     data = await file.read()
     if len(data) > VOICE_NOTE_MAX_FILE_BYTES:
@@ -111,7 +118,7 @@ async def upload_voice_note(
         file_name=file.filename,
         file_size_bytes=len(data),
         voice_duration_sec=duration_sec,
-        transcript=client_transcript or None,
+        transcript_encrypted=encrypt_message(client_transcript) if client_transcript else None,
         transcript_status=TranscriptStatus.COMPLETED if client_transcript else TranscriptStatus.PENDING,
         expires_at=MessageService.expiry_for(conv),
     )
@@ -128,20 +135,24 @@ async def upload_voice_note(
         resource_type="message",
         resource_id=msg.id,
     )
+    recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
     await db.commit()
 
     out = MessageService.to_out(msg)
-    await ws_manager.broadcast_org(conv.org_id, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json"))
+    await ws_manager.publish_to_users(
+        conv.org_id, recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
+    )
 
     if not client_transcript:
         await TranscriptionService.start(message_id=str(msg.id), s3_key=key)
         server_transcript = await TranscriptionService.fetch(message_id=str(msg.id))
         if server_transcript:
-            msg.transcript = server_transcript
+            msg.transcript_encrypted = encrypt_message(server_transcript)
             msg.transcript_status = TranscriptStatus.COMPLETED
             await db.commit()
-            await ws_manager.broadcast_org(
+            await ws_manager.publish_to_users(
                 conv.org_id,
+                recipients,
                 WsEventServer.TRANSCRIPT_READY,
                 {"message_id": str(msg.id), "transcript": server_transcript},
             )
@@ -161,8 +172,12 @@ async def mark_read(
     await MessageService.mark_read(message_id=message_id, user_id=user.id, db=db)
     conv = await db.scalar(select(Conversation).where(Conversation.id == msg.conversation_id))
     if conv is not None:
-        await ws_manager.broadcast_org(
+        recipients = await MessageService.member_ids(
+            conversation_id=msg.conversation_id, db=db
+        )
+        await ws_manager.publish_to_users(
             conv.org_id,
+            recipients,
             WsEventServer.MESSAGE_READ,
             {
                 "message_id": str(message_id),

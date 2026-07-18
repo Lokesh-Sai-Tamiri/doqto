@@ -5,6 +5,37 @@ import '../../core/tokens/colors.dart';
 import '../../core/tokens/radii.dart';
 import '../../core/tokens/spacing.dart';
 import '../../core/tokens/typography.dart';
+import '../../data/models/message.dart';
+
+/// Status tick shown on own messages: clock (sending) → check (sent) →
+/// gray double-check (delivered) → blue double-check (read) → red ! (failed).
+class MessageStatusTick extends StatelessWidget {
+  final MessageStatus status;
+  final bool delivered;
+  final bool read;
+  final Color idleColor;
+  const MessageStatusTick({
+    super.key,
+    required this.status,
+    required this.read,
+    required this.idleColor,
+    this.delivered = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (status) {
+      MessageStatus.sending => Icon(Icons.schedule, size: 13, color: idleColor),
+      MessageStatus.failed =>
+        const Icon(Icons.error_outline, size: 15, color: Color(0xFFFFB4A9)),
+      MessageStatus.sent => Icon(
+          (read || delivered) ? Icons.done_all : Icons.check,
+          size: 15,
+          color: read ? const Color(0xFF7FC8FF) : idleColor,
+        ),
+    };
+  }
+}
 
 /// Centered pill for in-chat system banners (e.g. disappearing-messages
 /// changes). No timestamp, no read ticks.
@@ -45,6 +76,8 @@ class MessageBubble extends StatelessWidget {
   final String? senderName;
   final int senderColorIndex;
   final bool read;
+  final bool delivered;
+  final MessageStatus status;
 
   const MessageBubble({
     super.key,
@@ -54,6 +87,8 @@ class MessageBubble extends StatelessWidget {
     this.senderName,
     this.senderColorIndex = 0,
     this.read = false,
+    this.delivered = false,
+    this.status = MessageStatus.sent,
   });
 
   @override
@@ -99,10 +134,11 @@ class MessageBubble extends StatelessWidget {
                 ),
                 if (isMine) ...[
                   const SizedBox(width: 3),
-                  Icon(
-                    read ? Icons.done_all : Icons.check,
-                    size: 15,
-                    color: read ? const Color(0xFF7FC8FF) : AppColors.white.withValues(alpha: 0.55),
+                  MessageStatusTick(
+                    status: status,
+                    read: read,
+                    delivered: delivered,
+                    idleColor: AppColors.white.withValues(alpha: 0.55),
                   ),
                 ],
               ],

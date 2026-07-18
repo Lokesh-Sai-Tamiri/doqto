@@ -17,6 +17,7 @@ import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
 import '../../../state/org_state.dart';
+import '../../widgets/connectivity_banner.dart';
 import '../../widgets/doctor_avatar.dart';
 import '../../widgets/search_bar.dart';
 import '../../widgets/typing_indicator.dart';
@@ -151,6 +152,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
             ),
       body: Column(
         children: [
+          const ConnectivityBanner(),
           if (!_isSelecting)
             AppSearchBar(
               hint: 'Search chats or people…',

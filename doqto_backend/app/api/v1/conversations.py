@@ -16,6 +16,7 @@ from app.core.constants import (
 from app.core.security import decrypt_message
 from app.core.dependencies import get_current_user
 from app.core.enums import ConversationType, MessageType, WsEventServer
+from app.core.rate_limit import enforce_rate_limit
 from app.core.routes import ApiRoutes
 from app.db.postgres import get_db
 from app.models import Conversation, ConversationMember, Message, OrgMember, User
@@ -83,15 +84,17 @@ async def list_conversations(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> list[ConversationOut]:
     convs = await MessageService.list_for_user(user_id=user.id, db=db)
-    latest = await MessageService.latest_per_conversation(
-        conversation_ids=[c.id for c in convs], db=db
+    conv_ids = [c.id for c in convs]
+    # Batched: 4 queries total regardless of conversation count (was ~2×N).
+    latest = await MessageService.latest_per_conversation(conversation_ids=conv_ids, db=db)
+    conv_members = await MessageService.members_by_conversation(
+        conversation_ids=conv_ids, db=db
     )
-    out: list[ConversationOut] = []
-    conv_members: dict[uuid.UUID, list[uuid.UUID]] = {}
+    unread = await MessageService.unread_counts(
+        conversation_ids=conv_ids, user_id=user.id, db=db
+    )
     other_ids: set[uuid.UUID] = set()
     for c in convs:
-        members = await MessageService.conversation_members(conversation_id=c.id, db=db)
-        conv_members[c.id] = [m.user_id for m in members]
         if c.type == ConversationType.DIRECT:
             other_ids.update(uid for uid in conv_members[c.id] if uid != user.id)
     names: dict[uuid.UUID, str] = {}
@@ -100,6 +103,7 @@ async def list_conversations(
             select(User.id, User.full_name).where(User.id.in_(other_ids))
         )
         names = dict(rows.all())
+    out: list[ConversationOut] = []
     for c in convs:
         o = _to_out(c, conv_members[c.id], latest.get(c.id))
         if c.type == ConversationType.DIRECT:
@@ -107,9 +111,7 @@ async def list_conversations(
                 (names[uid] for uid in conv_members[c.id] if uid != user.id and uid in names),
                 None,
             )
-        o.unread_count = await MessageService.unread_count(
-            conversation_id=c.id, user_id=user.id, db=db
-        )
+        o.unread_count = unread.get(c.id, 0)
         out.append(o)
     return out
 
@@ -165,7 +167,13 @@ async def list_messages(
     read_ids = await MessageService.read_message_ids(
         message_ids=[m.id for m in msgs], db=db
     )
-    return [MessageService.to_out(m, read=m.id in read_ids) for m in msgs]
+    delivered_ids = await MessageService.delivered_message_ids(
+        message_ids=[m.id for m in msgs], db=db
+    )
+    return [
+        MessageService.to_out(m, read=m.id in read_ids, delivered=m.id in delivered_ids)
+        for m in msgs
+    ]
 
 
 @router.post(ApiRoutes.CONVERSATIONS_MESSAGES, response_model=MessageOut)
@@ -175,6 +183,7 @@ async def send_message(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageOut:
+    await enforce_rate_limit(user.id, "send_message")
     conv = await _assert_member(conversation_id, user.id, db)
     try:
         msg = await MessageService.send_text(
@@ -182,14 +191,17 @@ async def send_message(
             sender_id=user.id,
             content=body.content,
             db=db,
+            client_id=body.client_id,
         )
     except MessageError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     out = MessageService.to_out(msg)
+    recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
     await db.commit()  # flush before broadcasting so receivers can query
-    await ws_manager.broadcast_org(
+    await ws_manager.publish_to_users(
         conv.org_id,
+        recipients,
         WsEventServer.NEW_MESSAGE,
         out.model_dump(mode="json"),
     )
@@ -206,13 +218,39 @@ async def mark_conversation_read(
     await MessageService.mark_conversation_read(
         conversation_id=conversation_id, user_id=user.id, db=db
     )
+    recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
     await db.commit()
     # One conversation-level event: senders flip all their ticks to read.
-    await ws_manager.broadcast_org(
+    await ws_manager.publish_to_users(
         conv.org_id,
+        recipients,
         WsEventServer.MESSAGE_READ,
         {"conversation_id": str(conversation_id), "user_id": str(user.id)},
     )
+    return OkResponse()
+
+
+@router.post(ApiRoutes.CONVERSATIONS_DELIVERED, response_model=OkResponse)
+async def mark_conversation_delivered(
+    conversation_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OkResponse:
+    """Recipient acks receipt of a conversation's messages → gray double-check
+    on the sender's side. Called by clients whenever messages arrive."""
+    conv = await _assert_member(conversation_id, user.id, db)
+    changed = await MessageService.mark_conversation_delivered(
+        conversation_id=conversation_id, user_id=user.id, db=db
+    )
+    if changed:
+        recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
+        await db.commit()
+        await ws_manager.publish_to_users(
+            conv.org_id,
+            recipients,
+            WsEventServer.MESSAGE_DELIVERED,
+            {"conversation_id": str(conversation_id), "user_id": str(user.id)},
+        )
     return OkResponse()
 
 
@@ -224,6 +262,7 @@ async def add_members(
     db: AsyncSession = Depends(get_db),
 ) -> OkResponse:
     conv = await _assert_member(conversation_id, user.id, db)
+    added: list[uuid.UUID] = []
     for uid in body.user_ids:
         exists = await db.scalar(
             select(ConversationMember).where(
@@ -233,8 +272,14 @@ async def add_members(
         )
         if exists is None:
             db.add(ConversationMember(conversation_id=conversation_id, user_id=uid))
-            await ws_manager.broadcast_org(
+            added.append(uid)
+    if added:
+        await db.flush()  # member_ids below must see the new rows
+        recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
+        for uid in added:
+            await ws_manager.publish_to_users(
                 conv.org_id,
+                recipients,
                 WsEventServer.MEMBER_ADDED,
                 {"conversation_id": str(conversation_id), "user_id": str(uid)},
             )
@@ -258,8 +303,12 @@ async def remove_or_leave(
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="member_not_found")
     await db.delete(target)
-    await ws_manager.broadcast_org(
+    await db.flush()
+    # Remaining members + the removed user (they need to see themselves leave).
+    recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
+    await ws_manager.publish_to_users(
         conv.org_id,
+        [*recipients, user_id],
         WsEventServer.MEMBER_REMOVED,
         {"conversation_id": str(conversation_id), "user_id": str(user_id)},
     )
@@ -292,10 +341,11 @@ async def update_settings(
         )
     msg = await MessageService.send_system(conv=conv, sender_id=user.id, content=text, db=db)
     out = MessageService.to_out(msg)
+    recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
     await db.commit()  # flush before broadcasting so receivers can query
     # Broadcast as NEW_MESSAGE: clients already insert it into the open thread and
     # refresh the conversation list (which refetches disappear_after_sec).
-    await ws_manager.broadcast_org(
-        conv.org_id, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
+    await ws_manager.publish_to_users(
+        conv.org_id, recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
     )
     return OkResponse()

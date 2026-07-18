@@ -33,6 +33,13 @@ final notificationListenerProvider = Provider<void>((ref) {
     if (conversationId == null || senderId == null || senderId == me?.id) {
       return;
     }
+    // Ack receipt → sender sees the gray double-check. WS fanout is
+    // conversation-scoped, so any event here is for a chat I'm in.
+    ref
+        .read(chatRepositoryProvider)
+        .markConversationDelivered(conversationId)
+        .catchError((_) {});
+
     final wireType = (event.data['type'] ?? '') as String;
     if (wireType == MessageType.system.wire) return; // settings banners etc.
     final msgType =

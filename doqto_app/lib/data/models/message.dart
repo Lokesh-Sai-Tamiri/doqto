@@ -1,5 +1,9 @@
 import '../../core/enums/app_enums.dart';
 
+/// Client-side send lifecycle (not a wire enum — the server only ever returns
+/// persisted messages, which are always [sent]).
+enum MessageStatus { sending, sent, failed }
+
 class Message {
   final String id;
   final String conversationId;
@@ -15,6 +19,9 @@ class Message {
   final DateTime? expiresAt;
   final DateTime createdAt;
   final bool read;
+  final bool delivered;
+  final MessageStatus status;
+  final String? clientId; // outbox idempotency key (echoed by the server)
 
   const Message({
     required this.id,
@@ -31,7 +38,37 @@ class Message {
     required this.expiresAt,
     required this.createdAt,
     this.read = false,
+    this.delivered = false,
+    this.status = MessageStatus.sent,
+    this.clientId,
   });
+
+  /// Optimistic local text message: shown with a clock tick while the outbox
+  /// delivers it. `id` is the clientId until the server row replaces it.
+  factory Message.pending({
+    required String clientId,
+    required String conversationId,
+    required String senderId,
+    required String content,
+    MessageStatus status = MessageStatus.sending,
+  }) =>
+      Message(
+        id: clientId,
+        conversationId: conversationId,
+        senderId: senderId,
+        type: MessageType.text,
+        content: content,
+        s3Key: null,
+        fileName: null,
+        fileSizeBytes: null,
+        voiceDurationSec: null,
+        transcript: null,
+        transcriptStatus: TranscriptStatus.none,
+        expiresAt: null,
+        createdAt: DateTime.now().toUtc(),
+        status: status,
+        clientId: clientId,
+      );
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
         id: j['id'] as String,
@@ -49,12 +86,35 @@ class Message {
         expiresAt: j['expires_at'] != null ? DateTime.parse(j['expires_at'] as String) : null,
         createdAt: DateTime.parse(j['created_at'] as String),
         read: (j['read'] as bool?) ?? false,
+        delivered: (j['delivered'] as bool?) ?? false,
+        clientId: j['client_id'] as String?,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'conversation_id': conversationId,
+        'sender_id': senderId,
+        'type': type.wire,
+        'content': content,
+        's3_key': s3Key,
+        'file_name': fileName,
+        'file_size_bytes': fileSizeBytes,
+        'voice_duration_sec': voiceDurationSec,
+        'transcript': transcript,
+        'transcript_status': transcriptStatus.wire,
+        'expires_at': expiresAt?.toIso8601String(),
+        'created_at': createdAt.toIso8601String(),
+        'read': read,
+        'delivered': delivered,
+        'client_id': clientId,
+      };
 
   Message copyWith({
     String? transcript,
     TranscriptStatus? transcriptStatus,
     bool? read,
+    bool? delivered,
+    MessageStatus? status,
   }) =>
       Message(
         id: id,
@@ -71,5 +131,8 @@ class Message {
         expiresAt: expiresAt,
         createdAt: createdAt,
         read: read ?? this.read,
+        delivered: delivered ?? this.delivered,
+        status: status ?? this.status,
+        clientId: clientId,
       );
 }

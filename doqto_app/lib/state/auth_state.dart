@@ -104,9 +104,12 @@ class AuthNotifier extends Notifier<AuthState> {
   /// Open the realtime socket for the signed-in user's org. Drives instant
   /// message delivery, read receipts, and typing indicators.
   Future<void> _connectWs(String orgId) async {
-    final token = await ref.read(tokenStorageProvider).accessToken;
-    if (token == null || token.isEmpty) return;
-    ref.read(websocketClientProvider).connect(orgId: orgId, token: token);
+    // Token is read per reconnect attempt, so a token refreshed by the Dio
+    // interceptor is picked up automatically instead of fail-looping.
+    await ref.read(websocketClientProvider).connect(
+          orgId: orgId,
+          tokenProvider: () => ref.read(tokenStorageProvider).accessToken,
+        );
   }
 
   Future<void> requestOtp(String phone) async {

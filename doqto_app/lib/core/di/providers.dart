@@ -7,6 +7,8 @@ import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/chat_repository.dart';
 import '../../data/repositories/org_repository.dart';
 import '../../data/repositories/user_repository.dart';
+import '../../data/services/chat_cache.dart';
+import '../../data/services/outbox.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
@@ -35,3 +37,12 @@ final websocketClientProvider = Provider<WebsocketClient>((ref) {
   ref.onDispose(ws.dispose);
   return ws;
 });
+
+/// Socket lifecycle as a watchable value — drives the "Connecting…" banner.
+final wsConnStateProvider = StreamProvider<WsConnState>(
+  (ref) => ref.watch(websocketClientProvider).states,
+);
+
+final outboxProvider = Provider<Outbox>((ref) => Outbox());
+
+final chatCacheProvider = Provider<ChatCache>((ref) => ChatCache());

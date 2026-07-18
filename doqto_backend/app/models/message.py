@@ -28,12 +28,15 @@ class Message(Base):
         PgUUID(as_uuid=True), ForeignKey(f"{Tables.USERS}.id"), nullable=False, index=True
     )
     type: Mapped[MessageType] = mapped_column(String(20), nullable=False)
+    # Client-generated idempotency key; unique per conversation (partial index).
+    client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     content_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     s3_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     voice_duration_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Voice-note transcripts are PHI — encrypted at rest like message bodies.
+    transcript_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     transcript_status: Mapped[TranscriptStatus] = mapped_column(
         String(20), default=TranscriptStatus.NONE, nullable=False
     )

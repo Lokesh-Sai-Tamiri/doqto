@@ -61,6 +61,8 @@ class ErrorMessages {
     'conversation_not_found': 'This conversation no longer exists.',
     'not_a_conversation_member': 'You\'re not part of this conversation.',
     'message_not_found': 'We couldn\'t find that message.',
+    'rate_limited':
+        'You\'re sending too quickly. Please wait a moment and try again.',
     'direct_requires_one_member':
         'Select one doctor to start a direct message.',
     'direct_requires_two_distinct': 'You can\'t start a chat with yourself.',

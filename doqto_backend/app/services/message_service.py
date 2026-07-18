@@ -102,6 +102,58 @@ class MessageService:
         return list(rows.scalars().all())
 
     @staticmethod
+    async def members_by_conversation(
+        *, conversation_ids: list[uuid.UUID], db: AsyncSession
+    ) -> dict[uuid.UUID, list[uuid.UUID]]:
+        """Member ids for many conversations in ONE query (chat-list path)."""
+        if not conversation_ids:
+            return {}
+        rows = await db.execute(
+            select(ConversationMember.conversation_id, ConversationMember.user_id).where(
+                ConversationMember.conversation_id.in_(conversation_ids)
+            )
+        )
+        out: dict[uuid.UUID, list[uuid.UUID]] = {cid: [] for cid in conversation_ids}
+        for cid, uid in rows.all():
+            out[cid].append(uid)
+        return out
+
+    @staticmethod
+    async def unread_counts(
+        *, conversation_ids: list[uuid.UUID], user_id: uuid.UUID, db: AsyncSession
+    ) -> dict[uuid.UUID, int]:
+        """unread_count for many conversations in ONE grouped query."""
+        if not conversation_ids:
+            return {}
+        read_subq = select(MessageReceipt.message_id).where(
+            MessageReceipt.user_id == user_id,
+            MessageReceipt.read_at.is_not(None),
+        )
+        rows = await db.execute(
+            select(Message.conversation_id, func.count())
+            .where(
+                Message.conversation_id.in_(conversation_ids),
+                Message.sender_id != user_id,
+                Message.is_deleted.is_(False),
+                Message.type != MessageType.SYSTEM,
+                MessageService._not_expired(),
+                Message.id.not_in(read_subq),
+            )
+            .group_by(Message.conversation_id)
+        )
+        return dict(rows.all())
+
+    @staticmethod
+    async def member_ids(*, conversation_id: uuid.UUID, db: AsyncSession) -> list[uuid.UUID]:
+        """Recipient list for conversation-scoped WS fanout."""
+        rows = await db.execute(
+            select(ConversationMember.user_id).where(
+                ConversationMember.conversation_id == conversation_id
+            )
+        )
+        return list(rows.scalars().all())
+
+    @staticmethod
     def expiry_for(conv: Conversation) -> datetime | None:
         """When a message sent NOW in this conversation should disappear (None = never)."""
         if conv.disappear_after_sec:
@@ -156,15 +208,30 @@ class MessageService:
         sender_id: uuid.UUID,
         content: str,
         db: AsyncSession,
+        client_id: str | None = None,
     ) -> Message:
         conv = await db.scalar(select(Conversation).where(Conversation.id == conversation_id))
         if conv is None:
             raise MessageError("conversation_not_found")
 
+        # Idempotency: a retried send (same outbox client_id) returns the
+        # original row instead of duplicating. The partial unique index
+        # (conversation_id, client_id) backstops concurrent retries.
+        if client_id is not None:
+            existing = await db.scalar(
+                select(Message).where(
+                    Message.conversation_id == conversation_id,
+                    Message.client_id == client_id,
+                )
+            )
+            if existing is not None:
+                return existing
+
         msg = Message(
             conversation_id=conversation_id,
             sender_id=sender_id,
             type=MessageType.TEXT,
+            client_id=client_id,
             content_encrypted=encrypt_message(content),
             transcript_status=TranscriptStatus.NONE,
             expires_at=MessageService.expiry_for(conv),
@@ -222,7 +289,7 @@ class MessageService:
         return {m.conversation_id: m for m in rows.scalars().all()}
 
     @staticmethod
-    def to_out(msg: Message, read: bool = False) -> MessageOut:
+    def to_out(msg: Message, read: bool = False, delivered: bool = False) -> MessageOut:
         content = decrypt_message(msg.content_encrypted) if msg.content_encrypted else None
         return MessageOut(
             id=msg.id,
@@ -234,12 +301,69 @@ class MessageService:
             file_name=msg.file_name,
             file_size_bytes=msg.file_size_bytes,
             voice_duration_sec=msg.voice_duration_sec,
-            transcript=msg.transcript,
+            transcript=(
+                decrypt_message(msg.transcript_encrypted) if msg.transcript_encrypted else None
+            ),
             transcript_status=msg.transcript_status,
             expires_at=msg.expires_at,
             created_at=msg.created_at,
             read=read,
+            delivered=delivered or read,  # read implies delivered
+            client_id=msg.client_id,
         )
+
+    @staticmethod
+    async def mark_conversation_delivered(
+        *, conversation_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
+    ) -> bool:
+        """Stamp delivered_at for every message from other senders this user
+        hasn't acknowledged yet. Returns True if anything changed."""
+        now = datetime.now(tz=timezone.utc)
+        msg_ids = (
+            await db.execute(
+                select(Message.id).where(
+                    Message.conversation_id == conversation_id,
+                    Message.sender_id != user_id,
+                    Message.is_deleted.is_(False),
+                )
+            )
+        ).scalars().all()
+        if not msg_ids:
+            return False
+        receipts = (
+            await db.execute(
+                select(MessageReceipt).where(
+                    MessageReceipt.message_id.in_(msg_ids),
+                    MessageReceipt.user_id == user_id,
+                )
+            )
+        ).scalars().all()
+        by_msg = {r.message_id: r for r in receipts}
+        changed = False
+        for mid in msg_ids:
+            r = by_msg.get(mid)
+            if r is None:
+                db.add(MessageReceipt(message_id=mid, user_id=user_id, delivered_at=now))
+                changed = True
+            elif r.delivered_at is None:
+                r.delivered_at = now
+                changed = True
+        return changed
+
+    @staticmethod
+    async def delivered_message_ids(
+        *, message_ids: list[uuid.UUID], db: AsyncSession
+    ) -> set[uuid.UUID]:
+        """Subset of the given message ids delivered to a recipient."""
+        if not message_ids:
+            return set()
+        rows = await db.execute(
+            select(MessageReceipt.message_id).where(
+                MessageReceipt.message_id.in_(message_ids),
+                MessageReceipt.delivered_at.is_not(None),
+            )
+        )
+        return set(rows.scalars().all())
 
     @staticmethod
     async def read_message_ids(

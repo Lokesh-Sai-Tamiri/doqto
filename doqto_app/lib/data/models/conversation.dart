@@ -56,4 +56,23 @@ class Conversation {
             : null,
         unreadCount: (j['unread_count'] ?? 0) as int,
       );
+
+  /// Round-trips through [Conversation.fromJson] — used by the offline cache.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'org_id': orgId,
+        'type': type.wire,
+        'name': name,
+        'created_by': createdBy,
+        'disappear_after_sec': disappearAfterSec,
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': updatedAt.toIso8601String(),
+        'member_ids': memberIds,
+        'display_name': displayName,
+        'last_message_at': lastMessageAt?.toIso8601String(),
+        'last_message_preview': lastMessagePreview,
+        'last_message_sender_id': lastMessageSenderId,
+        'last_message_type': lastMessageType?.wire,
+        'unread_count': unreadCount,
+      };
 }

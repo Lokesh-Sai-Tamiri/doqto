@@ -34,10 +34,19 @@ class ChatRepository {
     return list.map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Message> sendText(String conversationId, String content) async {
+  Future<Message> sendText(
+    String conversationId,
+    String content, {
+    String? clientId,
+  }) async {
     final j = await _api.post(
       ApiRoutes.conversationMessages(conversationId),
-      body: {'type': MessageType.text.wire, 'content': content},
+      body: {
+        'type': MessageType.text.wire,
+        'content': content,
+        // Outbox idempotency key — retries return the original row.
+        'client_id': ?clientId,
+      },
     );
     return Message.fromJson(j);
   }
@@ -85,6 +94,11 @@ class ChatRepository {
 
   Future<void> markConversationRead(String conversationId) async {
     await _api.post(ApiRoutes.conversationRead(conversationId));
+  }
+
+  /// Ack receipt → sender's gray double-check. Fire on message arrival.
+  Future<void> markConversationDelivered(String conversationId) async {
+    await _api.post(ApiRoutes.conversationDelivered(conversationId));
   }
 
   Future<String> fileUrl(String messageId) async {

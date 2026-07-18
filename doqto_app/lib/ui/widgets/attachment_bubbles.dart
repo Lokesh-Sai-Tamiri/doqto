@@ -7,17 +7,21 @@ import '../../core/tokens/colors.dart';
 import '../../core/tokens/radii.dart';
 import '../../core/tokens/spacing.dart';
 import '../../core/tokens/typography.dart';
+import '../../data/models/message.dart';
+import 'message_bubble.dart';
 
-/// Timestamp + read ticks row shared by attachment bubbles (mirrors
+/// Timestamp + status ticks row shared by attachment bubbles (mirrors
 /// MessageBubble's footer).
 class _BubbleFooter extends StatelessWidget {
   final bool isMine;
   final DateTime timestamp;
   final bool read;
+  final bool delivered;
   const _BubbleFooter({
     required this.isMine,
     required this.timestamp,
     required this.read,
+    this.delivered = false,
   });
 
   @override
@@ -33,12 +37,11 @@ class _BubbleFooter extends StatelessWidget {
         ),
         if (isMine) ...[
           const SizedBox(width: 3),
-          Icon(
-            read ? Icons.done_all : Icons.check,
-            size: 15,
-            color: read
-                ? const Color(0xFF7FC8FF)
-                : AppColors.white.withValues(alpha: 0.55),
+          MessageStatusTick(
+            status: MessageStatus.sent, // attachments upload synchronously
+            read: read,
+            delivered: delivered,
+            idleColor: AppColors.white.withValues(alpha: 0.55),
           ),
         ],
       ],
@@ -53,6 +56,7 @@ class ImageBubble extends StatefulWidget {
   final bool isMine;
   final DateTime timestamp;
   final bool read;
+  final bool delivered;
 
   const ImageBubble({
     super.key,
@@ -60,6 +64,7 @@ class ImageBubble extends StatefulWidget {
     required this.isMine,
     required this.timestamp,
     this.read = false,
+    this.delivered = false,
   });
 
   @override
@@ -163,6 +168,7 @@ class _ImageBubbleState extends State<ImageBubble> {
               isMine: widget.isMine,
               timestamp: widget.timestamp,
               read: widget.read,
+              delivered: widget.delivered,
             ),
           ),
         ],
@@ -188,6 +194,7 @@ class FileBubble extends StatelessWidget {
   final bool isMine;
   final DateTime timestamp;
   final bool read;
+  final bool delivered;
 
   const FileBubble({
     super.key,
@@ -197,6 +204,7 @@ class FileBubble extends StatelessWidget {
     required this.isMine,
     required this.timestamp,
     this.read = false,
+    this.delivered = false,
   });
 
   String get _sizeLabel {
@@ -270,7 +278,11 @@ class FileBubble extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 2),
-            _BubbleFooter(isMine: isMine, timestamp: timestamp, read: read),
+            _BubbleFooter(
+                isMine: isMine,
+                timestamp: timestamp,
+                read: read,
+                delivered: delivered),
           ],
         ),
       ),

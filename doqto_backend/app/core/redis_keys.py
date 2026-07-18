@@ -34,3 +34,12 @@ def ws_connections_key(org_id: UUID | str) -> str:
 
 def rate_limit_key(user_id: UUID | str, endpoint: str) -> str:
     return f"rate_limit:{user_id}:{endpoint}"
+
+
+# Pub/sub channel for cross-instance WebSocket fanout.
+WS_EVENTS_CHANNEL = "ws:events"
+
+
+def purge_lock_key() -> str:
+    """Singleton lock so only one replica runs the disappearing-message purge."""
+    return "lock:purge_expired"

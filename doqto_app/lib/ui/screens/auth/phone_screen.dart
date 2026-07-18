@@ -8,6 +8,7 @@ import '../../../core/tokens/spacing.dart';
 import '../../../core/tokens/typography.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../state/auth_state.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/inline_error.dart';
 import '../../widgets/phone_field.dart';
 import '../../widgets/primary_button.dart';
@@ -52,26 +53,38 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: AppSpacing.xl),
-            Center(child: Image.asset('logo.png', width: 72, height: 72)),
+            FadeSlideIn.staggered(
+              0,
+              Center(child: Image.asset('logo.png', width: 72, height: 72)),
+            ),
             const SizedBox(height: AppSpacing.lg),
-            Text(Strings.authPhoneTitle, style: AppText.display),
+            FadeSlideIn.staggered(
+              1,
+              Text(Strings.authPhoneTitle, style: AppText.display),
+            ),
             const SizedBox(height: AppSpacing.lg),
-            PhoneField(
-              key: _phoneKey,
-              autofocus: true,
-              helperText: 'Tap the flag to change country',
-              onChanged: (full) {
-                _e164 = full;
-                if (_submitError != null) setState(() => _submitError = null);
-              },
+            FadeSlideIn.staggered(
+              2,
+              PhoneField(
+                key: _phoneKey,
+                autofocus: true,
+                helperText: 'Tap the flag to change country',
+                onChanged: (full) {
+                  _e164 = full;
+                  if (_submitError != null) setState(() => _submitError = null);
+                },
+              ),
             ),
             InlineError(_submitError),
             const SizedBox(height: AppSpacing.lg),
-            AppButton(
-              label: Strings.authSendOtp,
-              onPressed: _submit,
-              loading: _loading,
-              expand: true,
+            FadeSlideIn.staggered(
+              3,
+              AppButton(
+                label: Strings.authSendOtp,
+                onPressed: _submit,
+                loading: _loading,
+                expand: true,
+              ),
             ),
           ],
         ),

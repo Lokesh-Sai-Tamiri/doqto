@@ -12,7 +12,9 @@ import '../../../core/utils/error_messages.dart';
 import '../../../data/models/organization.dart';
 import '../../../data/models/user.dart';
 import '../../../state/auth_state.dart';
+import '../../widgets/app_skeleton.dart';
 import '../../widgets/doctor_avatar.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/primary_button.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -100,7 +102,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (!_isSelf) return _MemberProfileView(member: widget.member!);
     final user = ref.watch(authProvider).user;
     if (user == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: _ProfileSkeleton());
     }
     return Scaffold(
       backgroundColor: AppColors.appBg,
@@ -120,61 +122,92 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
           children: [
-            _Header(user: user),
+            FadeSlideIn.staggered(0, _Header(user: user)),
             const SizedBox(height: AppSpacing.xl),
-            _Section(
-              title: 'About',
-              child: user.bio == null || user.bio!.trim().isEmpty
-                  ? _Empty(text: _isSelf ? 'Tap edit to add a short bio.' : 'No bio yet.')
-                  : Text(user.bio!, style: AppText.bodyPrimary),
-            ),
-            _Section(
-              title: 'Practice',
-              children: [
-                _Row(icon: Icons.badge_outlined, label: 'NPI', value: user.npiNumber),
-                if (user.specialty != null && user.specialty!.isNotEmpty)
-                  _Row(icon: Icons.medical_services_outlined, label: 'Specialty', value: user.specialty!),
-                if (user.yearsOfExperience != null)
-                  _Row(
-                    icon: Icons.timeline,
-                    label: 'Experience',
-                    value: '${user.yearsOfExperience} year${user.yearsOfExperience == 1 ? '' : 's'}',
-                  ),
-              ],
-            ),
-            _Section(
-              title: 'Contact',
-              children: [
-                _Row(icon: Icons.phone_outlined, label: 'Phone', value: user.phone),
-                if (user.email != null && user.email!.isNotEmpty)
-                  _Row(icon: Icons.alternate_email, label: 'Email', value: user.email!),
-                if (user.locationLabel != null)
-                  _Row(icon: Icons.location_on_outlined, label: 'Location', value: user.locationLabel!),
-              ],
-            ),
-            _Section(
-              title: 'Skills',
-              child: user.skills.isEmpty
-                  ? _Empty(text: 'No skills added yet.')
-                  : Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        for (final s in user.skills) _SkillTag(label: s),
-                      ],
-                    ),
-            ),
+            FadeSlideIn.staggered(
+                1,
+                _Section(
+                  title: 'About',
+                  child: user.bio == null || user.bio!.trim().isEmpty
+                      ? _Empty(
+                          text: _isSelf
+                              ? 'Tap edit to add a short bio.'
+                              : 'No bio yet.')
+                      : Text(user.bio!, style: AppText.bodyPrimary),
+                )),
+            FadeSlideIn.staggered(
+                2,
+                _Section(
+                  title: 'Practice',
+                  children: [
+                    _Row(
+                        icon: Icons.badge_outlined,
+                        label: 'NPI',
+                        value: user.npiNumber),
+                    if (user.specialty != null && user.specialty!.isNotEmpty)
+                      _Row(
+                          icon: Icons.medical_services_outlined,
+                          label: 'Specialty',
+                          value: user.specialty!),
+                    if (user.yearsOfExperience != null)
+                      _Row(
+                        icon: Icons.timeline,
+                        label: 'Experience',
+                        value:
+                            '${user.yearsOfExperience} year${user.yearsOfExperience == 1 ? '' : 's'}',
+                      ),
+                  ],
+                )),
+            FadeSlideIn.staggered(
+                3,
+                _Section(
+                  title: 'Contact',
+                  children: [
+                    _Row(
+                        icon: Icons.phone_outlined,
+                        label: 'Phone',
+                        value: user.phone),
+                    if (user.email != null && user.email!.isNotEmpty)
+                      _Row(
+                          icon: Icons.alternate_email,
+                          label: 'Email',
+                          value: user.email!),
+                    if (user.locationLabel != null)
+                      _Row(
+                          icon: Icons.location_on_outlined,
+                          label: 'Location',
+                          value: user.locationLabel!),
+                  ],
+                )),
+            FadeSlideIn.staggered(
+                4,
+                _Section(
+                  title: 'Skills',
+                  child: user.skills.isEmpty
+                      ? _Empty(text: 'No skills added yet.')
+                      : Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          children: [
+                            for (final s in user.skills) _SkillTag(label: s),
+                          ],
+                        ),
+                )),
             if (_isSelf) ...[
               const SizedBox(height: AppSpacing.lg),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenHorizontal),
-                child: AppButton(
-                  label: 'Sign out',
-                  variant: AppButtonVariant.danger,
-                  icon: Icons.logout,
-                  expand: true,
-                  loading: _signingOut,
-                  onPressed: _signingOut ? null : _confirmAndSignOut,
+              FadeSlideIn.staggered(
+                5,
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.screenHorizontal),
+                  child: AppButton(
+                    label: 'Sign out',
+                    variant: AppButtonVariant.danger,
+                    icon: Icons.logout,
+                    expand: true,
+                    loading: _signingOut,
+                    onPressed: _signingOut ? null : _confirmAndSignOut,
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
@@ -200,29 +233,39 @@ class _MemberProfileView extends StatelessWidget {
         children: [
           Column(
             children: [
+              // Hero pairs with the org member list row (member-avatar-<id>).
               DoctorAvatar(
                 initials: member.initials,
                 size: AvatarSize.xxl,
                 imageUrl: member.avatarPresignedUrl,
+                heroTag: 'member-avatar-${member.id}',
               ),
               const SizedBox(height: AppSpacing.md),
-              Text(member.fullName, style: AppText.display, textAlign: TextAlign.center),
-              if (member.specialty case final specialty? when specialty.isNotEmpty) ...[
+              FadeSlideIn.staggered(
+                0,
+                Text(member.fullName,
+                    style: AppText.display, textAlign: TextAlign.center),
+              ),
+              if (member.specialty case final specialty?
+                  when specialty.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xs),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.xs + 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.medBlueLight,
-                    borderRadius: AppRadii.rFull,
-                  ),
-                  child: Text(
-                    specialty,
-                    style: AppText.caption.copyWith(
-                      color: AppColors.medBlueDark,
-                      fontWeight: FontWeight.w600,
+                FadeSlideIn.staggered(
+                  1,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.xs + 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.medBlueLight,
+                      borderRadius: AppRadii.rFull,
+                    ),
+                    child: Text(
+                      specialty,
+                      style: AppText.caption.copyWith(
+                        color: AppColors.medBlueDark,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -231,6 +274,36 @@ class _MemberProfileView extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Profile-shaped loading placeholder: avatar circle + name line + section
+/// blocks. Replaces the bare spinner while the cached user hydrates.
+class _ProfileSkeleton extends StatelessWidget {
+  const _ProfileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.screenHorizontal,
+        vertical: AppSpacing.xl,
+      ),
+      children: [
+        Center(child: AppSkeleton.circle(size: 104)),
+        const SizedBox(height: AppSpacing.md),
+        Center(child: AppSkeleton.line(width: 160, height: 16)),
+        const SizedBox(height: AppSpacing.sm),
+        Center(child: AppSkeleton.line(width: 96)),
+        const SizedBox(height: AppSpacing.xl),
+        AppSkeleton.block(height: 88),
+        const SizedBox(height: AppSpacing.lg),
+        AppSkeleton.block(height: 120),
+        const SizedBox(height: AppSpacing.lg),
+        AppSkeleton.block(height: 120),
+      ],
     );
   }
 }

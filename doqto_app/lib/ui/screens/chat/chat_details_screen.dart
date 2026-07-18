@@ -14,7 +14,9 @@ import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
 import '../../../state/org_state.dart';
+import '../../widgets/app_pressable.dart';
 import '../../widgets/doctor_avatar.dart';
+import '../../widgets/fade_slide_in.dart';
 import '_conversation_display.dart';
 
 /// Timer options — mirror of DISAPPEAR_OPTIONS_SEC on the backend.
@@ -63,54 +65,63 @@ class ChatDetailsScreen extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
         children: [
           // Header — avatar + name; direct chats tap through to the peer profile.
-          InkWell(
-            onTap: display.isDirect && display.otherUser != null
-                ? () =>
-                      context.push(AppRoutes.profile, extra: display.otherUser)
-                : null,
-            child: Column(
-              children: [
-                DoctorAvatar(
-                  initials: display.initials,
-                  size: AvatarSize.xxl,
-                  imageUrl: display.otherUser?.avatarPresignedUrl,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  display.title,
-                  style: AppText.display,
-                  textAlign: TextAlign.center,
-                ),
-                if (display.otherUser?.specialty case final specialty?
-                    when specialty.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(specialty, style: AppText.caption),
+          FadeSlideIn.staggered(
+            0,
+            AppPressable(
+              onTap: display.isDirect && display.otherUser != null
+                  ? () => context.push(AppRoutes.profile,
+                      extra: display.otherUser)
+                  : null,
+              child: Column(
+                children: [
+                  DoctorAvatar(
+                    initials: display.initials,
+                    size: AvatarSize.xxl,
+                    imageUrl: display.otherUser?.avatarPresignedUrl,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    display.title,
+                    style: AppText.display,
+                    textAlign: TextAlign.center,
+                  ),
+                  if (display.otherUser?.specialty case final specialty?
+                      when specialty.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(specialty, style: AppText.caption),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          _Section(
-            title: 'Chat settings',
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(
-                Icons.timer_outlined,
-                color: AppColors.medBlue,
-              ),
-              title: Text('Disappearing messages', style: AppText.bodyPrimary),
-              subtitle: Text(
-                'New messages disappear after the selected time',
-                style: AppText.caption,
-              ),
-              trailing: Text(
-                kDisappearOptions[conv.disappearAfterSec] ?? 'Off',
-                style: AppText.caption.copyWith(
-                  color: AppColors.medBlue,
-                  fontWeight: FontWeight.w600,
+          FadeSlideIn.staggered(
+            1,
+            _Section(
+              title: 'Chat settings',
+              child: AppPressable(
+                onTap: () => _pickDisappearTimer(context, ref, conv),
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.timer_outlined,
+                    color: AppColors.medBlue,
+                  ),
+                  title:
+                      Text('Disappearing messages', style: AppText.bodyPrimary),
+                  subtitle: Text(
+                    'New messages disappear after the selected time',
+                    style: AppText.caption,
+                  ),
+                  trailing: Text(
+                    kDisappearOptions[conv.disappearAfterSec] ?? 'Off',
+                    style: AppText.caption.copyWith(
+                      color: AppColors.medBlue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
-              onTap: () => _pickDisappearTimer(context, ref, conv),
             ),
           ),
         ],

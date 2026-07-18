@@ -6,6 +6,7 @@ import '../../core/tokens/colors.dart';
 import '../../core/tokens/radii.dart';
 import '../../core/tokens/spacing.dart';
 import '../../core/tokens/typography.dart';
+import 'app_pressable.dart';
 
 class VoiceNoteBubble extends StatefulWidget {
   final int durationSec;
@@ -113,8 +114,9 @@ class _VoiceNoteBubbleState extends State<VoiceNoteBubble> {
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Row(
                   children: [
-                    GestureDetector(
+                    AppPressable(
                       onTap: _isLoading ? null : _togglePlay,
+                      minTarget: true,
                       child: Container(
                         width: 36,
                         height: 36,

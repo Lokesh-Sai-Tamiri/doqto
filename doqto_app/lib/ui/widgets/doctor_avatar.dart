@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/tokens/colors.dart';
+import '../../core/tokens/motion.dart';
 
 enum AvatarSize { sm, md, lg, xl, xxl }
 
@@ -14,6 +15,10 @@ class DoctorAvatar extends StatelessWidget {
   final String? imageUrl;
   final bool isSelected;
 
+  /// When provided, the avatar is wrapped in a [Hero] for shared-element
+  /// transitions (e.g. chat list → chat header → profile).
+  final Object? heroTag;
+
   const DoctorAvatar({
     super.key,
     required this.initials,
@@ -22,6 +27,7 @@ class DoctorAvatar extends StatelessWidget {
     this.presence,
     this.imageUrl,
     this.isSelected = false,
+    this.heroTag,
   });
 
   @override
@@ -71,7 +77,7 @@ class DoctorAvatar extends StatelessWidget {
           )
         : initialsWidget;
 
-    return SizedBox(
+    final avatar = SizedBox(
       width: dim,
       height: dim,
       child: Stack(
@@ -98,6 +104,9 @@ class DoctorAvatar extends StatelessWidget {
         ],
       ),
     );
+
+    if (heroTag == null) return avatar;
+    return Hero(tag: heroTag!, child: avatar);
   }
 }
 
@@ -111,7 +120,9 @@ class PresenceStatusDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AnimatedContainer(
+      duration: AppMotion.maybe(context, AppMotion.micro),
+      curve: AppMotion.standard,
       width: 10,
       height: 10,
       decoration: BoxDecoration(

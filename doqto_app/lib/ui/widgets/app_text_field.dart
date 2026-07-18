@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/tokens/colors.dart';
+import '../../core/tokens/motion.dart';
 import '../../core/tokens/radii.dart';
 import '../../core/tokens/spacing.dart';
 import '../../core/tokens/typography.dart';
 import '../../core/utils/validators.dart';
+import 'fade_slide_in.dart';
 
 /// Global reusable input field.
 ///
@@ -62,6 +64,7 @@ class AppTextFieldState extends State<AppTextField> {
   final _focus = FocusNode();
   String? _internalError;
   bool _hasBlurred = false;
+  bool _focused = false;
 
   @override
   void initState() {
@@ -77,6 +80,7 @@ class AppTextFieldState extends State<AppTextField> {
   }
 
   void _onFocusChange() {
+    setState(() => _focused = _focus.hasFocus);
     if (!_focus.hasFocus) {
       _hasBlurred = true;
       _runValidator(widget.controller?.text ?? '');
@@ -110,9 +114,17 @@ class AppTextFieldState extends State<AppTextField> {
     final errorToShow = widget.errorText ?? _internalError;
     final hasError = errorToShow != null && errorToShow.isNotEmpty;
 
-    final errorBorder = OutlineInputBorder(
+    // Border color animates (error > focused > resting) via AnimatedContainer;
+    // the TextField's own borders are disabled so the frame never snaps.
+    // Width stays constant so layout never shifts.
+    final borderColor = hasError
+        ? AppColors.red
+        : _focused
+            ? AppColors.medBlue
+            : AppColors.gray200;
+    final noBorder = OutlineInputBorder(
       borderRadius: AppRadii.rMd,
-      borderSide: const BorderSide(color: AppColors.red, width: 1.5),
+      borderSide: BorderSide.none,
     );
 
     return Column(
@@ -120,47 +132,69 @@ class AppTextFieldState extends State<AppTextField> {
       children: [
         if (widget.label != null) ...[
           Text(widget.label!, style: AppText.subheading),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.sm),
         ],
-        TextField(
-          controller: widget.controller,
-          focusNode: _focus,
-          keyboardType: widget.keyboardType,
-          obscureText: widget.obscure,
-          maxLength: widget.maxLength,
-          inputFormatters: widget.inputFormatters,
-          onChanged: _onChanged,
-          autofocus: widget.autofocus,
-          style: widget.style ?? AppText.bodyPrimary,
-          decoration: InputDecoration(
-            hintText: widget.hint,
-            counterText: '',
-            enabledBorder: hasError ? errorBorder : null,
-            focusedBorder: hasError ? errorBorder : null,
+        AnimatedContainer(
+          duration: AppMotion.maybe(context, AppMotion.micro),
+          curve: AppMotion.standard,
+          decoration: BoxDecoration(
+            borderRadius: AppRadii.rMd,
+            border: Border.all(color: borderColor, width: 1.5),
+          ),
+          child: TextField(
+            controller: widget.controller,
+            focusNode: _focus,
+            keyboardType: widget.keyboardType,
+            obscureText: widget.obscure,
+            maxLength: widget.maxLength,
+            inputFormatters: widget.inputFormatters,
+            onChanged: _onChanged,
+            autofocus: widget.autofocus,
+            style: widget.style ?? AppText.bodyPrimary,
+            decoration: InputDecoration(
+              hintText: widget.hint,
+              counterText: '',
+              border: noBorder,
+              enabledBorder: noBorder,
+              focusedBorder: noBorder,
+            ),
           ),
         ),
-        if (hasError)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.xs + 2),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.error_outline, size: 14, color: AppColors.red),
-                const SizedBox(width: AppSpacing.xs + 2),
-                Expanded(
-                  child: Text(
-                    errorToShow,
-                    style: AppText.caption.copyWith(color: AppColors.red),
+        // Error/helper region animates size + entrance so appearing text
+        // slides in instead of snapping.
+        AnimatedSize(
+          duration: AppMotion.maybe(context, AppMotion.enter),
+          curve: AppMotion.curveEnter,
+          alignment: Alignment.topLeft,
+          child: hasError
+              ? Padding(
+                  key: ValueKey<String>(errorToShow),
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: FadeSlideIn(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 14, color: AppColors.red),
+                        const SizedBox(width: AppSpacing.xs + 2),
+                        Expanded(
+                          child: Text(
+                            errorToShow,
+                            style:
+                                AppText.caption.copyWith(color: AppColors.red),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          )
-        else if (widget.helperText != null && widget.helperText!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.xs),
-            child: Text(widget.helperText!, style: AppText.caption),
-          ),
+                )
+              : (widget.helperText != null && widget.helperText!.isNotEmpty)
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xs),
+                      child: Text(widget.helperText!, style: AppText.caption),
+                    )
+                  : const SizedBox(width: double.infinity),
+        ),
       ],
     );
   }

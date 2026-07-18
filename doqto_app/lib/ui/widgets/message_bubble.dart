@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/tokens/colors.dart';
+import '../../core/tokens/motion.dart';
 import '../../core/tokens/radii.dart';
 import '../../core/tokens/spacing.dart';
 import '../../core/tokens/typography.dart';
@@ -24,16 +27,71 @@ class MessageStatusTick extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return switch (status) {
-      MessageStatus.sending => Icon(Icons.schedule, size: 13, color: idleColor),
-      MessageStatus.failed =>
-        const Icon(Icons.error_outline, size: 15, color: Color(0xFFFFB4A9)),
+    final icon = switch (status) {
+      MessageStatus.sending => _PulsingClock(
+          key: const ValueKey('tick-sending'),
+          color: idleColor,
+        ),
+      MessageStatus.failed => const Icon(Icons.error_outline,
+          key: ValueKey('tick-failed'), size: 15, color: Color(0xFFFFB4A9)),
       MessageStatus.sent => Icon(
           (read || delivered) ? Icons.done_all : Icons.check,
+          key: ValueKey('tick-sent-${read ? 'read' : delivered ? 'delivered' : 'sent'}'),
           size: 15,
           color: read ? const Color(0xFF7FC8FF) : idleColor,
         ),
     };
+    return AnimatedSwitcher(
+      duration: AppMotion.maybe(context, AppMotion.micro),
+      switchInCurve: AppMotion.curveEnter,
+      switchOutCurve: AppMotion.curveExit,
+      child: icon,
+    );
+  }
+}
+
+/// Clock icon with a gentle opacity pulse while a message is pending.
+/// Reduced-motion aware (static icon when animations are disabled).
+class _PulsingClock extends StatefulWidget {
+  final Color color;
+  const _PulsingClock({super.key, required this.color});
+
+  @override
+  State<_PulsingClock> createState() => _PulsingClockState();
+}
+
+class _PulsingClockState extends State<_PulsingClock>
+    with SingleTickerProviderStateMixin {
+  static const Duration _period = Duration(milliseconds: 900);
+
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: _period);
+  late final Animation<double> _opacity = Tween<double>(begin: 1.0, end: 0.45)
+      .animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reduced(context)) {
+      _controller.stop();
+      _controller.value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: Icon(Icons.schedule, size: 13, color: widget.color),
+    );
   }
 }
 
@@ -79,6 +137,10 @@ class MessageBubble extends StatelessWidget {
   final bool delivered;
   final MessageStatus status;
 
+  /// True when the bubble visually above is from the same sender on the same
+  /// day — tightens vertical spacing so runs read as one group.
+  final bool grouped;
+
   const MessageBubble({
     super.key,
     required this.text,
@@ -89,6 +151,7 @@ class MessageBubble extends StatelessWidget {
     this.read = false,
     this.delivered = false,
     this.status = MessageStatus.sent,
+    this.grouped = false,
   });
 
   @override
@@ -98,7 +161,7 @@ class MessageBubble extends StatelessWidget {
     final fg = isMine ? AppColors.white : AppColors.textPrimary;
     final timeColor = isMine ? AppColors.white.withValues(alpha: 0.55) : AppColors.textMuted;
 
-    final bubble = Container(
+    Widget bubble = Container(
       constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.72),
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
       decoration: BoxDecoration(
@@ -148,12 +211,73 @@ class MessageBubble extends StatelessWidget {
       ),
     );
 
+    // Failed sends draw attention with a single, subtle horizontal shake.
+    if (status == MessageStatus.failed) {
+      bubble = _ShakeOnce(child: bubble);
+    }
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        grouped ? 1 : AppSpacing.xs,
+        AppSpacing.lg,
+        AppSpacing.xs,
+      ),
       child: Row(
         mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [bubble],
       ),
+    );
+  }
+}
+
+/// One-shot horizontal shake played when a bubble first appears in the
+/// failed state. Reduced-motion aware (renders statically when disabled).
+class _ShakeOnce extends StatefulWidget {
+  final Widget child;
+  const _ShakeOnce({required this.child});
+
+  @override
+  State<_ShakeOnce> createState() => _ShakeOnceState();
+}
+
+class _ShakeOnceState extends State<_ShakeOnce>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: AppMotion.emphasizedDuration);
+
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (AppMotion.reduced(context)) {
+      _controller.value = 1.0;
+    } else {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_controller.isCompleted) return widget.child;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = _controller.value;
+        // Damped sine: three swings fading out, max 4px.
+        final dx = math.sin(t * math.pi * 6) * 4 * (1 - t);
+        return Transform.translate(offset: Offset(dx, 0), child: child);
+      },
+      child: widget.child,
     );
   }
 }

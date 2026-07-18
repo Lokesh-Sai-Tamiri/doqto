@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,12 +10,14 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/tokens/colors.dart';
+import '../../../core/tokens/motion.dart';
 import '../../../core/tokens/spacing.dart';
 import '../../../core/tokens/typography.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/validators.dart';
 import '../../../state/auth_state.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/inline_error.dart';
 import '../../widgets/primary_button.dart';
 
@@ -34,6 +37,8 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   int _cooldownRemaining = 0;
   Timer? _cooldownTimer;
   String? _error;
+  // Increments on every failed verify to replay the field shake.
+  int _shakeTrigger = 0;
 
   @override
   void initState() {
@@ -82,7 +87,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
         _ => AppRoutes.phone,
       });
     } catch (e) {
-      setState(() => _error = ErrorMessages.forApi(e));
+      setState(() {
+        _error = ErrorMessages.forApi(e);
+        _shakeTrigger++;
+      });
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -119,22 +127,34 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: AppSpacing.xl),
-            Text(Strings.authOtpTitle, style: AppText.display),
+            FadeSlideIn.staggered(
+              0,
+              Text(Strings.authOtpTitle, style: AppText.display),
+            ),
             const SizedBox(height: AppSpacing.xs),
-            Text('Sent to ${widget.phone}', style: AppText.caption),
+            FadeSlideIn.staggered(
+              1,
+              Text('Sent to ${widget.phone}', style: AppText.caption),
+            ),
             const SizedBox(height: AppSpacing.lg),
-            AppTextField(
-              key: _otpKey,
-              controller: _controller,
-              hint: Strings.authOtpHint,
-              keyboardType: TextInputType.number,
-              maxLength: AppConstants.otpLength,
-              autofocus: true,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              validator: Validators.otp(AppConstants.otpLength),
-              onChanged: (_) {
-                if (_error != null) setState(() => _error = null);
-              },
+            FadeSlideIn.staggered(
+              2,
+              _Shake(
+                trigger: _shakeTrigger,
+                child: AppTextField(
+                  key: _otpKey,
+                  controller: _controller,
+                  hint: Strings.authOtpHint,
+                  keyboardType: TextInputType.number,
+                  maxLength: AppConstants.otpLength,
+                  autofocus: true,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: Validators.otp(AppConstants.otpLength),
+                  onChanged: (_) {
+                    if (_error != null) setState(() => _error = null);
+                  },
+                ),
+              ),
             ),
             InlineError(_error),
             const SizedBox(height: AppSpacing.xs),
@@ -163,15 +183,65 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            AppButton(
-              label: Strings.authVerify,
-              onPressed: _verify,
-              loading: _loading,
-              expand: true,
+            FadeSlideIn.staggered(
+              3,
+              AppButton(
+                label: Strings.authVerify,
+                onPressed: _verify,
+                loading: _loading,
+                expand: true,
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Horizontal error shake: ±8px, 3 damped cycles, played when [trigger]
+/// increments. Skipped entirely under reduced motion.
+class _Shake extends StatefulWidget {
+  final Widget child;
+  final int trigger;
+
+  const _Shake({required this.child, required this.trigger});
+
+  @override
+  State<_Shake> createState() => _ShakeState();
+}
+
+class _ShakeState extends State<_Shake> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.slow,
+  );
+
+  @override
+  void didUpdateWidget(covariant _Shake oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.trigger != oldWidget.trigger && !AppMotion.reduced(context)) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = _controller.value;
+        // 3 full sine cycles, damped so it settles back at rest.
+        final dx = math.sin(t * math.pi * 6) * 8 * (1 - t);
+        return Transform.translate(offset: Offset(dx, 0), child: child);
+      },
+      child: widget.child,
     );
   }
 }

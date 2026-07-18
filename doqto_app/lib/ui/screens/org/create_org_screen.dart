@@ -11,6 +11,7 @@ import '../../../data/api/api_client.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/org_state.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/inline_error.dart';
 import '../../widgets/primary_button.dart';
 
@@ -81,28 +82,37 @@ class _CreateOrgScreenState extends ConsumerState<CreateOrgScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: AppSpacing.lg),
-            AppTextField(
-              key: _nameKey,
-              controller: _name,
-              label: 'Organization name',
-              validator: Validators.orgName(),
-              onChanged: (_) {
-                if (_error != null) setState(() => _error = null);
-              },
+            FadeSlideIn.staggered(
+              0,
+              AppTextField(
+                key: _nameKey,
+                controller: _name,
+                label: 'Organization name',
+                validator: Validators.orgName(),
+                onChanged: (_) {
+                  if (_error != null) setState(() => _error = null);
+                },
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            AppTextField(
-              controller: _city,
-              label: 'City',
-              helperText: 'Optional',
+            FadeSlideIn.staggered(
+              1,
+              AppTextField(
+                controller: _city,
+                label: 'City',
+                helperText: 'Optional',
+              ),
             ),
             InlineError(_error),
             const SizedBox(height: AppSpacing.xl),
-            AppButton(
-              label: 'Create',
-              onPressed: _submit,
-              loading: _loading,
-              expand: true,
+            FadeSlideIn.staggered(
+              2,
+              AppButton(
+                label: 'Create',
+                onPressed: _submit,
+                loading: _loading,
+                expand: true,
+              ),
             ),
           ],
         ),

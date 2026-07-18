@@ -7,6 +7,7 @@ import '../../../core/di/providers.dart';
 import '../../../core/enums/app_enums.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/tokens/colors.dart';
+import '../../../core/tokens/motion.dart';
 import '../../../core/tokens/radii.dart';
 import '../../../core/tokens/spacing.dart';
 import '../../../core/tokens/typography.dart';
@@ -17,8 +18,12 @@ import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
 import '../../../state/org_state.dart';
+import '../../widgets/app_pressable.dart';
+import '../../widgets/app_skeleton.dart';
 import '../../widgets/connectivity_banner.dart';
 import '../../widgets/doctor_avatar.dart';
+import '../../widgets/fade_slide_in.dart';
+import '../../widgets/primary_button.dart';
 import '../../widgets/search_bar.dart';
 import '../../widgets/typing_indicator.dart';
 import '_conversation_display.dart';
@@ -34,6 +39,9 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
   String _query = '';
   final Set<String> _selectedIds = {};
   bool _deleting = false;
+  // Rows stagger-animate only on the very first data paint; refreshes and
+  // scrolled-in rows render instantly.
+  bool _entranceDone = false;
 
   bool get _isSelecting => _selectedIds.isNotEmpty;
 
@@ -102,7 +110,15 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         ? const AsyncValue<List<OrgMember>>.data([])
         : ref.watch(orgMembersProvider(currentOrg.id));
     final orgMembers = membersAsync.asData?.value ?? const <OrgMember>[];
+    if (!_entranceDone && convs.hasValue) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_entranceDone) setState(() => _entranceDone = true);
+      });
+    }
     return Scaffold(
+      floatingActionButton: _isSelecting
+          ? null
+          : _NewChatFab(onTap: () => context.push(AppRoutes.createGroup)),
       appBar: _isSelecting
           ? AppBar(
               leading: IconButton(
@@ -131,10 +147,6 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                 style: AppText.display.copyWith(fontSize: 28),
               ),
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  onPressed: () => context.push(AppRoutes.createGroup),
-                ),
                 if (user != null)
                   Padding(
                     padding: const EdgeInsets.only(right: AppSpacing.sm),
@@ -159,21 +171,30 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               onChanged: (q) => setState(() => _query = q),
             ),
           Expanded(
-            child: _query.isNotEmpty && !_isSelecting
-                ? _SearchResults(
-                    query: _query,
-                    conversations: convs.asData?.value ?? const [],
-                    orgMembers: orgMembers,
-                    meId: user?.id,
-                  )
-                : _ConversationList(
-                    convs: convs,
-                    orgMembers: orgMembers,
-                    meId: user?.id,
-                    selectedIds: _selectedIds,
-                    isSelecting: _isSelecting,
-                    onSelect: _toggleSelect,
-                  ),
+            // Search results fade in/out over the list — no hard snap.
+            child: AnimatedSwitcher(
+              duration: AppMotion.maybe(context, AppMotion.enter),
+              switchInCurve: AppMotion.curveEnter,
+              switchOutCurve: AppMotion.curveExit,
+              child: _query.isNotEmpty && !_isSelecting
+                  ? _SearchResults(
+                      key: const ValueKey('search'),
+                      query: _query,
+                      conversations: convs.asData?.value ?? const [],
+                      orgMembers: orgMembers,
+                      meId: user?.id,
+                    )
+                  : _ConversationList(
+                      key: const ValueKey('list'),
+                      convs: convs,
+                      orgMembers: orgMembers,
+                      meId: user?.id,
+                      selectedIds: _selectedIds,
+                      isSelecting: _isSelecting,
+                      onSelect: _toggleSelect,
+                      staggerEntrance: !_entranceDone,
+                    ),
+            ),
           ),
         ],
       ),
@@ -188,21 +209,34 @@ class _ConversationList extends ConsumerWidget {
   final Set<String> selectedIds;
   final bool isSelecting;
   final ValueChanged<String> onSelect;
+  final bool staggerEntrance;
 
   const _ConversationList({
+    super.key,
     required this.convs,
     required this.orgMembers,
     required this.meId,
     required this.selectedIds,
     required this.isSelecting,
     required this.onSelect,
+    required this.staggerEntrance,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return convs.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('$e', style: AppText.caption)),
+      // Cached data paints instantly (AsyncData); the skeleton only ever
+      // shows on a true cold start with nothing cached.
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
+      loading: () => const SkeletonList(),
+      error: (e, _) => _StatusPane(
+        icon: Icons.cloud_off_rounded,
+        title: 'Couldn’t load your chats',
+        subtitle: ErrorMessages.forApi(e),
+        actionLabel: 'Retry',
+        onAction: () => ref.invalidate(conversationsProvider),
+      ),
       data: (rawList) {
         final list = [...rawList]..sort((a, b) {
             final ta = a.lastMessageAt ?? a.updatedAt;
@@ -210,18 +244,19 @@ class _ConversationList extends ConsumerWidget {
             return tb.compareTo(ta);
           });
         return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(conversationsProvider),
+          onRefresh: () => ref.read(conversationsProvider.notifier).refresh(),
           child: list.isEmpty
               ? ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   children: [
-                    SizedBox(height: MediaQuery.of(context).size.height * 0.3),
-                    Center(
-                      child: Text(
-                        'Start a conversation from My Org.',
-                        style: AppText.body,
-                        textAlign: TextAlign.center,
-                      ),
+                    SizedBox(height: MediaQuery.of(context).size.height * 0.22),
+                    _StatusPane(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      title: 'No conversations yet',
+                      subtitle:
+                          'Message a colleague or start a group to get going.',
+                      actionLabel: 'Start a conversation',
+                      onAction: () => context.push(AppRoutes.createGroup),
                     ),
                   ],
                 )
@@ -242,14 +277,18 @@ class _ConversationList extends ConsumerWidget {
                       meId: meId,
                       fallbackColorIndex: i,
                     );
-                    return _ChatRow(
-                      conversation: c,
-                      display: display,
-                      orgMembers: orgMembers,
-                      meId: meId,
-                      isSelected: selectedIds.contains(c.id),
-                      isSelecting: isSelecting,
-                      onSelect: onSelect,
+                    return FadeSlideIn.staggered(
+                      i,
+                      _ChatRow(
+                        conversation: c,
+                        display: display,
+                        orgMembers: orgMembers,
+                        meId: meId,
+                        isSelected: selectedIds.contains(c.id),
+                        isSelecting: isSelecting,
+                        onSelect: onSelect,
+                      ),
+                      enabled: staggerEntrance && i <= AppMotion.staggerCap,
                     );
                   },
                 ),
@@ -266,6 +305,7 @@ class _SearchResults extends ConsumerStatefulWidget {
   final String? meId;
 
   const _SearchResults({
+    super.key,
     required this.query,
     required this.conversations,
     required this.orgMembers,
@@ -329,10 +369,24 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
 
     if (matchingConvs.isEmpty && matchingMembers.isEmpty) {
       return Center(
-        child: Text(
-          'No results for "${widget.query}"',
-          style: AppText.body,
-          textAlign: TextAlign.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.search_off_rounded,
+                size: 40, color: AppColors.gray400),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'No results for "${widget.query}"',
+              style: AppText.body,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Try a different name or specialty.',
+              style: AppText.caption,
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       );
     }
@@ -377,29 +431,31 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
             child: Text('PEOPLE', style: AppText.label),
           ),
           for (final m in matchingMembers)
-            ListTile(
+            AppPressable(
               onTap: () => context.push(AppRoutes.profile, extra: m),
-              leading: DoctorAvatar(
-                initials: m.initials,
-                colorIndex: widget.orgMembers.indexOf(m),
-                imageUrl: m.avatarPresignedUrl,
-              ),
-              title: Text(m.fullName, style: AppText.heading, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(m.specialty ?? '', style: AppText.caption, maxLines: 1),
-              trailing: SizedBox(
-                width: 40,
-                height: 40,
-                child: _startingChat.contains(m.id)
-                    ? const Padding(
-                        padding: EdgeInsets.all(AppSpacing.sm),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : IconButton(
-                        tooltip: 'Message',
-                        icon: const Icon(Icons.chat_bubble_outline),
-                        color: AppColors.medBlue,
-                        onPressed: () => _startChat(m),
-                      ),
+              child: ListTile(
+                leading: DoctorAvatar(
+                  initials: m.initials,
+                  colorIndex: widget.orgMembers.indexOf(m),
+                  imageUrl: m.avatarPresignedUrl,
+                ),
+                title: Text(m.fullName, style: AppText.heading, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(m.specialty ?? '', style: AppText.caption, maxLines: 1),
+                trailing: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: _startingChat.contains(m.id)
+                      ? const Padding(
+                          padding: EdgeInsets.all(AppSpacing.sm),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : IconButton(
+                          tooltip: 'Message',
+                          icon: const Icon(Icons.chat_bubble_outline),
+                          color: AppColors.medBlue,
+                          onPressed: () => _startChat(m),
+                        ),
+                ),
               ),
             ),
         ],
@@ -493,7 +549,7 @@ class _ChatRow extends ConsumerWidget {
             ],
           )
         : Text(_previewText(), style: previewStyle, maxLines: 1, overflow: TextOverflow.ellipsis);
-    return ListTile(
+    return AppPressable(
       onTap: () {
         if (isSelecting) {
           onSelect?.call(c.id);
@@ -502,42 +558,132 @@ class _ChatRow extends ConsumerWidget {
         }
       },
       onLongPress: () => onSelect?.call(c.id),
-      tileColor: isSelected ? AppColors.medBlueLight : null,
-      leading: DoctorAvatar(
-        initials: display.initials,
-        colorIndex: display.colorIndex,
-        imageUrl: display.otherUser?.avatarPresignedUrl,
-        isSelected: isSelected,
-      ),
-      title: Text(display.title, style: titleStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: subtitle,
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            formatChatListTime(c.lastMessageAt ?? c.updatedAt),
-            style: c.unreadCount > 0
-                ? AppText.timestamp.copyWith(color: AppColors.medBlue, fontWeight: FontWeight.w600)
-                : AppText.timestamp,
-          ),
-          if (c.unreadCount > 0) ...[
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.medBlue,
-                borderRadius: AppRadii.rFull,
-              ),
-              constraints: const BoxConstraints(minWidth: 20),
-              child: Text(
-                c.unreadCount > 99 ? '99+' : '${c.unreadCount}',
-                style: AppText.badge.copyWith(color: AppColors.white),
-                textAlign: TextAlign.center,
-              ),
+      child: ListTile(
+        tileColor: isSelected ? AppColors.medBlueLight : null,
+        leading: DoctorAvatar(
+          initials: display.initials,
+          colorIndex: display.colorIndex,
+          imageUrl: display.otherUser?.avatarPresignedUrl,
+          isSelected: isSelected,
+        ),
+        title: Text(display.title, style: titleStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: subtitle,
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              formatChatListTime(c.lastMessageAt ?? c.updatedAt),
+              style: c.unreadCount > 0
+                  ? AppText.timestamp.copyWith(color: AppColors.medBlue, fontWeight: FontWeight.w600)
+                  : AppText.timestamp,
             ),
+            if (c.unreadCount > 0) ...[
+              const SizedBox(height: 4),
+              // Badge pill scales in when a row first becomes unread.
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: AppMotion.maybe(context, AppMotion.micro),
+                curve: AppMotion.standard,
+                builder: (context, scale, child) =>
+                    Transform.scale(scale: scale, child: child),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.medBlue,
+                    borderRadius: AppRadii.rFull,
+                  ),
+                  constraints: const BoxConstraints(minWidth: 20),
+                  child: Text(
+                    c.unreadCount > 99 ? '99+' : '${c.unreadCount}',
+                    style: AppText.badge.copyWith(color: AppColors.white),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom-anchored new-chat action: thumb-zone reachable, scales in on
+/// first build, press feedback via AppPressable.
+class _NewChatFab extends StatelessWidget {
+  final VoidCallback onTap;
+  const _NewChatFab({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: AppMotion.maybe(context, AppMotion.enter),
+      curve: AppMotion.curveEnter,
+      builder: (context, scale, child) =>
+          Transform.scale(scale: scale, child: child),
+      child: AppPressable(
+        onTap: onTap,
+        haptic: true,
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.medBlue,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.medBlueDark.withValues(alpha: 0.3),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.edit_rounded,
+              color: AppColors.white, size: 24),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shared empty/error pane: icon + one line + one action. No blank screens.
+class _StatusPane extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  const _StatusPane({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xxl,
+          vertical: AppSpacing.xl,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: AppColors.gray400),
+            const SizedBox(height: AppSpacing.lg),
+            Text(title, style: AppText.heading, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.xs),
+            Text(subtitle, style: AppText.caption, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.lg),
+            AppButton(label: actionLabel, onPressed: onAction),
+          ],
+        ),
       ),
     );
   }

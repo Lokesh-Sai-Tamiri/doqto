@@ -12,8 +12,12 @@ import '../../../core/utils/error_messages.dart';
 import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/org_state.dart';
+import '../../widgets/app_pressable.dart';
+import '../../widgets/app_skeleton.dart';
 import '../../widgets/doctor_avatar.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/invite_code_card.dart';
+import '../../widgets/primary_button.dart';
 
 class MyOrgScreen extends ConsumerWidget {
   const MyOrgScreen({super.key});
@@ -27,8 +31,32 @@ class MyOrgScreen extends ConsumerWidget {
       body: org == null
           ? const Center(child: Text('No organization selected'))
           : ref.watch(orgMembersProvider(org.id)).when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('$e', style: AppText.caption)),
+                loading: () => const SkeletonList(),
+                error: (e, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.wifi_off_rounded,
+                            size: 40, color: AppColors.textMuted),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          ErrorMessages.forApi(e),
+                          style: AppText.caption,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        AppButton(
+                          label: 'Retry',
+                          icon: Icons.refresh_rounded,
+                          onPressed: () =>
+                              ref.invalidate(orgMembersProvider(org.id)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 data: (members) {
                   final isAdmin = me != null &&
                       members.any((m) =>
@@ -44,16 +72,26 @@ class MyOrgScreen extends ConsumerWidget {
                     ),
                     children: [
                       if (isAdmin) ...[
-                        InviteCodeCard(code: org.inviteCode),
+                        FadeSlideIn.staggered(
+                          0,
+                          InviteCodeCard(code: org.inviteCode),
+                        ),
                         const SizedBox(height: AppSpacing.xl),
                       ],
-                      Text('MEMBERS (${org.memberCount})', style: AppText.label),
+                      FadeSlideIn.staggered(
+                        isAdmin ? 1 : 0,
+                        Text('MEMBERS (${org.memberCount})',
+                            style: AppText.label),
+                      ),
                       const SizedBox(height: AppSpacing.sm),
                       for (final (i, m) in members.indexed)
-                        _MemberRow(
-                          member: m,
-                          colorIndex: i,
-                          isSelf: me != null && m.id == me.id,
+                        FadeSlideIn.staggered(
+                          i + (isAdmin ? 2 : 1),
+                          _MemberRow(
+                            member: m,
+                            colorIndex: i,
+                            isSelf: me != null && m.id == me.id,
+                          ),
                         ),
                     ],
                   );
@@ -114,35 +152,42 @@ class _MemberRowState extends ConsumerState<_MemberRow> {
   @override
   Widget build(BuildContext context) {
     final m = widget.member;
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
+    // AppPressable supplies scale/opacity press feedback; ListTile keeps the
+    // ≥44pt row layout. The avatar Hero pairs with the member profile view
+    // (`member-avatar-<id>`) — self opens the editable profile, so no hero.
+    return AppPressable(
       onTap: _openProfile,
-      leading: DoctorAvatar(
-        initials: m.initials,
-        colorIndex: widget.colorIndex,
-        imageUrl: m.avatarPresignedUrl,
+      minTarget: true,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: DoctorAvatar(
+          initials: m.initials,
+          colorIndex: widget.colorIndex,
+          imageUrl: m.avatarPresignedUrl,
+          heroTag: widget.isSelf ? null : 'member-avatar-${m.id}',
+        ),
+        title: Text(m.fullName),
+        subtitle: Text(
+          m.specialty ?? (widget.isSelf ? 'You' : ''),
+        ),
+        trailing: widget.isSelf
+            ? null
+            : SizedBox(
+                width: 40,
+                height: 40,
+                child: _starting
+                    ? const Padding(
+                        padding: EdgeInsets.all(AppSpacing.sm),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        tooltip: 'Message',
+                        icon: const Icon(Icons.chat_bubble_outline),
+                        color: AppColors.medBlue,
+                        onPressed: _startChat,
+                      ),
+              ),
       ),
-      title: Text(m.fullName),
-      subtitle: Text(
-        m.specialty ?? (widget.isSelf ? 'You' : ''),
-      ),
-      trailing: widget.isSelf
-          ? null
-          : SizedBox(
-              width: 40,
-              height: 40,
-              child: _starting
-                  ? const Padding(
-                      padding: EdgeInsets.all(AppSpacing.sm),
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : IconButton(
-                      tooltip: 'Message',
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      color: AppColors.medBlue,
-                      onPressed: _startChat,
-                    ),
-            ),
     );
   }
 }

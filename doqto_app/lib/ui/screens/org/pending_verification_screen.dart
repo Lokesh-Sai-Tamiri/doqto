@@ -11,6 +11,7 @@ import '../../../core/tokens/typography.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/org_state.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/primary_button.dart';
 
 class PendingVerificationScreen extends ConsumerStatefulWidget {
@@ -81,51 +82,62 @@ class _PendingVerificationScreenState
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        width: 96,
-                        height: 96,
-                        decoration: BoxDecoration(
-                          color: suspended
-                              ? AppColors.redLight
-                              : AppColors.medBlueLight,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          suspended
-                              ? Icons.cancel_rounded
-                              : Icons.hourglass_top_rounded,
-                          size: 48,
-                          color: suspended
-                              ? AppColors.red
-                              : AppColors.medBlueDark,
-                        ),
-                      ),
+                      FadeSlideIn.staggered(
+                          0,
+                          Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              color: suspended
+                                  ? AppColors.redLight
+                                  : AppColors.medBlueLight,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              suspended
+                                  ? Icons.cancel_rounded
+                                  : Icons.hourglass_top_rounded,
+                              size: 48,
+                              color: suspended
+                                  ? AppColors.red
+                                  : AppColors.medBlueDark,
+                            ),
+                          )),
                       const SizedBox(height: AppSpacing.xl),
-                      Text(
-                        suspended
-                            ? 'Organization not approved'
-                            : Strings.orgPendingTitle,
-                        style: AppText.display,
-                        textAlign: TextAlign.center,
+                      FadeSlideIn.staggered(
+                        1,
+                        Text(
+                          suspended
+                              ? 'Organization not approved'
+                              : Strings.orgPendingTitle,
+                          style: AppText.display,
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      Text(
-                        suspended
-                            ? (org?.reviewNotes?.isNotEmpty == true
-                                ? org!.reviewNotes!
-                                : 'Your organization was not approved. Please contact support for next steps.')
-                            : Strings.orgPendingBody,
-                        style: AppText.body,
-                        textAlign: TextAlign.center,
+                      FadeSlideIn.staggered(
+                        2,
+                        Text(
+                          suspended
+                              ? (org?.reviewNotes?.isNotEmpty == true
+                                  ? org!.reviewNotes!
+                                  : 'Your organization was not approved. Please contact support for next steps.')
+                              : Strings.orgPendingBody,
+                          style: AppText.body,
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
                       if (!suspended)
-                        AppButton(
-                          label: 'Check verification',
-                          icon: Icons.refresh_rounded,
-                          loading: _checking,
-                          onPressed: _checkNow,
-                          expand: true,
+                        FadeSlideIn.staggered(
+                          3,
+                          AppButton(
+                            label: 'Check verification',
+                            icon: Icons.refresh_rounded,
+                            loading: _checking,
+                            onPressed: _checkNow,
+                            expand: true,
+                          ),
                         ),
                       if (!suspended) ...[
                         const SizedBox(height: AppSpacing.sm),

@@ -11,9 +11,11 @@ import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../../state/chat_state.dart';
 import '../../../core/tokens/colors.dart';
+import '../../../core/tokens/motion.dart';
 import '../../../core/tokens/spacing.dart';
 import '../../../core/tokens/typography.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/primary_button.dart';
 
 enum _RecorderState { recording, recorded, sending }
@@ -208,17 +210,21 @@ class _VoiceRecorderPanelState extends ConsumerState<VoiceRecorderPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: _state == _RecorderState.recording
-            ? _buildRecording()
-            : _buildRecorded(),
+    // FadeSlideIn gives the panel a one-shot slide-up + fade entrance
+    // (reduced-motion aware); recording logic is untouched.
+    return FadeSlideIn(
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: _state == _RecorderState.recording
+              ? _buildRecording()
+              : _buildRecorded(),
+        ),
       ),
     );
   }
@@ -268,7 +274,14 @@ class _VoiceRecorderPanelState extends ConsumerState<VoiceRecorderPanel> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(_formatDuration(_durationSec), style: AppText.subheading),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _RecPulseDot(),
+                const SizedBox(width: AppSpacing.sm - 2),
+                Text(_formatDuration(_durationSec), style: AppText.subheading),
+              ],
+            ),
             Material(
               color: AppColors.medBlue,
               shape: const CircleBorder(),
@@ -373,6 +386,55 @@ class _VoiceRecorderPanelState extends ConsumerState<VoiceRecorderPanel> {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Pulsing red "recording" dot shown next to the elapsed time while
+/// recording. Reduced-motion aware (static dot when animations disabled).
+class _RecPulseDot extends StatefulWidget {
+  const _RecPulseDot();
+
+  @override
+  State<_RecPulseDot> createState() => _RecPulseDotState();
+}
+
+class _RecPulseDotState extends State<_RecPulseDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 900));
+  late final Animation<double> _opacity = Tween<double>(begin: 1.0, end: 0.35)
+      .animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reduced(context)) {
+      _controller.stop();
+      _controller.value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: Container(
+        width: 10,
+        height: 10,
+        decoration: const BoxDecoration(
+          color: AppColors.red,
+          shape: BoxShape.circle,
+        ),
+      ),
     );
   }
 }

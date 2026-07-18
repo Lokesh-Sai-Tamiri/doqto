@@ -13,6 +13,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import '../../../core/di/providers.dart';
 import '../../../core/enums/app_enums.dart';
 import '../../../core/tokens/colors.dart';
+import '../../../core/tokens/motion.dart';
 import '../../../core/tokens/radii.dart';
 import '../../../core/tokens/spacing.dart';
 import '../../../core/tokens/typography.dart';
@@ -20,7 +21,9 @@ import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
 import '../../../state/org_state.dart';
+import '../../widgets/app_skeleton.dart';
 import '../../widgets/doctor_avatar.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/primary_button.dart';
 
 enum _Phase { pick, record, preview, sending }
@@ -265,7 +268,7 @@ class _VoiceBroadcastScreenState extends ConsumerState<VoiceBroadcastScreen> {
       children: [
         Expanded(
           child: membersAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const SkeletonList(),
             error: (e, _) => Center(child: Text('$e')),
             data: (members) {
               final others = members.where((m) => m.id != currentUserId).toList();
@@ -349,11 +352,15 @@ class _VoiceBroadcastScreenState extends ConsumerState<VoiceBroadcastScreen> {
 
   Widget _buildRecording() {
     return SafeArea(
-      child: Padding(
+      child: FadeSlideIn(
+        key: const ValueKey('record-phase'),
+        child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            const _RecordingIndicator(),
+            const SizedBox(height: AppSpacing.lg),
             SizedBox(
               height: 56,
               child: Row(
@@ -411,13 +418,16 @@ class _VoiceBroadcastScreenState extends ConsumerState<VoiceBroadcastScreen> {
             ),
           ],
         ),
+        ),
       ),
     );
   }
 
   Widget _buildPreview() {
     return SafeArea(
-      child: Padding(
+      child: FadeSlideIn(
+        key: const ValueKey('preview-phase'),
+        child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -477,6 +487,7 @@ class _VoiceBroadcastScreenState extends ConsumerState<VoiceBroadcastScreen> {
             ),
           ],
         ),
+        ),
       ),
     );
   }
@@ -494,6 +505,64 @@ class _VoiceBroadcastScreenState extends ConsumerState<VoiceBroadcastScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Pulsing red dot + "Recording" label. The pulse loops while recording;
+/// under reduced motion the dot renders static.
+class _RecordingIndicator extends StatefulWidget {
+  const _RecordingIndicator();
+
+  @override
+  State<_RecordingIndicator> createState() => _RecordingIndicatorState();
+}
+
+class _RecordingIndicatorState extends State<_RecordingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.emphasizedDuration * 2,
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reduced(context)) {
+      _controller.stop();
+      _controller.value = 1.0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        FadeTransition(
+          opacity: Tween<double>(begin: 0.35, end: 1.0).animate(
+            CurvedAnimation(parent: _controller, curve: AppMotion.standard),
+          ),
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: const BoxDecoration(
+              color: AppColors.red,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Text('Recording', style: AppText.caption),
+      ],
     );
   }
 }

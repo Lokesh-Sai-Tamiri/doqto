@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../core/tokens/colors.dart';
+import '../../core/tokens/motion.dart';
 import '../../core/tokens/radii.dart';
 import '../../core/tokens/typography.dart';
+import 'app_pressable.dart';
 
 enum AppButtonVariant { primary, secondary, ghost, danger }
 
@@ -33,30 +35,52 @@ class AppButton extends StatelessWidget {
       AppButtonVariant.danger => (AppColors.redLight, AppColors.red, null),
     };
 
-    final child = Row(
+    final labelRow = Row(
       mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (loading)
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2, color: fg),
-          )
-        else if (icon != null) ...[
+        if (icon != null) ...[
           Icon(icon, size: 18, color: fg),
           const SizedBox(width: 8),
         ],
-        if (!loading)
-          Text(label, style: AppText.button.copyWith(color: fg)),
+        Text(label, style: AppText.button.copyWith(color: fg)),
       ],
     );
 
-    final button = Material(
-      color: bg,
-      borderRadius: AppRadii.rFull,
-      child: InkWell(
-        onTap: loading ? null : onPressed,
+    // Invisible label holds the width; visible content crossfades on top —
+    // no width jump when swapping label ↔ spinner.
+    final child = Stack(
+      alignment: Alignment.center,
+      children: [
+        Visibility(
+          visible: false,
+          maintainSize: true,
+          maintainAnimation: true,
+          maintainState: true,
+          child: labelRow,
+        ),
+        AnimatedSwitcher(
+          duration: AppMotion.maybe(context, AppMotion.micro),
+          switchInCurve: AppMotion.curveEnter,
+          switchOutCurve: AppMotion.curveExit,
+          child: loading
+              ? SizedBox(
+                  key: const ValueKey('spinner'),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+                )
+              : KeyedSubtree(key: const ValueKey('label'), child: labelRow),
+        ),
+      ],
+    );
+
+    final button = AppPressable(
+      onTap: loading ? null : onPressed,
+      enabled: onPressed != null,
+      haptic: variant == AppButtonVariant.primary,
+      child: Material(
+        color: bg,
         borderRadius: AppRadii.rFull,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),

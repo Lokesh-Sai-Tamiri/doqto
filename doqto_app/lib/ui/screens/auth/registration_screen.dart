@@ -10,6 +10,7 @@ import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/validators.dart';
 import '../../../state/auth_state.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/inline_error.dart';
 import '../../widgets/primary_button.dart';
 
@@ -67,42 +68,54 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: AppSpacing.lg),
-            AppTextField(
-              key: _nameKey,
-              controller: _name,
-              label: Strings.regFullName,
-              validator: Validators.fullName(),
-              onChanged: (_) {
-                if (_submitError != null) setState(() => _submitError = null);
-              },
+            FadeSlideIn.staggered(
+              0,
+              AppTextField(
+                key: _nameKey,
+                controller: _name,
+                label: Strings.regFullName,
+                validator: Validators.fullName(),
+                onChanged: (_) {
+                  if (_submitError != null) setState(() => _submitError = null);
+                },
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            AppTextField(
-              controller: _specialty,
-              label: Strings.regSpecialty,
-              helperText: 'Optional — e.g. Cardiology, Pediatrics',
+            FadeSlideIn.staggered(
+              1,
+              AppTextField(
+                controller: _specialty,
+                label: Strings.regSpecialty,
+                helperText: 'Optional — e.g. Cardiology, Pediatrics',
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            AppTextField(
-              key: _npiKey,
-              controller: _npi,
-              label: Strings.regNpi,
-              keyboardType: TextInputType.number,
-              maxLength: 10,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              helperText: Strings.regNpiHelper,
-              validator: Validators.npi(),
-              onChanged: (_) {
-                if (_submitError != null) setState(() => _submitError = null);
-              },
+            FadeSlideIn.staggered(
+              2,
+              AppTextField(
+                key: _npiKey,
+                controller: _npi,
+                label: Strings.regNpi,
+                keyboardType: TextInputType.number,
+                maxLength: 10,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                helperText: Strings.regNpiHelper,
+                validator: Validators.npi(),
+                onChanged: (_) {
+                  if (_submitError != null) setState(() => _submitError = null);
+                },
+              ),
             ),
             InlineError(_submitError),
             const SizedBox(height: AppSpacing.xl),
-            AppButton(
-              label: Strings.regContinue,
-              onPressed: _submit,
-              loading: _loading,
-              expand: true,
+            FadeSlideIn.staggered(
+              3,
+              AppButton(
+                label: Strings.regContinue,
+                onPressed: _submit,
+                loading: _loading,
+                expand: true,
+              ),
             ),
           ],
         ),

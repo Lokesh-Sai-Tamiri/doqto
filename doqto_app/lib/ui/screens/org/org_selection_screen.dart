@@ -7,6 +7,8 @@ import '../../../core/router/app_router.dart';
 import '../../../core/tokens/colors.dart';
 import '../../../core/tokens/spacing.dart';
 import '../../../core/tokens/typography.dart';
+import '../../widgets/app_pressable.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/section_card.dart';
 
 class OrgSelectionScreen extends ConsumerWidget {
@@ -21,18 +23,24 @@ class OrgSelectionScreen extends ConsumerWidget {
         child: Column(
           children: [
             const SizedBox(height: AppSpacing.lg),
-            _OrgCard(
-              icon: Icons.apartment_rounded,
-              title: Strings.orgCreateTitle,
-              subtitle: Strings.orgCreateSub,
-              onTap: () => context.push(AppRoutes.createOrg),
+            FadeSlideIn.staggered(
+              0,
+              _OrgCard(
+                icon: Icons.apartment_rounded,
+                title: Strings.orgCreateTitle,
+                subtitle: Strings.orgCreateSub,
+                onTap: () => context.push(AppRoutes.createOrg),
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            _OrgCard(
-              icon: Icons.vpn_key_rounded,
-              title: Strings.orgJoinTitle,
-              subtitle: Strings.orgJoinSub,
-              onTap: () => context.push(AppRoutes.joinOrg),
+            FadeSlideIn.staggered(
+              1,
+              _OrgCard(
+                icon: Icons.vpn_key_rounded,
+                title: Strings.orgJoinTitle,
+                subtitle: Strings.orgJoinSub,
+                onTap: () => context.push(AppRoutes.joinOrg),
+              ),
             ),
           ],
         ),
@@ -56,29 +64,36 @@ class _OrgCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SectionCard(
+    // AppPressable gives the premium scale/opacity press feedback instead of
+    // the default InkWell ripple.
+    return AppPressable(
       onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: const BoxDecoration(color: AppColors.medBlueLight, shape: BoxShape.circle),
-            child: Icon(icon, color: AppColors.medBlueDark),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppText.heading),
-                const SizedBox(height: 2),
-                Text(subtitle, style: AppText.caption),
-              ],
+      haptic: true,
+      minTarget: true,
+      child: SectionCard(
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                  color: AppColors.medBlueLight, shape: BoxShape.circle),
+              child: Icon(icon, color: AppColors.medBlueDark),
             ),
-          ),
-          const Icon(Icons.chevron_right, color: AppColors.gray400),
-        ],
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppText.heading),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: AppText.caption),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.gray400),
+          ],
+        ),
       ),
     );
   }

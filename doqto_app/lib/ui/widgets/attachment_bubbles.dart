@@ -8,6 +8,7 @@ import '../../core/tokens/radii.dart';
 import '../../core/tokens/spacing.dart';
 import '../../core/tokens/typography.dart';
 import '../../data/models/message.dart';
+import 'app_pressable.dart';
 import 'message_bubble.dart';
 
 /// Timestamp + status ticks row shared by attachment bubbles (mirrors
@@ -140,7 +141,7 @@ class _ImageBubbleState extends State<ImageBubble> {
                   );
                 }
                 final url = snap.data!;
-                return GestureDetector(
+                return AppPressable(
                   onTap: () => _openViewer(url),
                   child: CachedNetworkImage(
                     imageUrl: url,
@@ -230,9 +231,8 @@ class FileBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = isMine ? AppColors.white : AppColors.textPrimary;
-    final bubble = InkWell(
+    final bubble = AppPressable(
       onTap: () => _open(context),
-      borderRadius: BorderRadius.circular(16),
       child: Container(
         constraints:
             BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.72),

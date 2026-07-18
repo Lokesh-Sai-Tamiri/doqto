@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:mime/mime.dart';
 
 import '../../../core/di/providers.dart';
@@ -12,7 +13,9 @@ import '../../../core/constants/strings.dart';
 import '../../../core/enums/app_enums.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/tokens/colors.dart';
+import '../../../core/tokens/motion.dart';
 import '../../../core/tokens/radii.dart';
+import '../../../core/tokens/shadows.dart';
 import '../../../core/tokens/spacing.dart';
 import '../../../core/tokens/typography.dart';
 import '../../../core/utils/error_messages.dart';
@@ -22,6 +25,7 @@ import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
 import '../../../state/notification_state.dart';
 import '../../../state/org_state.dart';
+import '../../widgets/app_pressable.dart';
 import '../../widgets/attachment_bubbles.dart';
 import '../../widgets/connectivity_banner.dart';
 import '../../widgets/doctor_avatar.dart';
@@ -47,6 +51,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   bool _hasText = false;
   Timer? _typingPing;
 
+  // --- New-message entrance tracking (screen-local; no state-layer changes).
+  // Messages present at first build (and older pages loaded later) never
+  // animate; only messages created after the screen opened do.
+  final DateTime _openedAt = DateTime.now().toUtc();
+  final Set<String> _knownIds = {};
+  final Set<String> _entranceIds = {};
+  bool _seededIds = false;
+
+  // --- Scroll-to-bottom pill (screen-local).
+  static const double _jumpThresholdPx = 400;
+  bool _showJump = false;
+  int _unseenCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +73,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       if (_scroll.position.pixels >
           _scroll.position.maxScrollExtent - 400) {
         ref.read(messagesProvider(widget.conversationId).notifier).loadOlder();
+      }
+      final showJump = _scroll.position.pixels > _jumpThresholdPx;
+      if (showJump != _showJump) {
+        setState(() {
+          _showJump = showJump;
+          if (!showJump) _unseenCount = 0; // back at bottom = caught up
+        });
       }
     });
     // Opening the thread = reading it: flip the sender's ticks to double-check.
@@ -282,6 +306,167 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
+  // ---- Entrance / separator helpers ---------------------------------------
+
+  /// Records which message ids are already known so only genuinely NEW
+  /// messages (arrived over WS after mount) get an entrance animation.
+  /// History and older pagination pages never animate. Runs during build —
+  /// pure set mutation, no setState (the unseen-count bump is deferred).
+  void _trackNew(List<Message> msgs, String? meId) {
+    if (!_seededIds) {
+      _knownIds.addAll(msgs.map((m) => m.id));
+      _seededIds = true;
+      return;
+    }
+    var newIncoming = 0;
+    for (final m in msgs) {
+      if (_knownIds.contains(m.id)) continue;
+      _knownIds.add(m.id);
+      // Server echo of an optimistic outbox bubble: same message, new id —
+      // it already animated under its clientId, don't replay. (The optimistic
+      // bubble itself has id == clientId, so exclude that case.)
+      final isEcho = m.clientId != null &&
+          m.clientId != m.id &&
+          _knownIds.contains(m.clientId);
+      if (m.createdAt.isAfter(_openedAt) && !isEcho) {
+        _entranceIds.add(m.id);
+        if (m.senderId != meId) newIncoming++;
+      }
+    }
+    if (newIncoming > 0 &&
+        _scroll.hasClients &&
+        _scroll.position.pixels > _jumpThresholdPx) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _unseenCount += newIncoming);
+      });
+    }
+  }
+
+  /// Consecutive same-sender, same-day bubbles group tighter.
+  /// List is reversed: the message visually above index i is msgs[i + 1].
+  bool _isGrouped(List<Message> msgs, int i) {
+    if (i + 1 >= msgs.length) return false;
+    final prev = msgs[i + 1];
+    final cur = msgs[i];
+    return prev.senderId == cur.senderId &&
+        prev.type != MessageType.system &&
+        _sameDay(prev.createdAt.toLocal(), cur.createdAt.toLocal());
+  }
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  static String _dayLabel(DateTime local) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final that = DateTime(local.year, local.month, local.day);
+    final diff = today.difference(that).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    return DateFormat(that.year == now.year ? 'MMM d' : 'MMM d, y')
+        .format(that);
+  }
+
+  /// Per-type bubble (logic unchanged from the pre-revamp itemBuilder);
+  /// failed bubbles get press feedback via AppPressable but keep the exact
+  /// same tap → retry/discard sheet flow.
+  Widget _buildBubble(Message m, bool isMine, List<Message> msgs, int i) {
+    if (m.type == MessageType.system) {
+      return SystemMessageBubble(text: m.content ?? '');
+    }
+    final grouped = _isGrouped(msgs, i);
+    // Local outbox media/voice (sending or failed): the file isn't on the
+    // server yet, so the URL-backed bubbles can't render it — show a labeled
+    // bubble with status ticks (and the same tap-to-retry flow as failed text).
+    final isLocalPending =
+        m.clientId != null && m.status != MessageStatus.sent;
+    if (isLocalPending && m.type != MessageType.text) {
+      final label = switch (m.type) {
+        MessageType.voiceNote =>
+          'Voice note (${(m.voiceDurationSec ?? 0) ~/ 60}:${((m.voiceDurationSec ?? 0) % 60).toString().padLeft(2, '0')})',
+        _ => m.fileName ?? 'Attachment',
+      };
+      final bubble = MessageBubble(
+        text: label,
+        isMine: isMine,
+        timestamp: m.createdAt.toLocal(),
+        read: m.read,
+        delivered: m.delivered,
+        status: m.status,
+        grouped: grouped,
+      );
+      if (m.status == MessageStatus.failed) {
+        return AppPressable(
+          onTap: () => _onFailedTap(m.clientId!),
+          child: bubble,
+        );
+      }
+      return bubble;
+    }
+    if (m.type == MessageType.voiceNote) {
+      return VoiceNoteBubble(
+        // Key by message id: these bubbles cache a resolved file URL in
+        // State — without a key, ListView reuses the State for a DIFFERENT
+        // message when the list shifts, showing the wrong media.
+        key: ValueKey(m.id),
+        durationSec: m.voiceDurationSec ?? 0,
+        transcript: m.transcript,
+        isMine: isMine,
+        getAudioUrl: () => ref.read(chatRepositoryProvider).fileUrl(m.id),
+      );
+    }
+    if (m.type == MessageType.image) {
+      return ImageBubble(
+        key: ValueKey(m.id),
+        getFileUrl: () => ref.read(chatRepositoryProvider).fileUrl(m.id),
+        isMine: isMine,
+        timestamp: m.createdAt.toLocal(),
+        read: m.read,
+        delivered: m.delivered,
+      );
+    }
+    if (m.type == MessageType.file) {
+      return FileBubble(
+        getFileUrl: () => ref.read(chatRepositoryProvider).fileUrl(m.id),
+        fileName: m.fileName ?? 'File',
+        fileSizeBytes: m.fileSizeBytes,
+        isMine: isMine,
+        timestamp: m.createdAt.toLocal(),
+        read: m.read,
+        delivered: m.delivered,
+      );
+    }
+    final bubble = MessageBubble(
+      text: m.content ?? '[${m.type.wire}]',
+      isMine: isMine,
+      timestamp: m.createdAt.toLocal(),
+      read: m.read,
+      delivered: m.delivered,
+      status: m.status,
+      grouped: grouped,
+    );
+    if (m.status == MessageStatus.failed && m.clientId != null) {
+      return AppPressable(
+        onTap: () => _onFailedTap(m.clientId!),
+        child: bubble,
+      );
+    }
+    return bubble;
+  }
+
+  void _jumpToBottom() {
+    setState(() => _unseenCount = 0);
+    if (AppMotion.reduced(context)) {
+      _scroll.jumpTo(0);
+    } else {
+      _scroll.animateTo(
+        0,
+        duration: AppMotion.emphasizedDuration,
+        curve: AppMotion.standard,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final me = ref.watch(authProvider).user;
@@ -375,113 +560,71 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       (m) => m.expiresAt == null || m.expiresAt!.isAfter(now),
                     )
                     .toList();
+                _trackNew(msgs, me?.id);
                 final notifier =
                     ref.read(messagesProvider(widget.conversationId).notifier);
-                return ListView.builder(
-                  controller: _scroll,
-                  reverse: true,
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  // +1 row at the top (list end) for the older-page spinner.
-                  itemCount: msgs.length + (notifier.loadingOlder ? 1 : 0),
-                  itemBuilder: (_, i) {
-                    if (i >= msgs.length) {
-                      return const Padding(
-                        padding: EdgeInsets.all(AppSpacing.md),
-                        child: Center(
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      );
-                    }
-                    final m = msgs[i];
-                    final isMine = me?.id == m.senderId;
-                    if (m.type == MessageType.system) {
-                      return SystemMessageBubble(text: m.content ?? '');
-                    }
-                    // Local outbox media/voice (sending or failed): the file
-                    // isn't on the server yet, so the URL-backed bubbles can't
-                    // render it — show a labeled bubble with status ticks
-                    // (and the same tap-to-retry flow as failed text).
-                    final isLocalPending =
-                        m.clientId != null && m.status != MessageStatus.sent;
-                    if (isLocalPending && m.type != MessageType.text) {
-                      final label = switch (m.type) {
-                        MessageType.voiceNote =>
-                          'Voice note (${(m.voiceDurationSec ?? 0) ~/ 60}:${((m.voiceDurationSec ?? 0) % 60).toString().padLeft(2, '0')})',
-                        _ => m.fileName ?? 'Attachment',
-                      };
-                      final bubble = MessageBubble(
-                        text: label,
-                        isMine: isMine,
-                        timestamp: m.createdAt.toLocal(),
-                        read: m.read,
-                        delivered: m.delivered,
-                        status: m.status,
-                      );
-                      if (m.status == MessageStatus.failed) {
-                        return GestureDetector(
-                          onTap: () => _onFailedTap(m.clientId!),
-                          child: bubble,
+                return Stack(
+                  children: [
+                    ListView.builder(
+                      controller: _scroll,
+                      reverse: true,
+                      padding:
+                          const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                      // +1 row at the top (list end) for the older-page spinner.
+                      itemCount: msgs.length + (notifier.loadingOlder ? 1 : 0),
+                      itemBuilder: (_, i) {
+                        if (i >= msgs.length) {
+                          return const Padding(
+                            padding: EdgeInsets.all(AppSpacing.md),
+                            child: Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          );
+                        }
+                        final m = msgs[i];
+                        final isMine = me?.id == m.senderId;
+                        Widget row = _buildBubble(m, isMine, msgs, i);
+                        // NEW messages only: sent slide from right, received
+                        // from left. Keyed by id so history/pagination and
+                        // recycled list elements never replay.
+                        row = _MessageEntrance(
+                          key: ValueKey('enter-${m.id}'),
+                          animate: _entranceIds.contains(m.id),
+                          fromRight: isMine,
+                          onShown: () => _entranceIds.remove(m.id),
+                          child: row,
                         );
-                      }
-                      return bubble;
-                    }
-                    if (m.type == MessageType.voiceNote) {
-                      return VoiceNoteBubble(
-                        // Key by message id: these bubbles cache a resolved
-                        // file URL in State — without a key, ListView reuses
-                        // the State for a DIFFERENT message when the list
-                        // shifts, showing the wrong media.
-                        key: ValueKey(m.id),
-                        durationSec: m.voiceDurationSec ?? 0,
-                        transcript: m.transcript,
-                        isMine: isMine,
-                        getAudioUrl: () =>
-                            ref.read(chatRepositoryProvider).fileUrl(m.id),
-                      );
-                    }
-                    if (m.type == MessageType.image) {
-                      return ImageBubble(
-                        key: ValueKey(m.id),
-                        getFileUrl: () =>
-                            ref.read(chatRepositoryProvider).fileUrl(m.id),
-                        isMine: isMine,
-                        timestamp: m.createdAt.toLocal(),
-                        read: m.read,
-                        delivered: m.delivered,
-                      );
-                    }
-                    if (m.type == MessageType.file) {
-                      return FileBubble(
-                        getFileUrl: () =>
-                            ref.read(chatRepositoryProvider).fileUrl(m.id),
-                        fileName: m.fileName ?? 'File',
-                        fileSizeBytes: m.fileSizeBytes,
-                        isMine: isMine,
-                        timestamp: m.createdAt.toLocal(),
-                        read: m.read,
-                        delivered: m.delivered,
-                      );
-                    }
-                    final bubble = MessageBubble(
-                      text: m.content ?? '[${m.type.wire}]',
-                      isMine: isMine,
-                      timestamp: m.createdAt.toLocal(),
-                      read: m.read,
-                      delivered: m.delivered,
-                      status: m.status,
-                    );
-                    if (m.status == MessageStatus.failed && m.clientId != null) {
-                      return GestureDetector(
-                        onTap: () => _onFailedTap(m.clientId!),
-                        child: bubble,
-                      );
-                    }
-                    return bubble;
-                  },
+                        // Day pill above the first message of each day
+                        // (reversed list: "above" = index i + 1).
+                        final showDay = i == msgs.length - 1 ||
+                            !_sameDay(m.createdAt.toLocal(),
+                                msgs[i + 1].createdAt.toLocal());
+                        if (showDay) {
+                          row = Column(
+                            children: [
+                              _DateChip(label: _dayLabel(m.createdAt.toLocal())),
+                              row,
+                            ],
+                          );
+                        }
+                        return row;
+                      },
+                    ),
+                    Positioned(
+                      right: AppSpacing.lg,
+                      bottom: AppSpacing.lg,
+                      child: _JumpToBottomPill(
+                        visible: _showJump,
+                        unreadCount: _unseenCount,
+                        onTap: _jumpToBottom,
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -494,60 +637,280 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               onCancel: () => setState(() => _showRecorder = false),
             )
           else
-            SafeArea(
-              top: false,
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                color: AppColors.white,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: Border(top: BorderSide(color: AppColors.divider)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 44),
                           child: TextField(
                             controller: _input,
+                            minLines: 1,
+                            maxLines: 5,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.send,
                             decoration: InputDecoration(
                               hintText: Strings.chatMessageHint,
                               border: OutlineInputBorder(
-                                borderRadius: AppRadii.rFull,
+                                borderRadius: AppRadii.rXl,
                               ),
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: AppSpacing.md + 2,
-                                vertical: AppSpacing.sm + 1,
+                                vertical: AppSpacing.md - 2,
                               ),
                             ),
                             onChanged: _onInputChanged,
                             onSubmitted: (_) => _send(),
                           ),
                         ),
-                        // WhatsApp-style: attach + mic when idle, send while typing.
-                        if (_hasText)
-                          IconButton(
-                            onPressed: _send,
-                            icon: const Icon(Icons.send,
-                                color: AppColors.medBlue),
-                          )
-                        else ...[
-                          IconButton(
-                            onPressed: _pickAttachment,
-                            icon: const Icon(Icons.attach_file,
-                                color: AppColors.medBlue),
-                          ),
-                          IconButton(
-                            onPressed: () =>
-                                setState(() => _showRecorder = true),
-                            icon: const Icon(Icons.mic,
-                                color: AppColors.medBlue),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      // WhatsApp-style morph: attach + mic when idle,
+                      // send while typing — scale+fade swap, never a snap.
+                      AnimatedSwitcher(
+                        duration: AppMotion.maybe(context, AppMotion.micro),
+                        switchInCurve: AppMotion.curveEnter,
+                        switchOutCurve: AppMotion.curveExit,
+                        transitionBuilder: (child, anim) => ScaleTransition(
+                          scale: anim,
+                          child: FadeTransition(opacity: anim, child: child),
+                        ),
+                        child: _hasText
+                            ? AppPressable(
+                                key: const ValueKey('composer-send'),
+                                haptic: true,
+                                minTarget: true,
+                                onTap: _send,
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.medBlue,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.send_rounded,
+                                    color: AppColors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                              )
+                            : Row(
+                                key: const ValueKey('composer-idle'),
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    onPressed: _pickAttachment,
+                                    icon: const Icon(Icons.attach_file,
+                                        color: AppColors.medBlue),
+                                  ),
+                                  IconButton(
+                                    onPressed: () =>
+                                        setState(() => _showRecorder = true),
+                                    icon: const Icon(Icons.mic,
+                                        color: AppColors.medBlue),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// One-shot entrance for a NEW message bubble: fade + horizontal slide
+/// (sent from the right, received from the left). History renders instantly
+/// (`animate: false`). Keyed by message id so list recycling never replays.
+class _MessageEntrance extends StatefulWidget {
+  final bool animate;
+  final bool fromRight;
+  final VoidCallback? onShown;
+  final Widget child;
+
+  const _MessageEntrance({
+    super.key,
+    required this.animate,
+    required this.fromRight,
+    this.onShown,
+    required this.child,
+  });
+
+  @override
+  State<_MessageEntrance> createState() => _MessageEntranceState();
+}
+
+class _MessageEntranceState extends State<_MessageEntrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: AppMotion.enter);
+  late final Animation<double> _t =
+      CurvedAnimation(parent: _controller, curve: AppMotion.curveEnter);
+
+  bool _started = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.animate) _controller.value = 1.0;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (!widget.animate) return;
+    widget.onShown?.call(); // one-shot: never replay after recycle
+    if (AppMotion.reduced(context)) {
+      _controller.value = 1.0;
+    } else {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_controller.isCompleted) return widget.child;
+    final dx = widget.fromRight ? 24.0 : -24.0;
+    return AnimatedBuilder(
+      animation: _t,
+      builder: (context, child) => Opacity(
+        opacity: _t.value,
+        child: Transform.translate(
+          offset: Offset(dx * (1 - _t.value), 0),
+          child: child,
+        ),
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+/// Day-separator pill (Today / Yesterday / MMM d) between day groups.
+class _DateChip extends StatelessWidget {
+  final String label;
+  const _DateChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.gray100,
+            borderRadius: AppRadii.rFull,
+          ),
+          child: Text(
+            label,
+            style: AppText.timestamp.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Floating scroll-to-bottom pill: fades + slides in when scrolled up past
+/// the threshold; shows an unread badge for messages that arrived meanwhile.
+class _JumpToBottomPill extends StatelessWidget {
+  final bool visible;
+  final int unreadCount;
+  final VoidCallback onTap;
+
+  const _JumpToBottomPill({
+    required this.visible,
+    required this.unreadCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = AppMotion.maybe(context, AppMotion.micro);
+    return IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedOpacity(
+        opacity: visible ? 1 : 0,
+        duration: duration,
+        curve: visible ? AppMotion.curveEnter : AppMotion.curveExit,
+        child: AnimatedSlide(
+          offset: visible ? Offset.zero : const Offset(0, 0.4),
+          duration: duration,
+          curve: visible ? AppMotion.curveEnter : AppMotion.curveExit,
+          child: AppPressable(
+            onTap: onTap,
+            minTarget: true,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: AppRadii.rFull,
+                border: Border.all(color: AppColors.border),
+                boxShadow: AppShadows.card,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (unreadCount > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm - 2,
+                        vertical: 2,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: AppColors.medBlue,
+                        borderRadius:
+                            BorderRadius.all(Radius.circular(AppRadii.full)),
+                      ),
+                      child: Text(
+                        '$unreadCount',
+                        style: AppText.badge
+                            .copyWith(color: AppColors.onPrimary),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                  ],
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: AppColors.medBlue,
+                    size: 22,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

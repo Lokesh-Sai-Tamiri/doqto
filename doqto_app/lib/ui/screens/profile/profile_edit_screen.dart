@@ -14,8 +14,10 @@ import '../../../core/tokens/typography.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../state/auth_state.dart';
+import '../../widgets/app_skeleton.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/doctor_avatar.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/skills_input.dart';
 
@@ -189,7 +191,27 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
     if (user == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: AppColors.appBg,
+        appBar: AppBar(title: const Text('Edit profile')),
+        body: ListView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.screenHorizontal,
+            vertical: AppSpacing.lg,
+          ),
+          children: [
+            Center(child: AppSkeleton.circle(size: 104)),
+            const SizedBox(height: AppSpacing.xl),
+            for (var i = 0; i < 4; i++) ...[
+              AppSkeleton.line(width: 80),
+              const SizedBox(height: AppSpacing.sm),
+              AppSkeleton.block(height: 48),
+              const SizedBox(height: AppSpacing.md),
+            ],
+          ],
+        ),
+      );
     }
     return Scaffold(
       backgroundColor: AppColors.appBg,
@@ -205,9 +227,11 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
             AppSpacing.xxl,
           ),
           children: [
-            Center(
-              child: Stack(
-                children: [
+            FadeSlideIn.staggered(
+                0,
+                Center(
+                  child: Stack(
+                    children: [
                   DoctorAvatar(
                     initials: user.initials,
                     size: AvatarSize.xxl,
@@ -241,71 +265,104 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
+                    ],
+                  ),
+                )),
             const SizedBox(height: AppSpacing.xl),
-            _SectionTitle('Basic'),
-            AppTextField(
-              controller: _fullName,
-              label: 'Full name',
-              hint: 'Dr. Priya Shah',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _email,
-              label: 'Email',
-              hint: 'you@clinic.com',
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _specialty,
-              label: 'Specialty',
-              hint: 'Cardiology',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _years,
-              label: 'Years of experience',
-              hint: 'e.g. 12',
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
-            ),
+            FadeSlideIn.staggered(
+                1,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _SectionTitle('Basic'),
+                    AppTextField(
+                      controller: _fullName,
+                      label: 'Full name',
+                      hint: 'Dr. Priya Shah',
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    AppTextField(
+                      controller: _email,
+                      label: 'Email',
+                      hint: 'you@clinic.com',
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    AppTextField(
+                      controller: _specialty,
+                      label: 'Specialty',
+                      hint: 'Cardiology',
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    AppTextField(
+                      controller: _years,
+                      label: 'Years of experience',
+                      hint: 'e.g. 12',
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(2),
+                      ],
+                    ),
+                  ],
+                )),
             const SizedBox(height: AppSpacing.xl),
-            _SectionTitle('Location'),
-            AppTextField(
-              controller: _city,
-              label: 'City',
-              hint: 'Bengaluru',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _state,
-              label: 'State / Region',
-              hint: 'Karnataka',
-            ),
+            FadeSlideIn.staggered(
+                2,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _SectionTitle('Location'),
+                    AppTextField(
+                      controller: _city,
+                      label: 'City',
+                      hint: 'Bengaluru',
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    AppTextField(
+                      controller: _state,
+                      label: 'State / Region',
+                      hint: 'Karnataka',
+                    ),
+                  ],
+                )),
             const SizedBox(height: AppSpacing.xl),
-            _SectionTitle('About'),
-            AppTextField(
-              controller: _bio,
-              label: 'Bio',
-              hint: 'Short description of your practice.',
-              maxLength: 500,
-            ),
+            FadeSlideIn.staggered(
+                3,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _SectionTitle('About'),
+                    AppTextField(
+                      controller: _bio,
+                      label: 'Bio',
+                      hint: 'Short description of your practice.',
+                      maxLength: 500,
+                    ),
+                  ],
+                )),
             const SizedBox(height: AppSpacing.xl),
-            _SectionTitle('Skills'),
-            SkillsInput(
-              initial: _skills,
-              onChanged: (s) => _skills = s,
-            ),
+            FadeSlideIn.staggered(
+                4,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _SectionTitle('Skills'),
+                    SkillsInput(
+                      initial: _skills,
+                      onChanged: (s) => _skills = s,
+                    ),
+                  ],
+                )),
             const SizedBox(height: AppSpacing.xxl),
-            AppButton(
-              label: 'Save changes',
-              onPressed: _save,
-              loading: _saving,
-              expand: true,
-            ),
+            FadeSlideIn.staggered(
+                5,
+                AppButton(
+                  label: 'Save changes',
+                  onPressed: _save,
+                  loading: _saving,
+                  expand: true,
+                )),
           ],
         ),
       ),

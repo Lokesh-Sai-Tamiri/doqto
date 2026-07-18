@@ -10,6 +10,7 @@ import '../../../core/utils/validators.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/org_state.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/fade_slide_in.dart';
 import '../../widgets/inline_error.dart';
 import '../../widgets/primary_button.dart';
 
@@ -65,24 +66,30 @@ class _JoinOrgScreenState extends ConsumerState<JoinOrgScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: AppSpacing.lg),
-            AppTextField(
-              key: _codeKey,
-              controller: _code,
-              label: 'Invite code',
-              hint: 'APOL·4827',
-              style: AppText.inviteCode,
-              validator: Validators.inviteCode(),
-              onChanged: (_) {
-                if (_error != null) setState(() => _error = null);
-              },
+            FadeSlideIn.staggered(
+              0,
+              AppTextField(
+                key: _codeKey,
+                controller: _code,
+                label: 'Invite code',
+                hint: 'APOL·4827',
+                style: AppText.inviteCode,
+                validator: Validators.inviteCode(),
+                onChanged: (_) {
+                  if (_error != null) setState(() => _error = null);
+                },
+              ),
             ),
             InlineError(_error),
             const SizedBox(height: AppSpacing.xl),
-            AppButton(
-              label: 'Join',
-              onPressed: _submit,
-              loading: _loading,
-              expand: true,
+            FadeSlideIn.staggered(
+              1,
+              AppButton(
+                label: 'Join',
+                onPressed: _submit,
+                loading: _loading,
+                expand: true,
+              ),
             ),
           ],
         ),

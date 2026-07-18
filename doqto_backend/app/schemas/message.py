@@ -21,6 +21,7 @@ class MessageOut(BaseModel):
     conversation_id: uuid.UUID
     sender_id: uuid.UUID
     type: MessageType
+    seq: int  # per-conversation sequence number (catch-up sync cursor)
     content: str | None
     s3_key: str | None
     file_name: str | None

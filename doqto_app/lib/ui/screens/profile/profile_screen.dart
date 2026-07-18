@@ -9,6 +9,7 @@ import '../../../core/tokens/radii.dart';
 import '../../../core/tokens/spacing.dart';
 import '../../../core/tokens/typography.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../../data/models/organization.dart';
 import '../../../data/models/user.dart';
 import '../../../state/auth_state.dart';
 import '../../widgets/doctor_avatar.dart';
@@ -16,11 +17,12 @@ import '../../widgets/primary_button.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   /// When null, the screen shows the signed-in user in editable mode.
-  /// When non-null, the screen renders that user in read-only "view" mode
-  /// (no edit pencil, no Sign out, no refresh).
-  final User? user;
+  /// When non-null, the screen renders that org member in read-only "view"
+  /// mode — name/specialty/avatar only (the API exposes no phone/email/NPI
+  /// for other members, per HIPAA minimum-necessary).
+  final OrgMember? member;
 
-  const ProfileScreen({super.key, this.user});
+  const ProfileScreen({super.key, this.member});
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -30,7 +32,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _refreshing = false;
   bool _signingOut = false;
 
-  bool get _isSelf => widget.user == null;
+  bool get _isSelf => widget.member == null;
 
   @override
   void initState() {
@@ -95,7 +97,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = _isSelf ? ref.watch(authProvider).user : widget.user;
+    if (!_isSelf) return _MemberProfileView(member: widget.member!);
+    final user = ref.watch(authProvider).user;
     if (user == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -178,6 +181,55 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MemberProfileView extends StatelessWidget {
+  final OrgMember member;
+  const _MemberProfileView({required this.member});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.appBg,
+      appBar: AppBar(title: const Text('Doctor')),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+        children: [
+          Column(
+            children: [
+              DoctorAvatar(
+                initials: member.initials,
+                size: AvatarSize.xxl,
+                imageUrl: member.avatarPresignedUrl,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(member.fullName, style: AppText.display, textAlign: TextAlign.center),
+              if (member.specialty case final specialty? when specialty.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.xs + 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.medBlueLight,
+                    borderRadius: AppRadii.rFull,
+                  ),
+                  child: Text(
+                    specialty,
+                    style: AppText.caption.copyWith(
+                      color: AppColors.medBlueDark,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -21,7 +21,14 @@ def otp_resend_key(phone: str) -> str:
 
 
 def session_key(jti: str) -> str:
+    """Access-token session (TTL = ACCESS_TOKEN_TTL_SECONDS)."""
     return f"session:{jti}"
+
+
+def refresh_session_key(jti: str) -> str:
+    """Refresh-token session (TTL = REFRESH_TOKEN_TTL_SECONDS). Access and
+    refresh tokens of a pair share the jti but must expire independently."""
+    return f"session_refresh:{jti}"
 
 
 def unread_key(user_id: UUID | str, conversation_id: UUID | str) -> str:

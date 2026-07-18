@@ -157,7 +157,8 @@ enum WsEventServer {
   memberRemoved,
   systemMessage,
   typingStart,
-  typingStop;
+  typingStop,
+  heartbeatAck;
 
   String get wire => switch (this) {
         WsEventServer.newMessage => 'new_message',
@@ -170,6 +171,7 @@ enum WsEventServer {
         WsEventServer.systemMessage => 'system_message',
         WsEventServer.typingStart => 'typing_start',
         WsEventServer.typingStop => 'typing_stop',
+        WsEventServer.heartbeatAck => 'heartbeat_ack',
       };
 
   static WsEventServer? fromWire(String s) => switch (s) {
@@ -183,6 +185,7 @@ enum WsEventServer {
         'system_message' => WsEventServer.systemMessage,
         'typing_start' => WsEventServer.typingStart,
         'typing_stop' => WsEventServer.typingStop,
+        'heartbeat_ack' => WsEventServer.heartbeatAck,
         _ => null,
       };
 }
@@ -196,6 +199,22 @@ enum WsEventClient {
         WsEventClient.heartbeat => 'heartbeat',
         WsEventClient.typingStart => 'typing_start',
         WsEventClient.typingStop => 'typing_stop',
+      };
+}
+
+enum DevicePlatform {
+  @JsonValue('ios') ios,
+  @JsonValue('android') android;
+
+  String get wire => switch (this) {
+        DevicePlatform.ios => 'ios',
+        DevicePlatform.android => 'android',
+      };
+
+  static DevicePlatform fromWire(String s) => switch (s) {
+        'ios' => DevicePlatform.ios,
+        'android' => DevicePlatform.android,
+        _ => throw ArgumentError('Unknown DevicePlatform: $s'),
       };
 }
 

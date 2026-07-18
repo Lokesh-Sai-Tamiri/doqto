@@ -9,6 +9,7 @@ import '../../data/repositories/org_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../data/services/chat_cache.dart';
 import '../../data/services/outbox.dart';
+import '../../data/services/push_token_provider.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
@@ -44,5 +45,12 @@ final wsConnStateProvider = StreamProvider<WsConnState>(
 );
 
 final outboxProvider = Provider<Outbox>((ref) => Outbox());
+
+final outboxMediaStoreProvider =
+    Provider<OutboxMediaStore>((ref) => OutboxMediaStore());
+
+/// Stub until real FCM/APNs wiring lands — swap the implementation here.
+final pushTokenProviderProvider =
+    Provider<PushTokenProvider>((ref) => StubPushTokenProvider());
 
 final chatCacheProvider = Provider<ChatCache>((ref) => ChatCache());

@@ -120,6 +120,8 @@ if [[ "$RUN_BACKEND" -eq 1 ]]; then
     log "starting backend (uvicorn) → logs/backend.log"
     (
         cd "$BACKEND_DIR"
+        # Explicit: the code default is the fail-safe "production".
+        export ENVIRONMENT=local
         # shellcheck source=/dev/null
         source venv/bin/activate
         alembic upgrade head >/dev/null 2>&1 || true

@@ -19,6 +19,9 @@ class AppConstants {
 
   // WebSocket — exponential backoff with jitter, base doubling up to the cap.
   static const Duration wsHeartbeatInterval = Duration(seconds: 60);
+  // Mirrors WS_HEARTBEAT_TIMEOUT_SECONDS on the backend (2× interval + 10s):
+  // silence beyond this on either side means the connection is dead.
+  static const Duration wsHeartbeatTimeout = Duration(seconds: 130);
   static const Duration wsReconnectBaseBackoff = Duration(seconds: 1);
   static const Duration wsReconnectMaxBackoff = Duration(seconds: 30);
 
@@ -29,9 +32,20 @@ class AppConstants {
   // Pagination
   static const int messagesPageSize = 50;
 
+  // Sessions / privacy
+  /// H5a (§164.312(a)(2)(iii)): resuming after this long in the background
+  /// forces sign-out, which also wipes cached PHI (H2).
+  static const Duration sessionIdleTimeout = Duration(minutes: 15);
+
+  /// H3: whether banner bodies show message content. True is acceptable only
+  /// while banners are foreground-only (device unlocked, app open). MUST
+  /// default to false before any lock-screen / remote (FCM/APNs) path ships.
+  static const bool showMessagePreviews = true;
+
   // Storage keys
   static const String kAccessToken = 'doqto_access_token';
   static const String kRefreshToken = 'doqto_refresh_token';
+  static const String kHiveBoxKey = 'doqto_hive_box_key';
 
   // Invite code format (visual)
   static const String inviteCodeSeparator = '·';

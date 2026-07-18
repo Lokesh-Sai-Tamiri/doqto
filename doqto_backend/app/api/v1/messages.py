@@ -10,6 +10,7 @@ from app.api.ws_manager import ws_manager
 from app.core.constants import (
     FILE_MAX_BYTES,
     PRESIGNED_URL_TTL_SECONDS,
+    RATE_LIMIT_READS_PER_MINUTE,
     VOICE_NOTE_MAX_FILE_BYTES,
 )
 from app.core.dependencies import get_current_user
@@ -29,6 +30,7 @@ from app.schemas.message import FileUrlOut, MessageOut
 from app.services.audit_service import AuditService
 from app.services.file_service import FileService
 from app.services.message_service import MessageService
+from app.services.push_service import PushService
 from app.services.transcription_service import TranscriptionService
 
 router = APIRouter()
@@ -55,11 +57,22 @@ async def _assert_conv_member(
 async def upload_file(
     conversation_id: uuid.UUID,
     file: UploadFile,
+    client_id: str | None = Form(default=None, max_length=64),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageOut:
     await enforce_rate_limit(user.id, "upload_file")
     conv = await _assert_conv_member(conversation_id, user.id, db)
+
+    # Idempotency: a retried upload (same outbox client_id) returns the
+    # original row — no re-upload, no re-broadcast.
+    if client_id is not None:
+        existing = await MessageService.find_by_client_id(
+            conversation_id=conversation_id, client_id=client_id, db=db
+        )
+        if existing is not None:
+            return MessageService.to_out(existing)
+
     data = await file.read()
     if len(data) > FILE_MAX_BYTES:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file_too_large")
@@ -68,6 +81,8 @@ async def upload_file(
         conversation_id=conversation_id,
         sender_id=user.id,
         type=MessageType.FILE if not (file.content_type or "").startswith("image/") else MessageType.IMAGE,
+        seq=await MessageService.next_seq(conversation_id=conversation_id, db=db),
+        client_id=client_id,
         file_name=file.filename,
         file_size_bytes=len(data),
         expires_at=MessageService.expiry_for(conv),
@@ -91,6 +106,10 @@ async def upload_file(
     await ws_manager.publish_to_users(
         conv.org_id, recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
     )
+    # Presence-gated push for members without a live WS (fire-and-forget).
+    PushService.notify_new_message(
+        conversation_id=conversation_id, recipient_ids=recipients, sender_id=user.id
+    )
     return out
 
 
@@ -100,11 +119,22 @@ async def upload_voice_note(
     file: UploadFile,
     duration_sec: int = Form(default=0),
     transcript: str = Form(default=""),
+    client_id: str | None = Form(default=None, max_length=64),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageOut:
     await enforce_rate_limit(user.id, "upload_voice_note")
     conv = await _assert_conv_member(conversation_id, user.id, db)
+
+    # Idempotency: a retried upload (same outbox client_id) returns the
+    # original row — no re-upload, no re-broadcast.
+    if client_id is not None:
+        existing = await MessageService.find_by_client_id(
+            conversation_id=conversation_id, client_id=client_id, db=db
+        )
+        if existing is not None:
+            return MessageService.to_out(existing)
+
     data = await file.read()
     if len(data) > VOICE_NOTE_MAX_FILE_BYTES:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="voice_note_too_large")
@@ -115,6 +145,8 @@ async def upload_voice_note(
         conversation_id=conversation_id,
         sender_id=user.id,
         type=MessageType.VOICE_NOTE,
+        seq=await MessageService.next_seq(conversation_id=conversation_id, db=db),
+        client_id=client_id,
         file_name=file.filename,
         file_size_bytes=len(data),
         voice_duration_sec=duration_sec,
@@ -141,6 +173,10 @@ async def upload_voice_note(
     out = MessageService.to_out(msg)
     await ws_manager.publish_to_users(
         conv.org_id, recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
+    )
+    # Presence-gated push for members without a live WS (fire-and-forget).
+    PushService.notify_new_message(
+        conversation_id=conversation_id, recipient_ids=recipients, sender_id=user.id
     )
 
     if not client_transcript:
@@ -194,6 +230,7 @@ async def get_file_url(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> FileUrlOut:
+    await enforce_rate_limit(user.id, "get_file_url", RATE_LIMIT_READS_PER_MINUTE)
     msg = await db.scalar(select(Message).where(Message.id == message_id))
     if msg is None or not msg.s3_key:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="file_not_found")

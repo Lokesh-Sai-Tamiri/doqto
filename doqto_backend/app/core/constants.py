@@ -17,6 +17,9 @@ DEV_MASTER_OTP = "777777"
 PRESENCE_ONLINE_TTL_SECONDS = 60 * 5  # 5 minutes
 PRESENCE_AWAY_TTL_SECONDS = 60 * 30  # 30 minutes
 WS_HEARTBEAT_INTERVAL_SECONDS = 60
+# Server drops a socket silent for 2 missed heartbeats + grace. Must match
+# AppConstants.wsHeartbeatTimeout (130s) on the Flutter side.
+WS_HEARTBEAT_TIMEOUT_SECONDS = WS_HEARTBEAT_INTERVAL_SECONDS * 2 + 10
 
 # Presigned URL
 PRESIGNED_URL_TTL_SECONDS = 60 * 5  # 5 minutes
@@ -53,10 +56,21 @@ INVITE_CODE_DIGITS_LEN = 4
 # Rate limiting (requests per minute per user per endpoint)
 RATE_LIMIT_DEFAULT_PER_MINUTE = 60
 RATE_LIMIT_OTP_PER_HOUR = 5
+# Read endpoints (message history, file URLs, member list) — generous.
+RATE_LIMIT_READS_PER_MINUTE = 120
+# Admin login lockout: attempts per email per window.
+ADMIN_LOGIN_MAX_ATTEMPTS = 5
+ADMIN_LOGIN_WINDOW_SECONDS = 15 * 60
 
 # OTP request cooldown — mirror of mobile-side Resend button timer. Must match
 # AppConstants.otpResendCooldown (30s) on the Flutter side.
 OTP_RESEND_COOLDOWN_SECONDS = 30
+
+# Push notifications — PHI-free by policy: these strings are sent verbatim to
+# Apple/Google. NEVER interpolate user data (names, message content, phone
+# numbers) into push title/body.
+PUSH_TITLE = "Doqto"
+PUSH_BODY_NEW_MESSAGE = "New message"
 
 # Chat list preview
 CHAT_LIST_PREVIEW_MAX_LEN = 140
@@ -70,3 +84,6 @@ DISAPPEAR_OPTIONS_SEC = {
     60 * 60 * 24 * 90: "90 days",
 }
 DISAPPEAR_PURGE_INTERVAL_SEC = 60
+# Hard-delete grace: content of soft-deleted/expired messages is crypto-shredded
+# (encrypted blobs nulled, S3 objects deleted) once older than this.
+PURGE_CONTENT_GRACE_SEC = 30 * 24 * 3600  # 30 days

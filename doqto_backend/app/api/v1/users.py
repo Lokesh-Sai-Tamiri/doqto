@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -11,10 +12,14 @@ from app.core.constants import (
     AVATAR_MAX_BYTES,
 )
 from app.core.dependencies import get_current_user
+from app.core.routes import ApiRoutes
 from app.db.postgres import get_db
 from app.models import User
+from app.schemas.common import OkResponse
+from app.schemas.push import PushTokenDeleteIn, PushTokenIn
 from app.schemas.user import UserOut, UserPatch, build_user_out
 from app.services.file_service import FileService
+from app.services.push_service import PushService
 
 router = APIRouter()
 
@@ -70,11 +75,42 @@ async def upload_avatar(
     return await build_user_out(user)
 
 
+@router.post(ApiRoutes.USERS_PUSH_TOKENS, response_model=OkResponse)
+async def register_push_token(
+    body: PushTokenIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OkResponse:
+    await PushService.register_token(
+        user_id=user.id, token=body.token, platform=body.platform.value, db=db
+    )
+    return OkResponse()
+
+
+@router.delete(ApiRoutes.USERS_PUSH_TOKENS, response_model=OkResponse)
+async def unregister_push_token(
+    body: PushTokenDeleteIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OkResponse:
+    await PushService.unregister_token(user_id=user.id, token=body.token, db=db)
+    return OkResponse()
+
+
 @router.delete("/me/avatar", response_model=UserOut)
 async def delete_avatar(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserOut:
+    # Disposal: remove the S3 object too (avatar_url stores the S3 key).
+    # Best-effort — the DB pointer is cleared regardless.
+    if user.avatar_url:
+        try:
+            await FileService.delete_object(key=user.avatar_url)
+        except Exception:
+            logging.getLogger("doqto.users").warning(
+                "avatar S3 delete failed for key %s", user.avatar_url
+            )
     user.avatar_url = None
     await db.flush()
     await db.refresh(user)

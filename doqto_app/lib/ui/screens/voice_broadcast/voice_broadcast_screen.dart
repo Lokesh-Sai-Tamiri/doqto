@@ -205,6 +205,11 @@ class _VoiceBroadcastScreenState extends ConsumerState<VoiceBroadcastScreen> {
       if (mounted) setState(() => _sendProgress++);
     }
 
+    // M8: uploads carried the bytes — drop the temp .wav recording.
+    try {
+      await file.delete();
+    } catch (_) {}
+
     ref.invalidate(conversationsProvider);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -263,7 +268,7 @@ class _VoiceBroadcastScreenState extends ConsumerState<VoiceBroadcastScreen> {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('$e')),
             data: (members) {
-              final others = members.where((m) => m.user.id != currentUserId).toList();
+              final others = members.where((m) => m.id != currentUserId).toList();
               return ListView(
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 children: [
@@ -304,20 +309,20 @@ class _VoiceBroadcastScreenState extends ConsumerState<VoiceBroadcastScreen> {
                   ),
                   for (final m in others)
                     CheckboxListTile(
-                      value: _selectedUserIds.contains(m.user.id),
+                      value: _selectedUserIds.contains(m.id),
                       onChanged: (v) => setState(() {
                         if (v == true) {
-                          _selectedUserIds.add(m.user.id);
+                          _selectedUserIds.add(m.id);
                         } else {
-                          _selectedUserIds.remove(m.user.id);
+                          _selectedUserIds.remove(m.id);
                         }
                       }),
-                      title: Text(m.user.fullName, style: AppText.bodyPrimary),
-                      subtitle: Text(m.user.specialty ?? '', style: AppText.caption),
+                      title: Text(m.fullName, style: AppText.bodyPrimary),
+                      subtitle: Text(m.specialty ?? '', style: AppText.caption),
                       secondary: DoctorAvatar(
-                        initials: m.user.initials,
+                        initials: m.initials,
                         colorIndex: others.indexOf(m),
-                        imageUrl: m.user.avatarPresignedUrl,
+                        imageUrl: m.avatarPresignedUrl,
                       ),
                       activeColor: AppColors.medBlue,
                       controlAffinity: ListTileControlAffinity.trailing,

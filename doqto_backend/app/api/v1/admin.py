@@ -8,8 +8,10 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import ADMIN_LOGIN_MAX_ATTEMPTS, ADMIN_LOGIN_WINDOW_SECONDS
 from app.core.dependencies import require_super_admin
 from app.core.enums import OrgStatus
+from app.core.rate_limit import enforce_rate_limit
 from app.core.routes import ApiRoutes
 from app.db.postgres import get_db
 from app.db.redis import get_redis
@@ -29,6 +31,13 @@ async def admin_login(
     redis: Redis = Depends(get_redis),
     db: AsyncSession = Depends(get_db),
 ) -> TokenPair:
+    # Lockout (M4): counted per email regardless of outcome.
+    await enforce_rate_limit(
+        body.email.lower().strip(),
+        "admin_login",
+        limit=ADMIN_LOGIN_MAX_ATTEMPTS,
+        window_seconds=ADMIN_LOGIN_WINDOW_SECONDS,
+    )
     try:
         return await AdminAuthService.login(
             email=body.email, password=body.password, redis=redis, db=db

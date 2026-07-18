@@ -45,7 +45,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   bool _showRecorder = false;
   bool _typing = false;
   bool _hasText = false;
-  bool _uploading = false;
   Timer? _typingPing;
 
   @override
@@ -223,12 +222,14 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     );
   }
 
+  /// Outbox-first: the notifier persists + enqueues and shows an optimistic
+  /// bubble immediately; failures surface as a failed bubble (tap to retry),
+  /// so no blocking spinner and no error snackbar here.
   Future<void> _upload({
     required List<int> bytes,
     required String filename,
     required String contentType,
   }) async {
-    setState(() => _uploading = true);
     try {
       await ref
           .read(messagesProvider(widget.conversationId).notifier)
@@ -238,9 +239,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             contentType: contentType,
           );
     } catch (e) {
+      // Only local persistence can throw (e.g. disk full).
       _showError(ErrorMessages.forApi(e));
-    } finally {
-      if (mounted) setState(() => _uploading = false);
     }
   }
 
@@ -401,6 +401,34 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     if (m.type == MessageType.system) {
                       return SystemMessageBubble(text: m.content ?? '');
                     }
+                    // Local outbox media/voice (sending or failed): the file
+                    // isn't on the server yet, so the URL-backed bubbles can't
+                    // render it — show a labeled bubble with status ticks
+                    // (and the same tap-to-retry flow as failed text).
+                    final isLocalPending =
+                        m.clientId != null && m.status != MessageStatus.sent;
+                    if (isLocalPending && m.type != MessageType.text) {
+                      final label = switch (m.type) {
+                        MessageType.voiceNote =>
+                          'Voice note (${(m.voiceDurationSec ?? 0) ~/ 60}:${((m.voiceDurationSec ?? 0) % 60).toString().padLeft(2, '0')})',
+                        _ => m.fileName ?? 'Attachment',
+                      };
+                      final bubble = MessageBubble(
+                        text: label,
+                        isMine: isMine,
+                        timestamp: m.createdAt.toLocal(),
+                        read: m.read,
+                        delivered: m.delivered,
+                        status: m.status,
+                      );
+                      if (m.status == MessageStatus.failed) {
+                        return GestureDetector(
+                          onTap: () => _onFailedTap(m.clientId!),
+                          child: bubble,
+                        );
+                      }
+                      return bubble;
+                    }
                     if (m.type == MessageType.voiceNote) {
                       return VoiceNoteBubble(
                         // Key by message id: these bubbles cache a resolved
@@ -474,11 +502,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (_uploading)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: AppSpacing.xs),
-                        child: LinearProgressIndicator(minHeight: 2),
-                      ),
                     Row(
                       children: [
                         Expanded(
@@ -507,7 +530,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           )
                         else ...[
                           IconButton(
-                            onPressed: _uploading ? null : _pickAttachment,
+                            onPressed: _pickAttachment,
                             icon: const Icon(Icons.attach_file,
                                 color: AppColors.medBlue),
                           ),

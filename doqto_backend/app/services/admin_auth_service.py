@@ -12,9 +12,9 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import REFRESH_TOKEN_TTL_SECONDS
+from app.core.constants import ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS
 from app.core.enums import AuditAction, JwtTokenType, UserRole
-from app.core.redis_keys import session_key
+from app.core.redis_keys import refresh_session_key, session_key
 from app.core.security import create_token
 from app.models import User
 from app.schemas.auth import TokenPair
@@ -50,7 +50,8 @@ class AdminAuthService:
 
         access, jti = create_token(user.id, JwtTokenType.ACCESS)
         refresh, _ = create_token(user.id, JwtTokenType.REFRESH, jti=jti)
-        await redis.setex(session_key(jti), REFRESH_TOKEN_TTL_SECONDS, str(user.id))
+        await redis.setex(session_key(jti), ACCESS_TOKEN_TTL_SECONDS, str(user.id))
+        await redis.setex(refresh_session_key(jti), REFRESH_TOKEN_TTL_SECONDS, str(user.id))
 
         await AuditService.log(db, user_id=user.id, action=AuditAction.LOGIN, metadata={"via": "admin_panel"})
         return TokenPair(access_token=access, refresh_token=refresh, is_registered=True)

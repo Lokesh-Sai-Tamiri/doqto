@@ -4,12 +4,16 @@ import asyncio
 import time
 import uuid
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from redis.asyncio import Redis
 from sqlalchemy import select
 
 from app.api.ws_manager import ws_manager
-from app.core.constants import PRESENCE_AWAY_TTL_SECONDS, PRESENCE_ONLINE_TTL_SECONDS
+from app.core.constants import (
+    PRESENCE_AWAY_TTL_SECONDS,
+    PRESENCE_ONLINE_TTL_SECONDS,
+    WS_HEARTBEAT_TIMEOUT_SECONDS,
+)
 from app.core.enums import JwtTokenType, PresenceStatus, WsEventClient, WsEventServer
 from app.core.redis_keys import presence_key
 from app.core.security import TokenError, decode_token
@@ -53,30 +57,19 @@ async def _authorize(token: str, org_id: uuid.UUID) -> uuid.UUID:
 
 
 @router.websocket("/ws/{org_id}")
-async def websocket_endpoint(
-    websocket: WebSocket,
-    org_id: uuid.UUID,
-    token: str | None = Query(default=None),
-) -> None:
-    # Preferred: token in a first `auth` frame (query strings end up in proxy
-    # logs). `?token=` remains as a fallback for one release.
-    if token is None:
-        await websocket.accept()
-        try:
-            first = await asyncio.wait_for(websocket.receive_json(), timeout=5)
-            if first.get("type") != "auth" or not isinstance(first.get("token"), str):
-                raise TokenError("missing_auth_frame")
-            user_id = await _authorize(first["token"], org_id)
-        except Exception:
-            await websocket.close(code=4401)
-            return
-    else:
-        try:
-            user_id = await _authorize(token, org_id)
-        except TokenError:
-            await websocket.close(code=4401)
-            return
-        await websocket.accept()
+async def websocket_endpoint(websocket: WebSocket, org_id: uuid.UUID) -> None:
+    # Auth-frame only: the token must arrive in a first `auth` frame.
+    # A `?token=` query string is never read (query strings end up in
+    # proxy/access logs — M1).
+    await websocket.accept()
+    try:
+        first = await asyncio.wait_for(websocket.receive_json(), timeout=5)
+        if first.get("type") != "auth" or not isinstance(first.get("token"), str):
+            raise TokenError("missing_auth_frame")
+        user_id = await _authorize(first["token"], org_id)
+    except Exception:
+        await websocket.close(code=4401)
+        return
     await ws_manager.connect(org_id, user_id, websocket)
     redis: Redis = await get_redis()
     await redis.setex(presence_key(user_id), PRESENCE_ONLINE_TTL_SECONDS, PresenceStatus.ONLINE.value)
@@ -88,11 +81,25 @@ async def websocket_endpoint(
 
     try:
         while True:
-            msg = await websocket.receive_json()
+            try:
+                # Zombie reaper: a client silent past 2 missed heartbeats is dead.
+                msg = await asyncio.wait_for(
+                    websocket.receive_json(), timeout=WS_HEARTBEAT_TIMEOUT_SECONDS
+                )
+            except TimeoutError:
+                try:
+                    await websocket.close(code=1001)  # going away
+                except Exception:
+                    pass  # socket already dead
+                break  # finally handles presence + cleanup
             msg_type = msg.get("type")
             if msg_type == WsEventClient.HEARTBEAT.value:
                 await redis.setex(
                     presence_key(user_id), PRESENCE_ONLINE_TTL_SECONDS, PresenceStatus.ONLINE.value
+                )
+                # Direct ack (no fanout) — the client's liveness signal.
+                await websocket.send_json(
+                    {"type": WsEventServer.HEARTBEAT_ACK.value, "data": {}}
                 )
             elif msg_type in (WsEventClient.TYPING_START.value, WsEventClient.TYPING_STOP.value):
                 event = (

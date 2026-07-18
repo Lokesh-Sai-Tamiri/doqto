@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/di/providers.dart';
@@ -24,8 +27,11 @@ class AuthState {
 }
 
 class AuthNotifier extends Notifier<AuthState> {
+  StreamSubscription<String>? _tokenRefreshSub;
+
   @override
   AuthState build() {
+    ref.onDispose(() => _tokenRefreshSub?.cancel());
     // When the API client detects the session is unrecoverable (refresh
     // token expired, revoked, or backend returns session_revoked), drop
     // straight to signedOut. The router redirect fires automatically.
@@ -36,9 +42,25 @@ class AuthNotifier extends Notifier<AuthState> {
   void _onSessionEnded() {
     // Runs on the interceptor's future — mutate state on the next tick to
     // avoid reassigning while a build may be in flight.
-    Future.microtask(() {
+    Future.microtask(() async {
       state = const AuthState(AuthStage.signedOut, null);
+      await _wipeLocalPhi();
     });
+  }
+
+  /// H2: no cached PHI survives the end of a session — chat cache, queued
+  /// outbox entries, and persisted attachments. Best-effort: a failure here
+  /// must never block sign-out.
+  Future<void> _wipeLocalPhi() async {
+    try {
+      await ref.read(chatCacheProvider).clear();
+    } catch (_) {}
+    try {
+      await ref.read(outboxProvider).clear();
+    } catch (_) {}
+    try {
+      await ref.read(outboxMediaStoreProvider).deleteAll();
+    } catch (_) {}
   }
 
   Future<void> bootstrap() async {
@@ -82,7 +104,11 @@ class AuthNotifier extends Notifier<AuthState> {
         OrgStatus.active => AuthStage.signedIn,
         OrgStatus.pending || OrgStatus.suspended => AuthStage.pendingVerification,
       };
-      if (stage == AuthStage.signedIn) await _connectWs(org.id);
+      if (stage == AuthStage.signedIn) {
+        await _connectWs(org.id);
+        // Fire-and-forget: push registration must never block sign-in.
+        unawaited(_syncPushToken());
+      }
       return stage;
     } catch (_) {
       // If we can't reach the backend right now, assume needs-org so the user
@@ -110,6 +136,34 @@ class AuthNotifier extends Notifier<AuthState> {
           orgId: orgId,
           tokenProvider: () => ref.read(tokenStorageProvider).accessToken,
         );
+  }
+
+  DevicePlatform get _devicePlatform =>
+      Platform.isIOS ? DevicePlatform.ios : DevicePlatform.android;
+
+  /// Register this device's push token (no-op while the provider is stubbed)
+  /// and keep it registered across platform token rotations. Called after
+  /// login and on every authed app start; the backend upsert is idempotent.
+  Future<void> _syncPushToken() async {
+    final provider = ref.read(pushTokenProviderProvider);
+    try {
+      final token = await provider.getToken();
+      if (token != null && token.isNotEmpty) {
+        await ref
+            .read(userRepositoryProvider)
+            .registerPushToken(token: token, platform: _devicePlatform);
+      }
+    } catch (_) {
+      // Best-effort — retried on next app start / login.
+    }
+    await _tokenRefreshSub?.cancel();
+    _tokenRefreshSub = provider.onTokenRefresh.listen((token) async {
+      try {
+        await ref
+            .read(userRepositoryProvider)
+            .registerPushToken(token: token, platform: _devicePlatform);
+      } catch (_) {}
+    });
   }
 
   Future<void> requestOtp(String phone) async {
@@ -147,8 +201,19 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> signOut() async {
+    // Best-effort: stop pushes to this device before the session dies. Must
+    // run while the access token is still valid; never blocks sign-out.
+    await _tokenRefreshSub?.cancel();
+    _tokenRefreshSub = null;
+    try {
+      final token = await ref.read(pushTokenProviderProvider).getToken();
+      if (token != null && token.isNotEmpty) {
+        await ref.read(userRepositoryProvider).unregisterPushToken(token: token);
+      }
+    } catch (_) {}
     await ref.read(authRepositoryProvider).logout();
     await ref.read(websocketClientProvider).close();
+    await _wipeLocalPhi();
     ref.read(orgProvider.notifier).clear();
     state = const AuthState(AuthStage.signedOut, null);
   }

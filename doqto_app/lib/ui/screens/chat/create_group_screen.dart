@@ -76,19 +76,19 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                   itemCount: list.length,
                   itemBuilder: (_, i) {
                     final m = list[i];
-                    final selected = _selected.contains(m.user.id);
+                    final selected = _selected.contains(m.id);
                     return ListTile(
-                      leading: DoctorAvatar(initials: m.user.initials, colorIndex: i),
-                      title: Text(m.user.fullName),
-                      subtitle: Text(m.user.specialty ?? ''),
+                      leading: DoctorAvatar(initials: m.initials, colorIndex: i),
+                      title: Text(m.fullName),
+                      subtitle: Text(m.specialty ?? ''),
                       trailing: selected
                           ? const Icon(Icons.check_circle, color: AppColors.medBlue)
                           : const Icon(Icons.add_circle_outline, color: AppColors.gray400),
                       onTap: () => setState(() {
                         if (selected) {
-                          _selected.remove(m.user.id);
+                          _selected.remove(m.id);
                         } else {
-                          _selected.add(m.user.id);
+                          _selected.add(m.id);
                         }
                       }),
                     );

@@ -27,6 +27,9 @@ class WebsocketClient {
   WsConnState _state = WsConnState.disconnected;
   bool _intentionallyClosed = false;
   int _attempts = 0;
+  // Last time ANY frame arrived from the server (heartbeat_ack or otherwise).
+  // Silence beyond wsHeartbeatTimeout means the socket is a zombie.
+  DateTime _lastAck = DateTime.now();
   String? _orgId;
   Future<String?> Function()? _tokenProvider;
 
@@ -72,10 +75,12 @@ class WebsocketClient {
       return;
     }
     _attempts = 0;
+    _lastAck = DateTime.now();
     _setState(WsConnState.connected);
 
     channel.stream.listen(
       (data) {
+        _lastAck = DateTime.now(); // any inbound frame proves liveness
         try {
           final decoded = jsonDecode(data as String) as Map<String, dynamic>;
           final type = WsEventServer.fromWire(decoded['type'] as String);
@@ -85,9 +90,12 @@ class WebsocketClient {
         } catch (_) {}
       },
       onDone: () {
+        // Ignore callbacks from a channel we've already replaced.
+        if (channel != _channel) return;
         if (!_intentionallyClosed) _scheduleReconnect();
       },
       onError: (_) {
+        if (channel != _channel) return;
         if (!_intentionallyClosed) _scheduleReconnect();
       },
       cancelOnError: true,
@@ -95,10 +103,40 @@ class WebsocketClient {
 
     _heartbeat?.cancel();
     _heartbeat = Timer.periodic(AppConstants.wsHeartbeatInterval, (_) {
+      // Zombie detection: nothing (not even a heartbeat_ack) has arrived for
+      // longer than the server's own idle deadline — tear down and redial now.
+      if (DateTime.now().difference(_lastAck) > AppConstants.wsHeartbeatTimeout) {
+        _forceReconnect();
+        return;
+      }
       try {
         channel.sink.add(jsonEncode({'type': WsEventClient.heartbeat.wire}));
       } catch (_) {}
     });
+  }
+
+  /// Drop the (presumed dead) socket and reconnect immediately — no backoff.
+  void _forceReconnect() {
+    if (_intentionallyClosed) return;
+    _heartbeat?.cancel();
+    _reconnect?.cancel();
+    _attempts = 0;
+    final stale = _channel;
+    _channel = null; // detaches stale onDone/onError from reconnect logic
+    stale?.sink.close();
+    _setState(WsConnState.disconnected);
+    _open();
+  }
+
+  /// Called on app resume (and anywhere a live socket must be guaranteed):
+  /// if disconnected and not intentionally closed, skip the pending backoff
+  /// and open now.
+  void ensureConnected() {
+    if (_intentionallyClosed || _orgId == null || _tokenProvider == null) return;
+    if (_state != WsConnState.disconnected) return;
+    _reconnect?.cancel();
+    _attempts = 0;
+    _open();
   }
 
   /// Fire-and-forget client → server message (typing, heartbeat, …).

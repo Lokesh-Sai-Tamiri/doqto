@@ -14,6 +14,7 @@ class ApiRoutes {
   // Users
   static const String usersMe = '$apiV1/users/me';
   static const String usersMeAvatar = '$apiV1/users/me/avatar';
+  static const String usersMePushTokens = '$apiV1/users/me/push-tokens';
 
   // Orgs
   static const String orgs = '$apiV1/orgs';

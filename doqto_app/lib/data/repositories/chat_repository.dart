@@ -26,10 +26,20 @@ class ChatRepository {
     return Conversation.fromJson(j);
   }
 
-  Future<List<Message>> listMessages(String conversationId, {DateTime? before}) async {
+  /// [before] pages backwards (history); [afterSeq] pages forwards in seq
+  /// order (catch-up after offline). The server rejects both together.
+  Future<List<Message>> listMessages(
+    String conversationId, {
+    DateTime? before,
+    int? afterSeq,
+  }) async {
+    final query = <String, dynamic>{
+      'before': ?before?.toUtc().toIso8601String(),
+      'after_seq': ?afterSeq,
+    };
     final list = await _api.getList(
       ApiRoutes.conversationMessages(conversationId),
-      query: before != null ? {'before': before.toUtc().toIso8601String()} : null,
+      query: query.isEmpty ? null : query,
     );
     return list.map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -56,6 +66,7 @@ class ChatRepository {
     required List<int> bytes,
     required String filename,
     String? contentType,
+    String? clientId,
   }) async {
     final j = await _api.postMultipart(
       ApiRoutes.messageUpload(conversationId),
@@ -64,6 +75,10 @@ class ChatRepository {
       filename: filename,
       // Server classifies IMAGE vs FILE from this MIME type.
       contentType: contentType,
+      fields: {
+        // Outbox idempotency key — retries return the original row.
+        'client_id': ?clientId,
+      },
     );
     return Message.fromJson(j);
   }
@@ -74,6 +89,7 @@ class ChatRepository {
     required String filename,
     required int durationSec,
     String? transcript,
+    String? clientId,
   }) async {
     final j = await _api.postMultipart(
       ApiRoutes.messageVoiceNote(conversationId),
@@ -83,6 +99,8 @@ class ChatRepository {
       fields: {
         'duration_sec': durationSec,
         if (transcript != null && transcript.isNotEmpty) 'transcript': transcript,
+        // Outbox idempotency key — retries return the original row.
+        'client_id': ?clientId,
       },
     );
     return Message.fromJson(j);

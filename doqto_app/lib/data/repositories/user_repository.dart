@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../../core/constants/api_routes.dart';
+import '../../core/enums/app_enums.dart';
 import '../api/api_client.dart';
 import '../models/user.dart';
 
@@ -65,6 +66,22 @@ class UserRepository {
   Future<User> deleteAvatar() async {
     final j = await _api.delete(ApiRoutes.usersMeAvatar);
     return User.fromJson(j);
+  }
+
+  /// Register (upsert) this device's push token for the signed-in user.
+  Future<void> registerPushToken({
+    required String token,
+    required DevicePlatform platform,
+  }) async {
+    await _api.post(ApiRoutes.usersMePushTokens, body: {
+      'token': token,
+      'platform': platform.wire,
+    });
+  }
+
+  /// Best-effort removal on logout so a signed-out device stops being pushed.
+  Future<void> unregisterPushToken({required String token}) async {
+    await _api.delete(ApiRoutes.usersMePushTokens, body: {'token': token});
   }
 
   String _mimeFor(String filename) {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 from contextlib import asynccontextmanager
 
@@ -16,13 +17,20 @@ from app.core.redis_keys import purge_lock_key
 from app.core.routes import ApiPrefix
 from app.db.postgres import SessionLocal
 from app.db.redis import close_redis, get_redis
+from app.services.file_service import FileService
 from app.services.message_service import MessageService
+
+# App loggers (doqto.*) have no handler under uvicorn's default config — give them one.
+logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger("doqto")
 
 
 async def _purge_expired_loop() -> None:
-    """Soft-delete disappearing messages past their expiry, forever."""
+    """Soft-delete disappearing messages past their expiry, forever.
+
+    Same pass also crypto-shreds content past the 30-day grace period
+    (PURGE_CONTENT_GRACE_SEC) and deletes the backing S3 objects."""
     while True:
         try:
             # Redis NX lock: with N replicas only one runs each purge tick.
@@ -33,16 +41,47 @@ async def _purge_expired_loop() -> None:
             if got_lock:
                 async with SessionLocal() as db:
                     purged = await MessageService.purge_expired(db)
+                    purged_keys = await MessageService.purge_content(db)
                     await db.commit()
                     if purged:
                         logger.info("purged %d expired messages", purged)
+                # S3 disposal is best-effort per key; a failed delete only
+                # orphans an unreferenced, SSE-encrypted object.
+                for key in purged_keys:
+                    try:
+                        await FileService.delete_object(key=key)
+                    except Exception:
+                        logger.warning("purge: S3 delete failed for %s", key)
+                if purged_keys:
+                    logger.info("hard-purged content incl. %d S3 objects", len(purged_keys))
         except Exception:
             logger.exception("purge_expired failed")
         await asyncio.sleep(DISAPPEAR_PURGE_INTERVAL_SEC)
 
 
+def verify_boot_secrets(s=settings) -> None:
+    """Refuse to boot outside local with placeholder or malformed secrets.
+
+    The weak-key fallback in app/core/security.py is local-only; this guard
+    ensures non-local always has a real base64 32-byte MESSAGE_ENCRYPTION_KEY.
+    """
+    if s.is_local:
+        return
+    if s.JWT_SECRET.startswith("change-me") or s.MESSAGE_ENCRYPTION_KEY.startswith("change-me"):
+        raise RuntimeError(
+            "placeholder 'change-me' secrets are not allowed outside ENVIRONMENT=local"
+        )
+    try:
+        key = base64.b64decode(s.MESSAGE_ENCRYPTION_KEY, validate=True)
+    except Exception as e:
+        raise RuntimeError("MESSAGE_ENCRYPTION_KEY must be valid base64") from e
+    if len(key) != 32:
+        raise RuntimeError("MESSAGE_ENCRYPTION_KEY must base64-decode to exactly 32 bytes")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    verify_boot_secrets()
     purge_task = asyncio.create_task(_purge_expired_loop())
     # Pumps Redis pub/sub → this instance's sockets (multi-worker fanout).
     subscriber_task = asyncio.create_task(ws_manager.run_subscriber())

@@ -105,6 +105,7 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `system_message` | `conversation_id, text` |
 | `typing_start` | `conversation_id, user_id` |
 | `typing_stop` | `conversation_id, user_id` |
+| `heartbeat_ack` | `{}` — direct reply to a client heartbeat (liveness signal) |
 
 ## WsEventClient (client → server)
 
@@ -113,6 +114,13 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `heartbeat` | `{}` — sent every 60s |
 | `typing_start` | `conversation_id` |
 | `typing_stop` | `conversation_id` |
+
+## DevicePlatform
+
+| Wire value | Meaning |
+|---|---|
+| `ios` | Apple device (APNs via FCM) |
+| `android` | Android device (FCM) |
 
 ## JwtTokenType
 

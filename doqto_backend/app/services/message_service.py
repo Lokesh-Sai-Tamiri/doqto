@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import MESSAGES_PAGE_SIZE
+from app.core.constants import MESSAGES_PAGE_SIZE, PURGE_CONTENT_GRACE_SEC
 from app.core.enums import AuditAction, ConversationType, MessageType, TranscriptStatus
 from app.core.security import decrypt_message, encrypt_message
 from app.models import (
@@ -166,6 +166,35 @@ class MessageService:
         return or_(Message.expires_at.is_(None), Message.expires_at > func.now())
 
     @staticmethod
+    async def next_seq(*, conversation_id: uuid.UUID, db: AsyncSession) -> int:
+        """Atomically claim the next per-conversation sequence number.
+
+        The UPDATE row-locks the conversation, serializing concurrent senders;
+        holes from rolled-back transactions are acceptable (clients treat seq
+        as ordered, not dense)."""
+        seq = await db.scalar(
+            update(Conversation)
+            .where(Conversation.id == conversation_id)
+            .values(last_seq=Conversation.last_seq + 1)
+            .returning(Conversation.last_seq)
+        )
+        if seq is None:
+            raise MessageError("conversation_not_found")
+        return seq
+
+    @staticmethod
+    async def find_by_client_id(
+        *, conversation_id: uuid.UUID, client_id: str, db: AsyncSession
+    ) -> Message | None:
+        """Idempotency lookup: the original row for a retried client send, if any."""
+        return await db.scalar(
+            select(Message).where(
+                Message.conversation_id == conversation_id,
+                Message.client_id == client_id,
+            )
+        )
+
+    @staticmethod
     async def send_system(
         *,
         conv: Conversation,
@@ -178,6 +207,7 @@ class MessageService:
             conversation_id=conv.id,
             sender_id=sender_id,
             type=MessageType.SYSTEM,
+            seq=await MessageService.next_seq(conversation_id=conv.id, db=db),
             content_encrypted=encrypt_message(content),
             transcript_status=TranscriptStatus.NONE,
             expires_at=None,
@@ -202,6 +232,36 @@ class MessageService:
         return result.rowcount or 0
 
     @staticmethod
+    async def purge_content(db: AsyncSession) -> list[str]:
+        """Crypto-shred content of messages soft-deleted/expired past the grace
+        period: null the encrypted blobs and s3_key, keep the row (seq ordering,
+        receipts). Returns the S3 keys so the caller can delete the objects.
+        Reads already exclude these rows (is_deleted/expiry filters), and
+        to_out handles NULL content, so nulling is invisible to clients."""
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(seconds=PURGE_CONTENT_GRACE_SEC)
+        rows = await db.execute(
+            select(Message).where(
+                or_(
+                    and_(Message.is_deleted.is_(True), Message.created_at <= cutoff),
+                    and_(Message.expires_at.is_not(None), Message.expires_at <= cutoff),
+                ),
+                or_(
+                    Message.content_encrypted.is_not(None),
+                    Message.transcript_encrypted.is_not(None),
+                    Message.s3_key.is_not(None),
+                ),
+            )
+        )
+        keys: list[str] = []
+        for msg in rows.scalars().all():
+            if msg.s3_key:
+                keys.append(msg.s3_key)
+            msg.content_encrypted = None
+            msg.transcript_encrypted = None
+            msg.s3_key = None
+        return keys
+
+    @staticmethod
     async def send_text(
         *,
         conversation_id: uuid.UUID,
@@ -209,6 +269,8 @@ class MessageService:
         content: str,
         db: AsyncSession,
         client_id: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> Message:
         conv = await db.scalar(select(Conversation).where(Conversation.id == conversation_id))
         if conv is None:
@@ -218,11 +280,8 @@ class MessageService:
         # original row instead of duplicating. The partial unique index
         # (conversation_id, client_id) backstops concurrent retries.
         if client_id is not None:
-            existing = await db.scalar(
-                select(Message).where(
-                    Message.conversation_id == conversation_id,
-                    Message.client_id == client_id,
-                )
+            existing = await MessageService.find_by_client_id(
+                conversation_id=conversation_id, client_id=client_id, db=db
             )
             if existing is not None:
                 return existing
@@ -231,6 +290,7 @@ class MessageService:
             conversation_id=conversation_id,
             sender_id=sender_id,
             type=MessageType.TEXT,
+            seq=await MessageService.next_seq(conversation_id=conversation_id, db=db),
             client_id=client_id,
             content_encrypted=encrypt_message(content),
             transcript_status=TranscriptStatus.NONE,
@@ -245,6 +305,8 @@ class MessageService:
             action=AuditAction.MESSAGE_SENT,
             resource_type="message",
             resource_id=msg.id,
+            ip_address=ip_address,
+            user_agent=user_agent,
         )
         return msg
 
@@ -255,15 +317,21 @@ class MessageService:
         before: datetime | None,
         limit: int,
         db: AsyncSession,
+        after_seq: int | None = None,
     ) -> list[Message]:
         stmt = select(Message).where(
             Message.conversation_id == conversation_id,
             Message.is_deleted.is_(False),
             MessageService._not_expired(),
         )
-        if before is not None:
-            stmt = stmt.where(Message.created_at < before)
-        stmt = stmt.order_by(Message.created_at.desc()).limit(min(limit, MESSAGES_PAGE_SIZE))
+        if after_seq is not None:
+            # Forward catch-up sync: everything the client hasn't seen, oldest first.
+            stmt = stmt.where(Message.seq > after_seq).order_by(Message.seq.asc())
+        else:
+            if before is not None:
+                stmt = stmt.where(Message.created_at < before)
+            stmt = stmt.order_by(Message.created_at.desc())
+        stmt = stmt.limit(min(limit, MESSAGES_PAGE_SIZE))
         rows = await db.execute(stmt)
         return list(rows.scalars().all())
 
@@ -296,6 +364,7 @@ class MessageService:
             conversation_id=msg.conversation_id,
             sender_id=msg.sender_id,
             type=msg.type,
+            seq=msg.seq,
             content=content,
             s3_key=msg.s3_key,
             file_name=msg.file_name,

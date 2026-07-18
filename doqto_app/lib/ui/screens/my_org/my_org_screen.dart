@@ -32,7 +32,7 @@ class MyOrgScreen extends ConsumerWidget {
                 data: (members) {
                   final isAdmin = me != null &&
                       members.any((m) =>
-                          m.user.id == me.id && m.orgRole == OrgRole.admin);
+                          m.id == me.id && m.orgRole == OrgRole.admin);
                   return ListView(
                     // extendBody: keep last row clear of the floating nav bar.
                     padding: EdgeInsets.fromLTRB(
@@ -53,7 +53,7 @@ class MyOrgScreen extends ConsumerWidget {
                         _MemberRow(
                           member: m,
                           colorIndex: i,
-                          isSelf: me != null && m.user.id == me.id,
+                          isSelf: me != null && m.id == me.id,
                         ),
                     ],
                   );
@@ -88,7 +88,7 @@ class _MemberRowState extends ConsumerState<_MemberRow> {
       final conv = await ref.read(chatRepositoryProvider).createConversation(
             type: ConversationType.direct,
             name: null,
-            memberIds: [widget.member.user.id],
+            memberIds: [widget.member.id],
           );
       if (!mounted) return;
       context.push(AppRoutes.chat(conv.id));
@@ -107,7 +107,7 @@ class _MemberRowState extends ConsumerState<_MemberRow> {
     // For self, omit `extra` so we see the editable self view.
     context.push(
       AppRoutes.profile,
-      extra: widget.isSelf ? null : widget.member.user,
+      extra: widget.isSelf ? null : widget.member,
     );
   }
 
@@ -118,13 +118,13 @@ class _MemberRowState extends ConsumerState<_MemberRow> {
       contentPadding: EdgeInsets.zero,
       onTap: _openProfile,
       leading: DoctorAvatar(
-        initials: m.user.initials,
+        initials: m.initials,
         colorIndex: widget.colorIndex,
-        imageUrl: m.user.avatarPresignedUrl,
+        imageUrl: m.avatarPresignedUrl,
       ),
-      title: Text(m.user.fullName),
+      title: Text(m.fullName),
       subtitle: Text(
-        m.user.specialty ?? (widget.isSelf ? 'You' : ''),
+        m.specialty ?? (widget.isSelf ? 'You' : ''),
       ),
       trailing: widget.isSelf
           ? null

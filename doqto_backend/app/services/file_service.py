@@ -29,3 +29,7 @@ class FileService:
     @staticmethod
     async def presigned_url(*, key: str, expires_in: int = PRESIGNED_URL_TTL_SECONDS) -> str:
         return await _s3_instance.presigned_url(key=key, expires_in=expires_in)
+
+    @staticmethod
+    async def delete_object(*, key: str) -> None:
+        await _s3_instance.delete_object(key=key)

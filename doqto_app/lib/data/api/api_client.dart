@@ -144,9 +144,11 @@ class ApiClient {
     return (r.data as Map).cast<String, dynamic>();
   }
 
-  Future<Map<String, dynamic>> delete(String path) async {
-    final r = await _call(() => _dio.delete(path));
-    return (r.data as Map).cast<String, dynamic>();
+  Future<Map<String, dynamic>> delete(String path, {Object? body}) async {
+    final r = await _call(() => _dio.delete(path, data: body));
+    final data = r.data;
+    // DELETE may legitimately return no content.
+    return data is Map ? data.cast<String, dynamic>() : <String, dynamic>{};
   }
 
   Future<Map<String, dynamic>> postMultipart(

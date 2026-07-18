@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,10 +12,11 @@ from app.core.constants import (
     CHAT_LIST_PREVIEW_MAX_LEN,
     DISAPPEAR_OPTIONS_SEC,
     MESSAGES_PAGE_SIZE,
+    RATE_LIMIT_READS_PER_MINUTE,
 )
 from app.core.security import decrypt_message
 from app.core.dependencies import get_current_user
-from app.core.enums import ConversationType, MessageType, WsEventServer
+from app.core.enums import AuditAction, ConversationType, MessageType, OrgRole, WsEventServer
 from app.core.rate_limit import enforce_rate_limit
 from app.core.routes import ApiRoutes
 from app.db.postgres import get_db
@@ -28,7 +29,9 @@ from app.schemas.conversation import (
     ConversationSettingsIn,
 )
 from app.schemas.message import MessageOut, MessageSendIn
+from app.services.audit_service import AuditService, request_meta
 from app.services.message_service import MessageError, MessageService
+from app.services.push_service import PushService
 
 router = APIRouter()
 
@@ -46,6 +49,31 @@ async def _assert_member(conversation_id: uuid.UUID, user_id: uuid.UUID, db: Asy
     if member is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="not_a_conversation_member")
     return conv
+
+
+async def _assert_users_in_org(
+    org_id: uuid.UUID, user_ids: list[uuid.UUID], db: AsyncSession
+) -> None:
+    """Every target user must belong to the conversation's org (blocks the
+    cross-org member bug)."""
+    if not user_ids:
+        return
+    rows = await db.execute(
+        select(OrgMember.user_id).where(
+            OrgMember.org_id == org_id, OrgMember.user_id.in_(user_ids)
+        )
+    )
+    if set(user_ids) - set(rows.scalars().all()):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="member_not_in_org")
+
+
+async def _is_org_admin(org_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession) -> bool:
+    member = await db.scalar(
+        select(OrgMember).where(
+            OrgMember.org_id == org_id, OrgMember.user_id == user_id
+        )
+    )
+    return member is not None and member.org_role == OrgRole.ADMIN
 
 
 def _preview_for(msg: Message | None) -> str | None:
@@ -128,6 +156,7 @@ async def create_conversation(
     )
     if caller_org is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="user_not_in_any_org")
+    await _assert_users_in_org(caller_org, body.member_ids, db)
 
     try:
         conv = await MessageService.create_conversation(
@@ -155,14 +184,40 @@ async def create_conversation(
 @router.get(ApiRoutes.CONVERSATIONS_MESSAGES, response_model=list[MessageOut])
 async def list_messages(
     conversation_id: uuid.UUID,
+    request: Request,
     before: datetime | None = Query(default=None),
+    after_seq: int | None = Query(default=None, ge=0),
     limit: int = Query(default=MESSAGES_PAGE_SIZE, ge=1, le=MESSAGES_PAGE_SIZE),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[MessageOut]:
+    if before is not None and after_seq is not None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, detail="before_and_after_seq_exclusive"
+        )
+    await enforce_rate_limit(user.id, "list_messages", RATE_LIMIT_READS_PER_MINUTE)
     await _assert_member(conversation_id, user.id, db)
+    # HIPAA §164.312(b): reading decrypted PHI must leave an audit row —
+    # one per request (page), not per message.
+    await AuditService.log_request(
+        request,
+        user_id=user.id,
+        action=AuditAction.CONVERSATION_ACCESSED,
+        resource_type="conversation",
+        resource_id=conversation_id,
+        db=db,
+        metadata={
+            "before": before.isoformat() if before else None,
+            "after_seq": after_seq,
+            "limit": limit,
+        },
+    )
     msgs = await MessageService.list_messages(
-        conversation_id=conversation_id, before=before, limit=limit, db=db
+        conversation_id=conversation_id,
+        before=before,
+        limit=limit,
+        db=db,
+        after_seq=after_seq,
     )
     read_ids = await MessageService.read_message_ids(
         message_ids=[m.id for m in msgs], db=db
@@ -180,11 +235,13 @@ async def list_messages(
 async def send_message(
     conversation_id: uuid.UUID,
     body: MessageSendIn,
+    request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageOut:
     await enforce_rate_limit(user.id, "send_message")
     conv = await _assert_member(conversation_id, user.id, db)
+    ip, user_agent = request_meta(request)
     try:
         msg = await MessageService.send_text(
             conversation_id=conversation_id,
@@ -192,6 +249,8 @@ async def send_message(
             content=body.content,
             db=db,
             client_id=body.client_id,
+            ip_address=ip,
+            user_agent=user_agent,
         )
     except MessageError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
@@ -205,18 +264,31 @@ async def send_message(
         WsEventServer.NEW_MESSAGE,
         out.model_dump(mode="json"),
     )
+    # Presence-gated push for members without a live WS (fire-and-forget).
+    PushService.notify_new_message(
+        conversation_id=conversation_id, recipient_ids=recipients, sender_id=user.id
+    )
     return out
 
 
 @router.post(ApiRoutes.CONVERSATIONS_READ, response_model=OkResponse)
 async def mark_conversation_read(
     conversation_id: uuid.UUID,
+    request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> OkResponse:
     conv = await _assert_member(conversation_id, user.id, db)
     await MessageService.mark_conversation_read(
         conversation_id=conversation_id, user_id=user.id, db=db
+    )
+    await AuditService.log_request(
+        request,
+        user_id=user.id,
+        action=AuditAction.MESSAGE_READ,
+        resource_type="conversation",
+        resource_id=conversation_id,
+        db=db,
     )
     recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
     await db.commit()
@@ -258,10 +330,12 @@ async def mark_conversation_delivered(
 async def add_members(
     conversation_id: uuid.UUID,
     body: ConversationAddMembersIn,
+    request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> OkResponse:
     conv = await _assert_member(conversation_id, user.id, db)
+    await _assert_users_in_org(conv.org_id, body.user_ids, db)
     added: list[uuid.UUID] = []
     for uid in body.user_ids:
         exists = await db.scalar(
@@ -275,6 +349,16 @@ async def add_members(
             added.append(uid)
     if added:
         await db.flush()  # member_ids below must see the new rows
+        for uid in added:
+            await AuditService.log_request(
+                request,
+                user_id=user.id,
+                action=AuditAction.GROUP_MEMBER_ADDED,
+                resource_type="conversation",
+                resource_id=conversation_id,
+                db=db,
+                metadata={"member_id": str(uid)},
+            )
         recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
         for uid in added:
             await ws_manager.publish_to_users(
@@ -290,10 +374,14 @@ async def add_members(
 async def remove_or_leave(
     conversation_id: uuid.UUID,
     user_id: uuid.UUID,
+    request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> OkResponse:
     conv = await _assert_member(conversation_id, user.id, db)
+    # Self-leave is always allowed; removing someone ELSE is an org-admin action.
+    if user_id != user.id and not await _is_org_admin(conv.org_id, user.id, db):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="not_authorized")
     target = await db.scalar(
         select(ConversationMember).where(
             ConversationMember.conversation_id == conversation_id,
@@ -304,6 +392,19 @@ async def remove_or_leave(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="member_not_found")
     await db.delete(target)
     await db.flush()
+    await AuditService.log_request(
+        request,
+        user_id=user.id,
+        action=(
+            AuditAction.GROUP_MEMBER_LEFT
+            if user_id == user.id
+            else AuditAction.GROUP_MEMBER_REMOVED
+        ),
+        resource_type="conversation",
+        resource_id=conversation_id,
+        db=db,
+        metadata={"member_id": str(user_id)},
+    )
     # Remaining members + the removed user (they need to see themselves leave).
     recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
     await ws_manager.publish_to_users(

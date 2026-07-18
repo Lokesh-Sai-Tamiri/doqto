@@ -17,12 +17,15 @@ services:
 
   redis:
     image: redis:7-alpine
+    # Password matches REDIS_URL in .env. Prod must additionally use TLS
+    # (rediss:// URL) — plain requirepass is only in-transit-auth, not encryption.
+    command: ["redis-server", "--requirepass", "doqto-dev"]
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "doqto-dev", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5

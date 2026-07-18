@@ -7,15 +7,17 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import RATE_LIMIT_READS_PER_MINUTE
 from app.core.dependencies import get_current_user, require_org_admin, require_org_member
+from app.core.rate_limit import enforce_rate_limit
 from app.core.redis_keys import presence_key
 from app.core.routes import ApiRoutes
 from app.db.postgres import get_db
 from app.db.redis import get_redis
 from app.models import OrgMember, Organization, User
 from app.schemas.common import OkResponse
-from app.schemas.organization import OrgCreateIn, OrgJoinIn, OrgMemberOut, OrgOut
-from app.schemas.user import UserOut, build_user_out
+from app.schemas.organization import MemberOut, OrgCreateIn, OrgJoinIn, OrgOut
+from app.services.file_service import FileService
 from app.services.org_service import OrgError, OrgService
 
 router = APIRouter()
@@ -89,23 +91,33 @@ async def get_org(
     return await _to_out(org, db)
 
 
-@router.get(ApiRoutes.ORGS_MEMBERS, response_model=list[OrgMemberOut])
+@router.get(ApiRoutes.ORGS_MEMBERS, response_model=list[MemberOut])
 async def list_members(
     org_id: uuid.UUID,
-    _: object = Depends(require_org_member),
+    member: OrgMember = Depends(require_org_member),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
-) -> list[OrgMemberOut]:
+) -> list[MemberOut]:
+    await enforce_rate_limit(member.user_id, "list_members", RATE_LIMIT_READS_PER_MINUTE)
     rows = await OrgService.members(org_id=org_id, db=db)
-    out: list[OrgMemberOut] = []
-    for user, member in rows:
+    out: list[MemberOut] = []
+    for user, m in rows:
         presence = await redis.get(presence_key(user.id))
         out.append(
-            OrgMemberOut(
-                user=await build_user_out(user),
-                org_role=member.org_role,
-                joined_at=member.joined_at,
+            MemberOut(
+                id=user.id,
+                full_name=user.full_name,
+                specialty=user.specialty,
+                org_role=m.org_role,
+                joined_at=m.joined_at,
                 presence=presence,
+                avatar_color=user.avatar_color,
+                avatar_url=user.avatar_url,
+                avatar_presigned_url=(
+                    await FileService.presigned_url(key=user.avatar_url)
+                    if user.avatar_url
+                    else None
+                ),
             )
         )
     return out

@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../data/models/user.dart';
+import '../../data/models/organization.dart';
 import '../../state/auth_state.dart';
 import '../../ui/screens/auth/otp_screen.dart';
 import '../../ui/screens/auth/phone_screen.dart';
@@ -89,7 +89,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.settings, builder: (_, __) => const SettingsScreen()),
       GoRoute(
         path: AppRoutes.profile,
-        builder: (_, state) => ProfileScreen(user: state.extra as User?),
+        builder: (_, state) => ProfileScreen(member: state.extra as OrgMember?),
       ),
       GoRoute(path: AppRoutes.profileEdit, builder: (_, __) => const ProfileEditScreen()),
       GoRoute(path: AppRoutes.record, builder: (_, __) => const VoiceBroadcastScreen()),

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.constants import (
+    ACCESS_TOKEN_TTL_SECONDS,
     DEV_MASTER_OTP,
     OTP_LENGTH,
     OTP_MAX_ATTEMPTS,
@@ -19,7 +20,14 @@ from app.core.constants import (
     REFRESH_TOKEN_TTL_SECONDS,
 )
 from app.core.enums import AuditAction, JwtTokenType, UserRole
-from app.core.redis_keys import otp_attempts_key, otp_key, otp_resend_key, rate_limit_key, session_key
+from app.core.redis_keys import (
+    otp_attempts_key,
+    otp_key,
+    otp_resend_key,
+    rate_limit_key,
+    refresh_session_key,
+    session_key,
+)
 from app.core.security import TokenError, create_token, decode_token
 from app.models import User
 from app.schemas.auth import TokenPair
@@ -35,14 +43,25 @@ def _generate_otp() -> str:
     return "".join(str(secrets.randbelow(10)) for _ in range(OTP_LENGTH))
 
 
-def _sns() -> FakeSNSClient:
-    # Swap to real boto3 SNS client in staging/prod — wire from config.
-    return FakeSNSClient()
+def _sns():
+    # Local: logging fake (OTP appears in dev logs only). Elsewhere: real SNS.
+    if settings.is_local:
+        return FakeSNSClient()
+    from app.services.sns_client import RealSNSClient
+
+    return RealSNSClient()
 
 
 class AuthService:
     @staticmethod
-    async def request_otp(*, phone: str, redis: Redis, db: AsyncSession) -> None:
+    async def request_otp(
+        *,
+        phone: str,
+        redis: Redis,
+        db: AsyncSession,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> None:
         # Resend cooldown: prevents overwriting an OTP the user is actively
         # typing (e.g. accidental double-tap on "Send code").
         cooldown_key = otp_resend_key(phone)
@@ -64,11 +83,25 @@ class AuthService:
         else:
             await redis.incr(rl_key)
         await _sns().send_otp(phone, code)
-        await AuditService.log(db, user_id=None, action=AuditAction.OTP_REQUESTED, metadata={"phone": phone})
+        await AuditService.log(
+            db,
+            user_id=None,
+            action=AuditAction.OTP_REQUESTED,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            # Minimum necessary: last-4 only — audit rows outlive the OTP.
+            metadata={"phone": "****" + phone[-4:]},
+        )
 
     @staticmethod
     async def verify_otp(
-        *, phone: str, code: str, redis: Redis, db: AsyncSession
+        *,
+        phone: str,
+        code: str,
+        redis: Redis,
+        db: AsyncSession,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> TokenPair:
         # Dev master OTP — bypass Redis lookup when ENVIRONMENT=local.
         # Lets simulator/emulator testing skip the Redis-code step and the
@@ -107,14 +140,29 @@ class AuthService:
             is_registered = bool(user.full_name and not user.npi_number.startswith("PENDING"))
 
         user.last_seen_at = datetime.now(tz=timezone.utc)
-        await AuditService.log(db, user_id=user.id, action=AuditAction.OTP_VERIFIED)
+        await AuditService.log(
+            db,
+            user_id=user.id,
+            action=AuditAction.OTP_VERIFIED,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
 
         access, jti = create_token(user.id, JwtTokenType.ACCESS)
         refresh, _ = create_token(user.id, JwtTokenType.REFRESH, jti=jti)
-        await redis.setex(session_key(jti), REFRESH_TOKEN_TTL_SECONDS, str(user.id))
+        # Each token gets its own session TTL (§164.312(a)(2)(iii)): a revoked
+        # access token dies after 1h even though the refresh half lives 7d.
+        await redis.setex(session_key(jti), ACCESS_TOKEN_TTL_SECONDS, str(user.id))
+        await redis.setex(refresh_session_key(jti), REFRESH_TOKEN_TTL_SECONDS, str(user.id))
 
         if is_registered:
-            await AuditService.log(db, user_id=user.id, action=AuditAction.LOGIN)
+            await AuditService.log(
+                db,
+                user_id=user.id,
+                action=AuditAction.LOGIN,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
 
         return TokenPair(access_token=access, refresh_token=refresh, is_registered=is_registered)
 
@@ -126,13 +174,14 @@ class AuthService:
             raise AuthError(str(e)) from e
         jti = payload.get("jti")
         user_id = payload.get("sub")
-        if not jti or not user_id or not await redis.exists(session_key(jti)):
+        if not jti or not user_id or not await redis.exists(refresh_session_key(jti)):
             raise AuthError("session_revoked")
 
         access, new_jti = create_token(user_id, JwtTokenType.ACCESS)
         refresh, _ = create_token(user_id, JwtTokenType.REFRESH, jti=new_jti)
-        await redis.delete(session_key(jti))
-        await redis.setex(session_key(new_jti), REFRESH_TOKEN_TTL_SECONDS, user_id)
+        await redis.delete(session_key(jti), refresh_session_key(jti))
+        await redis.setex(session_key(new_jti), ACCESS_TOKEN_TTL_SECONDS, user_id)
+        await redis.setex(refresh_session_key(new_jti), REFRESH_TOKEN_TTL_SECONDS, user_id)
         return TokenPair(access_token=access, refresh_token=refresh, is_registered=True)
 
     @staticmethod
@@ -144,7 +193,7 @@ class AuthService:
         jti = payload.get("jti")
         user_id = payload.get("sub")
         if jti:
-            await redis.delete(session_key(jti))
+            await redis.delete(session_key(jti), refresh_session_key(jti))
         if user_id:
             await AuditService.log(db, user_id=uuid.UUID(user_id), action=AuditAction.LOGOUT)
 

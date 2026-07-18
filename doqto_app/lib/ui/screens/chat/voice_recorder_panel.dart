@@ -9,7 +9,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
-import '../../../core/di/providers.dart';
 import '../../../state/chat_state.dart';
 import '../../../core/tokens/colors.dart';
 import '../../../core/tokens/spacing.dart';
@@ -165,24 +164,26 @@ class _VoiceRecorderPanelState extends ConsumerState<VoiceRecorderPanel> {
     }
   }
 
+  /// Outbox-first: sendVoice copies the recording to durable storage,
+  /// enqueues, and shows an optimistic bubble — the panel dismisses
+  /// immediately; delivery failures surface as a failed bubble (tap to retry).
   Future<void> _send() async {
     if (_filePath == null) return;
     setState(() => _state = _RecorderState.sending);
     try {
-      final file = File(_filePath!);
-      final bytes = await file.readAsBytes();
-      final filename = _filePath!.split('/').last;
-      await ref.read(chatRepositoryProvider).uploadVoiceNote(
-            conversationId: widget.conversationId,
-            bytes: bytes,
-            filename: filename,
+      await ref.read(messagesProvider(widget.conversationId).notifier).sendVoice(
+            sourcePath: _filePath!,
             durationSec: _durationSec,
             transcript: _transcript.isNotEmpty ? _transcript : null,
           );
-      ref.invalidate(conversationsProvider);
+      // M8: the outbox persisted its own durable copy — drop the temp .wav.
+      try {
+        await File(_filePath!).delete();
+      } catch (_) {}
       if (!mounted) return;
       widget.onSent();
     } catch (e) {
+      // Only local persistence can throw (e.g. disk full).
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(ErrorMessages.forApi(e)),

@@ -10,3 +10,4 @@ class Tables:
     MESSAGES = "messages"
     MESSAGE_RECEIPTS = "message_receipts"
     AUDIT_LOGS = "audit_logs"
+    DEVICE_TOKENS = "device_tokens"

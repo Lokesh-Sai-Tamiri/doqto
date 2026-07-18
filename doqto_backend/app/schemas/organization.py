@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from app.core.enums import OrgRole, OrgStatus, PracticeType
 from app.schemas.common import ORMModel
-from app.schemas.user import UserOut
 
 
 class OrgCreateIn(BaseModel):
@@ -45,8 +44,16 @@ class OrgRejectIn(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
-class OrgMemberOut(BaseModel):
-    user: UserOut
+class MemberOut(BaseModel):
+    """Minimum-necessary member view (HIPAA H8) — deliberately NO phone,
+    email, or NPI. Full identifiers stay on /users/me (UserOut) only."""
+
+    id: uuid.UUID
+    full_name: str
+    specialty: str | None
     org_role: OrgRole
     joined_at: datetime
     presence: str | None = None
+    avatar_color: str | None = None
+    avatar_url: str | None = None
+    avatar_presigned_url: str | None = None

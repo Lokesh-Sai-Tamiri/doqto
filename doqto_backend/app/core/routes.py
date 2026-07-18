@@ -28,6 +28,9 @@ class ApiRoutes:
     ORGS_MEMBER_DETAIL = "/{org_id}/members/{user_id}"
     ORGS_INVITE_CODE = "/{org_id}/invite-code"
 
+    # Users
+    USERS_PUSH_TOKENS = "/me/push-tokens"
+
     # Conversations
     CONVERSATIONS_LIST = ""
     CONVERSATIONS_CREATE = ""

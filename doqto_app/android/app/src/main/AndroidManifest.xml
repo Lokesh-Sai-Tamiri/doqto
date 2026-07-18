@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- allowBackup=false: keep PHI (Hive boxes, outbox_media/) out of
+         device/cloud backups (H1). -->
     <application
+        android:allowBackup="false"
         android:label="doqto_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

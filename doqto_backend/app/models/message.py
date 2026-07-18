@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +28,9 @@ class Message(Base):
         PgUUID(as_uuid=True), ForeignKey(f"{Tables.USERS}.id"), nullable=False, index=True
     )
     type: Mapped[MessageType] = mapped_column(String(20), nullable=False)
+    # Per-conversation sequence number (1, 2, 3, …) — unique index
+    # uq_messages_conv_seq. Clients use it for gapless catch-up sync.
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False)
     # Client-generated idempotency key; unique per conversation (partial index).
     client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     content_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)

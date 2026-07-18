@@ -293,22 +293,21 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
   }
 
   bool _matchMember(OrgMember m) {
-    if (m.user.id == widget.meId) return false;
+    if (m.id == widget.meId) return false;
     final q = widget.query.toLowerCase();
-    if (m.user.fullName.toLowerCase().contains(q)) return true;
-    if (m.user.specialty != null && m.user.specialty!.toLowerCase().contains(q)) return true;
-    if (m.user.phone.contains(q)) return true;
+    if (m.fullName.toLowerCase().contains(q)) return true;
+    if (m.specialty != null && m.specialty!.toLowerCase().contains(q)) return true;
     return false;
   }
 
   Future<void> _startChat(OrgMember m) async {
-    if (_startingChat.contains(m.user.id)) return;
-    setState(() => _startingChat.add(m.user.id));
+    if (_startingChat.contains(m.id)) return;
+    setState(() => _startingChat.add(m.id));
     try {
       final conv = await ref.read(chatRepositoryProvider).createConversation(
             type: ConversationType.direct,
             name: null,
-            memberIds: [m.user.id],
+            memberIds: [m.id],
           );
       if (!mounted) return;
       context.push(AppRoutes.chat(conv.id));
@@ -319,7 +318,7 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
         backgroundColor: AppColors.red,
       ));
     } finally {
-      if (mounted) setState(() => _startingChat.remove(m.user.id));
+      if (mounted) setState(() => _startingChat.remove(m.id));
     }
   }
 
@@ -379,18 +378,18 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
           ),
           for (final m in matchingMembers)
             ListTile(
-              onTap: () => context.push(AppRoutes.profile, extra: m.user),
+              onTap: () => context.push(AppRoutes.profile, extra: m),
               leading: DoctorAvatar(
-                initials: m.user.initials,
+                initials: m.initials,
                 colorIndex: widget.orgMembers.indexOf(m),
-                imageUrl: m.user.avatarPresignedUrl,
+                imageUrl: m.avatarPresignedUrl,
               ),
-              title: Text(m.user.fullName, style: AppText.heading, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(m.user.specialty ?? '', style: AppText.caption, maxLines: 1),
+              title: Text(m.fullName, style: AppText.heading, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(m.specialty ?? '', style: AppText.caption, maxLines: 1),
               trailing: SizedBox(
                 width: 40,
                 height: 40,
-                child: _startingChat.contains(m.user.id)
+                child: _startingChat.contains(m.id)
                     ? const Padding(
                         padding: EdgeInsets.all(AppSpacing.sm),
                         child: CircularProgressIndicator(strokeWidth: 2),
@@ -430,8 +429,8 @@ class _ChatRow extends ConsumerWidget {
 
   String? _resolveSenderFirstName(String senderId) {
     for (final m in orgMembers) {
-      if (m.user.id == senderId) {
-        final first = m.user.fullName.trim().split(RegExp(r'\s+')).first;
+      if (m.id == senderId) {
+        final first = m.fullName.trim().split(RegExp(r'\s+')).first;
         return first.isEmpty ? null : first;
       }
     }

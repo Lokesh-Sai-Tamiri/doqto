@@ -67,12 +67,18 @@ class WsEventServer(StrEnum):
     SYSTEM_MESSAGE = "system_message"
     TYPING_START = "typing_start"
     TYPING_STOP = "typing_stop"
+    HEARTBEAT_ACK = "heartbeat_ack"
 
 
 class WsEventClient(StrEnum):
     HEARTBEAT = "heartbeat"
     TYPING_START = "typing_start"
     TYPING_STOP = "typing_stop"
+
+
+class DevicePlatform(StrEnum):
+    IOS = "ios"
+    ANDROID = "android"
 
 
 class JwtTokenType(StrEnum):
@@ -91,6 +97,7 @@ class AuditAction(StrEnum):
     ORG_VERIFIED = "org_verified"
     MEMBER_REMOVED = "member_removed"
     CONVERSATION_CREATED = "conversation_created"
+    CONVERSATION_ACCESSED = "conversation_accessed"
     GROUP_MEMBER_ADDED = "group_member_added"
     GROUP_MEMBER_LEFT = "group_member_left"
     GROUP_MEMBER_REMOVED = "group_member_removed"

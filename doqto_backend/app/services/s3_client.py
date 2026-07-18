@@ -57,6 +57,29 @@ def _ensure_bucket() -> None:
                     raise
         else:
             raise
+    # Best-effort hardening (HIPAA H6): default SSE + block all public access.
+    # The bucket may pre-exist with stricter IAM that denies these calls —
+    # never fail the boot path over it.
+    try:
+        _client.put_public_access_block(
+            Bucket=bucket,
+            PublicAccessBlockConfiguration={
+                "BlockPublicAcls": True,
+                "IgnorePublicAcls": True,
+                "BlockPublicPolicy": True,
+                "RestrictPublicBuckets": True,
+            },
+        )
+        _client.put_bucket_encryption(
+            Bucket=bucket,
+            ServerSideEncryptionConfiguration={
+                "Rules": [
+                    {"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}
+                ]
+            },
+        )
+    except Exception as e:
+        log.warning("[S3] bucket hardening skipped (%s)", e)
 
 
 class RealS3Client:
@@ -66,8 +89,14 @@ class RealS3Client:
             Key=key,
             Body=data,
             ContentType=content_type,
+            ServerSideEncryption="AES256",
         )
         log.info("[S3] uploaded %d bytes to %s", len(data), key)
+
+    async def delete_object(self, *, key: str) -> None:
+        """Disposal (§164.310(d)(2)(i)): remove media for purged/deleted content."""
+        _get_client().delete_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=key)
+        log.info("[S3] deleted %s", key)
 
     async def presigned_url(self, *, key: str, expires_in: int = PRESIGNED_URL_TTL_SECONDS) -> str:
         url = _get_client().generate_presigned_url(

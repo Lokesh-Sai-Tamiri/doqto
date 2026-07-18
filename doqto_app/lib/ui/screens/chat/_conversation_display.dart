@@ -1,11 +1,10 @@
 import '../../../core/enums/app_enums.dart';
 import '../../../data/models/conversation.dart';
 import '../../../data/models/organization.dart';
-import '../../../data/models/user.dart';
 
 class ConversationDisplay {
   final String title;
-  final User? otherUser;   // direct: the other member; group/unknown: null
+  final OrgMember? otherUser;   // direct: the other member; group/unknown: null
   final bool isDirect;
   final int colorIndex;    // for fallback DoctorAvatar
   final String initials;
@@ -47,20 +46,19 @@ ConversationDisplay conversationDisplay({
     OrgMember? otherMember;
     if (otherId != null) {
       for (final m in orgMembers) {
-        if (m.user.id == otherId) {
+        if (m.id == otherId) {
           otherMember = m;
           break;
         }
       }
     }
     if (otherMember != null) {
-      final u = otherMember.user;
       return ConversationDisplay(
-        title: u.fullName,
-        otherUser: u,
+        title: otherMember.fullName,
+        otherUser: otherMember,
         isDirect: true,
         colorIndex: fallbackColorIndex,
-        initials: u.initials,
+        initials: otherMember.initials,
       );
     }
     // Server-resolved peer name — covers peers missing from the org-members cache.

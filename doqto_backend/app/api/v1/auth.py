@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from app.models import User
 from app.schemas.auth import RefreshIn, RegisterIn, RequestOtpIn, TokenPair, VerifyOtpIn
 from app.schemas.common import OkResponse
 from app.schemas.user import UserOut, build_user_out
+from app.services.audit_service import request_meta
 from app.services.auth_service import AuthError, AuthService
 
 router = APIRouter()
@@ -19,10 +20,16 @@ router = APIRouter()
 
 @router.post(ApiRoutes.AUTH_REQUEST_OTP, response_model=OkResponse)
 async def request_otp(
-    body: RequestOtpIn, redis: Redis = Depends(get_redis), db: AsyncSession = Depends(get_db)
+    body: RequestOtpIn,
+    request: Request,
+    redis: Redis = Depends(get_redis),
+    db: AsyncSession = Depends(get_db),
 ) -> OkResponse:
+    ip, user_agent = request_meta(request)
     try:
-        await AuthService.request_otp(phone=body.phone, redis=redis, db=db)
+        await AuthService.request_otp(
+            phone=body.phone, redis=redis, db=db, ip_address=ip, user_agent=user_agent
+        )
     except AuthError as e:
         # 429 for rate-limit/cooldown errors so the client can surface a wait
         # message cleanly; other AuthErrors bubble as 400.
@@ -35,10 +42,21 @@ async def request_otp(
 
 @router.post(ApiRoutes.AUTH_VERIFY_OTP, response_model=TokenPair)
 async def verify_otp(
-    body: VerifyOtpIn, redis: Redis = Depends(get_redis), db: AsyncSession = Depends(get_db)
+    body: VerifyOtpIn,
+    request: Request,
+    redis: Redis = Depends(get_redis),
+    db: AsyncSession = Depends(get_db),
 ) -> TokenPair:
+    ip, user_agent = request_meta(request)
     try:
-        return await AuthService.verify_otp(phone=body.phone, code=body.code, redis=redis, db=db)
+        return await AuthService.verify_otp(
+            phone=body.phone,
+            code=body.code,
+            redis=redis,
+            db=db,
+            ip_address=ip,
+            user_agent=user_agent,
+        )
     except AuthError as e:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
 

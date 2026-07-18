@@ -9,6 +9,7 @@ which is legitimately org-wide.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import uuid
@@ -18,9 +19,20 @@ from fastapi import WebSocket
 
 from app.core.enums import WsEventServer
 from app.core.redis_keys import WS_EVENTS_CHANNEL
+from app.core.security import decrypt_message, encrypt_message
 from app.db.redis import get_redis
 
 logger = logging.getLogger(__name__)
+
+
+def encode_envelope(envelope: dict) -> str:
+    """AES-GCM-encrypt the envelope so decrypted PHI never transits Redis in
+    cleartext. Base64 keeps it a str (redis client uses decode_responses)."""
+    return base64.b64encode(encrypt_message(json.dumps(envelope))).decode()
+
+
+def decode_envelope(data: str) -> dict:
+    return json.loads(decrypt_message(base64.b64decode(data)))
 
 
 class WsManager:
@@ -75,7 +87,7 @@ class WsManager:
             "recipients": recipients,
         }
         redis = await get_redis()
-        await redis.publish(WS_EVENTS_CHANNEL, json.dumps(envelope))
+        await redis.publish(WS_EVENTS_CHANNEL, encode_envelope(envelope))
 
     # ---- delivery (subscriber → local sockets) -------------------------
 
@@ -110,7 +122,14 @@ class WsManager:
                     if message.get("type") != "message":
                         continue
                     try:
-                        await self.deliver_local(json.loads(message["data"]))
+                        envelope = decode_envelope(message["data"])
+                    except Exception:
+                        # Undecryptable (e.g. plaintext from a pre-encryption
+                        # instance during a rolling deploy) — drop, don't crash.
+                        logger.warning("dropping undecryptable ws envelope")
+                        continue
+                    try:
+                        await self.deliver_local(envelope)
                     except Exception:
                         logger.exception("ws envelope delivery failed")
             except asyncio.CancelledError:

@@ -22,6 +22,7 @@ class Message {
   final bool delivered;
   final MessageStatus status;
   final String? clientId; // outbox idempotency key (echoed by the server)
+  final int? seq; // per-conversation sequence (null for pending/legacy cache)
 
   const Message({
     required this.id,
@@ -41,28 +42,34 @@ class Message {
     this.delivered = false,
     this.status = MessageStatus.sent,
     this.clientId,
+    this.seq,
   });
 
-  /// Optimistic local text message: shown with a clock tick while the outbox
-  /// delivers it. `id` is the clientId until the server row replaces it.
+  /// Optimistic local message (text, media, or voice): shown with a clock tick
+  /// while the outbox delivers it. `id` is the clientId until the server row
+  /// replaces it.
   factory Message.pending({
     required String clientId,
     required String conversationId,
     required String senderId,
-    required String content,
+    String? content,
+    MessageType type = MessageType.text,
+    String? fileName,
+    int? voiceDurationSec,
+    String? transcript,
     MessageStatus status = MessageStatus.sending,
   }) =>
       Message(
         id: clientId,
         conversationId: conversationId,
         senderId: senderId,
-        type: MessageType.text,
+        type: type,
         content: content,
         s3Key: null,
-        fileName: null,
+        fileName: fileName,
         fileSizeBytes: null,
-        voiceDurationSec: null,
-        transcript: null,
+        voiceDurationSec: voiceDurationSec,
+        transcript: transcript,
         transcriptStatus: TranscriptStatus.none,
         expiresAt: null,
         createdAt: DateTime.now().toUtc(),
@@ -88,6 +95,7 @@ class Message {
         read: (j['read'] as bool?) ?? false,
         delivered: (j['delivered'] as bool?) ?? false,
         clientId: j['client_id'] as String?,
+        seq: j['seq'] as int?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -107,6 +115,7 @@ class Message {
         'read': read,
         'delivered': delivered,
         'client_id': clientId,
+        'seq': seq,
       };
 
   Message copyWith({
@@ -134,5 +143,6 @@ class Message {
         delivered: delivered ?? this.delivered,
         status: status ?? this.status,
         clientId: clientId,
+        seq: seq,
       );
 }

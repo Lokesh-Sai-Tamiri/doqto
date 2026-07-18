@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/constants/app_constants.dart';
 import '../core/di/providers.dart';
 import '../core/enums/app_enums.dart';
 import '../core/router/app_router.dart';
@@ -71,12 +72,19 @@ final notificationListenerProvider = Provider<void>((ref) {
     if (conv == null) return;
 
     final title = conv.displayName ?? conv.name ?? 'New message';
-    final body = switch (msgType) {
-      MessageType.voiceNote => '🎤 Voice note',
-      MessageType.image => '📷 Photo',
-      MessageType.file => '📎 File',
-      _ => (event.data['content'] as String?) ?? 'New message',
-    };
+    // H3: previews are acceptable only because these banners are
+    // foreground-only local notifications (device unlocked, app open). Any
+    // future lock-screen or remote path must flip showMessagePreviews to
+    // false by default. Non-text kinds (and the null-content fallback)
+    // always show a generic label — never raw content.
+    final body = !AppConstants.showMessagePreviews
+        ? 'New message'
+        : switch (msgType) {
+            MessageType.voiceNote => '🎤 Voice note',
+            MessageType.image => '📷 Photo',
+            MessageType.file => '📎 File',
+            _ => (event.data['content'] as String?) ?? 'New message',
+          };
     await ref.read(notificationServiceProvider).showMessage(
           conversationId: conversationId,
           title: title,

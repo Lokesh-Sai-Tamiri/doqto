@@ -32,6 +32,13 @@ class Settings(BaseSettings):
 
     ALLOWED_ORIGINS: str = ""
 
+    # Staged rollout (M3): gates CREATION of cross-org (different-org) direct
+    # conversations between connected doctors. Same-org direct chats are NEVER
+    # gated by this flag. Default True for local/test; PRODUCTION flips this to
+    # false (NETWORK_DM_ENABLED=false in the prod env) until the networking
+    # client ships, at which point it is turned on.
+    NETWORK_DM_ENABLED: bool = True
+
     SUPER_ADMIN_PHONE: str = ""
     SUPER_ADMIN_NAME: str = ""
     SUPER_ADMIN_NPI: str = ""

@@ -30,7 +30,7 @@ class MessageService:
     @staticmethod
     async def create_conversation(
         *,
-        org_id: uuid.UUID,
+        org_id: uuid.UUID | None,
         creator_id: uuid.UUID,
         conv_type: ConversationType,
         name: str | None,
@@ -58,8 +58,12 @@ class MessageService:
             if existing is not None:
                 return existing
 
+        # M3/A2: every NEW direct conversation is a NETWORK conversation
+        # (org_id=NULL). The direct_conversation_keys pair is the source of
+        # truth for one-DM-per-pair; org ownership is irrelevant for direct
+        # threads and would wrongly partition cross-org DMs. Groups keep org_id.
         conv = Conversation(
-            org_id=org_id,
+            org_id=None if conv_type == ConversationType.DIRECT else org_id,
             type=conv_type,
             name=name,
             created_by=creator_id,
@@ -150,28 +154,61 @@ class MessageService:
 
     @staticmethod
     async def unread_counts(
-        *, conversation_ids: list[uuid.UUID], user_id: uuid.UUID, db: AsyncSession
+        *, conversations: list[Conversation], user_id: uuid.UUID, db: AsyncSession
     ) -> dict[uuid.UUID, int]:
-        """unread_count for many conversations in ONE grouped query."""
-        if not conversation_ids:
+        """unread_count for many conversations, branched by type (A3 hybrid).
+
+        DIRECT conversations count messages without a read MessageReceipt;
+        GROUP conversations count messages with seq beyond the member's
+        last_read_seq cursor — no per-message receipts."""
+        if not conversations:
             return {}
-        read_subq = select(MessageReceipt.message_id).where(
-            MessageReceipt.user_id == user_id,
-            MessageReceipt.read_at.is_not(None),
-        )
-        rows = await db.execute(
-            select(Message.conversation_id, func.count())
-            .where(
-                Message.conversation_id.in_(conversation_ids),
-                Message.sender_id != user_id,
-                Message.is_deleted.is_(False),
-                Message.type != MessageType.SYSTEM,
-                MessageService._not_expired(),
-                Message.id.not_in(read_subq),
+        direct_ids = [c.id for c in conversations if c.type != ConversationType.GROUP]
+        group_ids = [c.id for c in conversations if c.type == ConversationType.GROUP]
+        out: dict[uuid.UUID, int] = {}
+
+        if direct_ids:
+            read_subq = select(MessageReceipt.message_id).where(
+                MessageReceipt.user_id == user_id,
+                MessageReceipt.read_at.is_not(None),
             )
-            .group_by(Message.conversation_id)
-        )
-        return dict(rows.all())
+            rows = await db.execute(
+                select(Message.conversation_id, func.count())
+                .where(
+                    Message.conversation_id.in_(direct_ids),
+                    Message.sender_id != user_id,
+                    Message.is_deleted.is_(False),
+                    Message.type != MessageType.SYSTEM,
+                    MessageService._not_expired(),
+                    Message.id.not_in(read_subq),
+                )
+                .group_by(Message.conversation_id)
+            )
+            out.update(dict(rows.all()))
+
+        if group_ids:
+            rows = await db.execute(
+                select(Message.conversation_id, func.count())
+                .join(
+                    ConversationMember,
+                    and_(
+                        ConversationMember.conversation_id == Message.conversation_id,
+                        ConversationMember.user_id == user_id,
+                    ),
+                )
+                .where(
+                    Message.conversation_id.in_(group_ids),
+                    Message.sender_id != user_id,
+                    Message.is_deleted.is_(False),
+                    Message.type != MessageType.SYSTEM,
+                    MessageService._not_expired(),
+                    Message.seq > ConversationMember.last_read_seq,
+                )
+                .group_by(Message.conversation_id)
+            )
+            out.update(dict(rows.all()))
+
+        return out
 
     @staticmethod
     async def member_ids(*, conversation_id: uuid.UUID, db: AsyncSession) -> list[uuid.UUID]:
@@ -415,9 +452,24 @@ class MessageService:
     async def mark_conversation_delivered(
         *, conversation_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
     ) -> bool:
-        """Stamp delivered_at for every message from other senders this user
-        hasn't acknowledged yet. Returns True if anything changed."""
+        """Stamp delivered for every message from other senders this user
+        hasn't acknowledged yet. Returns True if anything changed.
+
+        A3 hybrid: GROUP conversations advance the O(1) last_delivered_seq
+        cursor; DIRECT conversations keep per-message MessageReceipt rows."""
         now = datetime.now(tz=timezone.utc)
+        conv = await db.scalar(select(Conversation).where(Conversation.id == conversation_id))
+        if conv is not None and conv.type == ConversationType.GROUP:
+            member = await db.scalar(
+                select(ConversationMember).where(
+                    ConversationMember.conversation_id == conversation_id,
+                    ConversationMember.user_id == user_id,
+                )
+            )
+            if member is None or member.last_delivered_seq >= conv.last_seq:
+                return False
+            member.last_delivered_seq = conv.last_seq
+            return True
         msg_ids = (
             await db.execute(
                 select(Message.id).where(
@@ -480,6 +532,38 @@ class MessageService:
         return set(rows.scalars().all())
 
     @staticmethod
+    async def group_receipt_ids(
+        *, msgs: list[Message], conv: Conversation, db: AsyncSession
+    ) -> tuple[set[uuid.UUID], set[uuid.UUID]]:
+        """Read/delivered tick sets for a GROUP conversation's messages, derived
+        from member seq cursors (A3) instead of MessageReceipt rows.
+
+        A message (sent by S) is 'read' once EVERY other member's last_read_seq
+        has reached its seq; 'delivered' once every other member's
+        last_delivered_seq has. 'read' implies 'delivered' via to_out."""
+        if not msgs:
+            return set(), set()
+        rows = await db.execute(
+            select(
+                ConversationMember.user_id,
+                ConversationMember.last_read_seq,
+                ConversationMember.last_delivered_seq,
+            ).where(ConversationMember.conversation_id == conv.id)
+        )
+        members = rows.all()
+        read_ids: set[uuid.UUID] = set()
+        delivered_ids: set[uuid.UUID] = set()
+        for m in msgs:
+            others = [row for row in members if row[0] != m.sender_id]
+            if not others:
+                continue
+            if all(row[1] >= m.seq for row in others):
+                read_ids.add(m.id)
+            if all(row[2] >= m.seq for row in others):
+                delivered_ids.add(m.id)
+        return read_ids, delivered_ids
+
+    @staticmethod
     async def unread_count(
         *, conversation_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
     ) -> int:
@@ -506,8 +590,31 @@ class MessageService:
     async def mark_conversation_read(
         *, conversation_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
     ) -> None:
-        """Mark every message from other senders in this conversation as read by user_id."""
+        """Mark every message from other senders in this conversation as read by user_id.
+
+        A3 hybrid: GROUP conversations use the O(1) seq cursor
+        (conversation_members.last_read_seq) — one UPDATE, no per-message
+        MessageReceipt rows. DIRECT conversations keep per-message receipts
+        (2-person threads are cheap; zero client tick churn)."""
         now = datetime.now(tz=timezone.utc)
+        conv = await db.scalar(select(Conversation).where(Conversation.id == conversation_id))
+        if conv is not None and conv.type == ConversationType.GROUP:
+            # Read implies delivered → advance both cursors to the head seq.
+            await db.execute(
+                update(ConversationMember)
+                .where(
+                    ConversationMember.conversation_id == conversation_id,
+                    ConversationMember.user_id == user_id,
+                )
+                .values(
+                    last_read_seq=conv.last_seq,
+                    last_delivered_seq=func.greatest(
+                        ConversationMember.last_delivered_seq, conv.last_seq
+                    ),
+                    last_read_at=now,
+                )
+            )
+            return
         unread = await db.execute(
             select(Message.id).where(
                 Message.conversation_id == conversation_id,

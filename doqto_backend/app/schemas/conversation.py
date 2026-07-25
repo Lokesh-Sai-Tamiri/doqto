@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.core.enums import ConversationType, MessageType
+from app.core.enums import ConversationAccess, ConversationType, MessageType
 from app.schemas.common import ORMModel
 
 
@@ -25,10 +25,15 @@ class ConversationAddMembersIn(BaseModel):
 
 class ConversationOut(ORMModel):
     id: uuid.UUID
-    org_id: uuid.UUID
+    org_id: uuid.UUID | None  # NULL = network (cross-org) conversation
     type: ConversationType
     name: str | None
     created_by: uuid.UUID | None
+    # Networking tier + provenance (M3, additive). is_network mirrors org_id IS
+    # NULL (populated from the model's is_network property).
+    access: ConversationAccess = ConversationAccess.OPEN
+    initiator_id: uuid.UUID | None = None
+    is_network: bool = False
     disappear_after_sec: int | None
     created_at: datetime
     updated_at: datetime

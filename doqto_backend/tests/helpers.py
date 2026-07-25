@@ -11,7 +11,14 @@ from app.core.enums import ConversationType, JwtTokenType, OrgRole
 from app.core.redis_keys import session_key
 from app.core.security import create_token
 from app.db.redis import get_redis
-from app.models import Conversation, ConversationMember, Organization, OrgMember, User
+from app.models import (
+    Connection,
+    Conversation,
+    ConversationMember,
+    Organization,
+    OrgMember,
+    User,
+)
 
 
 def _digits(n: int) -> str:
@@ -79,6 +86,17 @@ async def create_conversation(
     await db.commit()
     await db.refresh(conv)
     return conv
+
+
+async def connect_users(db: AsyncSession, a: User, b: User) -> None:
+    """Create a first-degree connection (mirrored rows, shared pair_id).
+
+    Redis net:fd is flushed per test, so relationship_service lazily rebuilds
+    the first-degree set from these Postgres rows on first read."""
+    pair_id = uuid.uuid4()
+    db.add(Connection(user_id=a.id, connected_user_id=b.id, pair_id=pair_id))
+    db.add(Connection(user_id=b.id, connected_user_id=a.id, pair_id=pair_id))
+    await db.commit()
 
 
 def access_token(user_id: uuid.UUID) -> str:

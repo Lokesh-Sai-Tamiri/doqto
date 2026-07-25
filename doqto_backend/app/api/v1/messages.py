@@ -89,7 +89,15 @@ async def upload_file(
     )
     db.add(msg)
     await db.flush()
-    key = FileService.key_for_file(org_id=conv.org_id, message_id=msg.id, filename=file.filename or "file")
+    # Network (cross-org) conversations have no org_id → conversation-scoped key.
+    if conv.org_id is None:
+        key = FileService.key_for_network_file(
+            conversation_id=conversation_id, message_id=msg.id, filename=file.filename or "file"
+        )
+    else:
+        key = FileService.key_for_file(
+            org_id=conv.org_id, message_id=msg.id, filename=file.filename or "file"
+        )
     await FileService.upload_bytes(key=key, data=data, content_type=file.content_type or "application/octet-stream")
     msg.s3_key = key
     await AuditService.log(
@@ -156,7 +164,12 @@ async def upload_voice_note(
     )
     db.add(msg)
     await db.flush()
-    key = FileService.key_for_voice_note(org_id=conv.org_id, message_id=msg.id)
+    if conv.org_id is None:
+        key = FileService.key_for_network_voice_note(
+            conversation_id=conversation_id, message_id=msg.id
+        )
+    else:
+        key = FileService.key_for_voice_note(org_id=conv.org_id, message_id=msg.id)
     content_type = file.content_type or "audio/wav"
     await FileService.upload_bytes(key=key, data=data, content_type=content_type)
     msg.s3_key = key

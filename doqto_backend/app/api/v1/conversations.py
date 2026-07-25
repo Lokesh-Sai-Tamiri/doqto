@@ -14,6 +14,8 @@ from app.core.constants import (
     MESSAGES_PAGE_SIZE,
     RATE_LIMIT_READS_PER_MINUTE,
 )
+from app.core import permissions
+from app.core.config import settings
 from app.core.security import decrypt_message
 from app.core.dependencies import get_current_user
 from app.core.enums import AuditAction, ConversationType, MessageType, OrgRole, WsEventServer
@@ -22,6 +24,7 @@ from app.core.routes import ApiRoutes
 from app.db.postgres import get_db
 from app.models import Conversation, ConversationMember, Message, OrgMember, User
 from app.schemas.common import OkResponse
+from app.services.relationship_service import RelationshipService
 from app.schemas.conversation import (
     ConversationAddMembersIn,
     ConversationCreateIn,
@@ -119,7 +122,7 @@ async def list_conversations(
         conversation_ids=conv_ids, db=db
     )
     unread = await MessageService.unread_counts(
-        conversation_ids=conv_ids, user_id=user.id, db=db
+        conversations=convs, user_id=user.id, db=db
     )
     other_ids: set[uuid.UUID] = set()
     for c in convs:
@@ -156,11 +159,39 @@ async def create_conversation(
     )
     if caller_org is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="user_not_in_any_org")
-    await _assert_users_in_org(caller_org, body.member_ids, db)
+
+    if body.type == ConversationType.DIRECT and len(body.member_ids) == 1:
+        # M3: the central permission module (A4) decides reachability — this
+        # REPLACES the old org-membership gate for direct conversations. Same-org
+        # colleagues short-circuit to mode='open' inside permissions (regression
+        # rule); connected cross-org pairs also resolve to 'open'.
+        target_id = body.member_ids[0]
+        ctx = await RelationshipService.load_context(user.id, target_id, db)
+        decision = permissions.can_start_direct(ctx)
+        if decision.mode == "request":
+            # Message-request tier is M4 — not reachable in this milestone.
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="not_reachable")
+        if decision.mode == "denied":
+            # Blocks are never observable (HIPAA silence rule) — surface generic.
+            reason = "user_unavailable" if decision.reason == "blocked" else decision.reason
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail=reason)
+        # mode == 'open'. Cross-org (no shared org) CREATION is staged behind a
+        # flag; same-org creation is never gated.
+        if not ctx.shared_org_ids and not settings.NETWORK_DM_ENABLED:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, detail="network_dm_disabled"
+            )
+        # Direct conversations are always network-scoped (org_id=NULL, forced by
+        # the service); org_id passed here is ignored for direct.
+        conv_org = None
+    else:
+        # Group conversations keep the org gate + org ownership unchanged.
+        await _assert_users_in_org(caller_org, body.member_ids, db)
+        conv_org = caller_org
 
     try:
         conv = await MessageService.create_conversation(
-            org_id=caller_org,
+            org_id=conv_org,
             creator_id=user.id,
             conv_type=body.type,
             name=body.name,
@@ -196,7 +227,7 @@ async def list_messages(
             status.HTTP_400_BAD_REQUEST, detail="before_and_after_seq_exclusive"
         )
     await enforce_rate_limit(user.id, "list_messages", RATE_LIMIT_READS_PER_MINUTE)
-    await _assert_member(conversation_id, user.id, db)
+    conv = await _assert_member(conversation_id, user.id, db)
     # HIPAA §164.312(b): reading decrypted PHI must leave an audit row —
     # one per request (page), not per message.
     await AuditService.log_request(
@@ -219,12 +250,18 @@ async def list_messages(
         db=db,
         after_seq=after_seq,
     )
-    read_ids = await MessageService.read_message_ids(
-        message_ids=[m.id for m in msgs], db=db
-    )
-    delivered_ids = await MessageService.delivered_message_ids(
-        message_ids=[m.id for m in msgs], db=db
-    )
+    # A3 hybrid: GROUP ticks come from member seq cursors, DIRECT from receipts.
+    if conv.type == ConversationType.GROUP:
+        read_ids, delivered_ids = await MessageService.group_receipt_ids(
+            msgs=msgs, conv=conv, db=db
+        )
+    else:
+        read_ids = await MessageService.read_message_ids(
+            message_ids=[m.id for m in msgs], db=db
+        )
+        delivered_ids = await MessageService.delivered_message_ids(
+            message_ids=[m.id for m in msgs], db=db
+        )
     return [
         MessageService.to_out(m, read=m.id in read_ids, delivered=m.id in delivered_ids)
         for m in msgs
@@ -241,6 +278,22 @@ async def send_message(
 ) -> MessageOut:
     await enforce_rate_limit(user.id, "send_message")
     conv = await _assert_member(conversation_id, user.id, db)
+    # Network (cross-org) direct conversations are permission-gated on every
+    # send so a block mid-conversation freezes it both ways. Same-org (org_id
+    # set) conversations keep the legacy send path untouched.
+    if conv.org_id is None and conv.type == ConversationType.DIRECT:
+        other_id = await db.scalar(
+            select(ConversationMember.user_id).where(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id != user.id,
+            )
+        )
+        if other_id is not None:
+            ctx = await RelationshipService.load_context(user.id, other_id, db)
+            if not permissions.can_message(ctx).allowed:
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN, detail="not_reachable"
+                )
     ip, user_agent = request_meta(request)
     try:
         msg = await MessageService.send_text(

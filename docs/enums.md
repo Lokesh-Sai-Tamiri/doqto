@@ -140,6 +140,90 @@ so deliberately NOT in the parity-check SHARED set and no Dart mirror.
 | `actioned` | Resolved with action taken |
 | `dismissed` | Resolved, no action |
 
+## GroupVisibility
+
+Who can find/see a group in discovery (§6.4, M5). SHARED — client renders it.
+
+| Wire value | Meaning |
+|---|---|
+| `public` | Listed in discovery in full; anyone may view |
+| `private` | Listed with name/member_count only; full detail for members |
+| `secret` | Never listed; 404 to non-members |
+
+## GroupJoinPolicy
+
+How a non-member becomes a member (M5). SHARED — client renders join UI.
+
+| Wire value | Meaning |
+|---|---|
+| `open` | Anyone may join immediately |
+| `request` | Join requires an admin-approved request |
+| `invite_only` | No self-join; membership only via invite |
+
+## GroupRole
+
+Group capability ladder (§9.3, M5). SHARED — client renders role pills.
+
+| Wire value | Meaning |
+|---|---|
+| `owner` | Sole owner; transfers ownership, manages admins, cannot leave without transfer |
+| `admin` | Manages members/roles (except admins), removes/bans, edits group |
+| `moderator` | Approves/rejects join requests |
+| `member` | Regular member |
+
+## GroupPostPolicy (backend-only)
+
+Who may post in the group conversation (M5). Backend-only — NOT in the parity SHARED set.
+
+| Wire value | Meaning |
+|---|---|
+| `all_members` | Any active member may post |
+| `admins_only` | Only owner/admin may post |
+
+## GroupMemberDmPolicy (backend-only)
+
+Whether a member may DM a co-member from group context (M5). Backend-only.
+
+| Wire value | Meaning |
+|---|---|
+| `open` | Co-member DM opens directly |
+| `request` | Co-member DM goes through the message-request tier |
+| `disabled` | No member-to-member DM from group context |
+
+## GroupMemberState (backend-only)
+
+Group membership lifecycle (M5). Backend-only (client may render active/left).
+
+| Wire value | Meaning |
+|---|---|
+| `active` | Current member |
+| `banned` | Removed and barred from rejoining |
+| `left` | Voluntarily left |
+| `removed` | Removed by an admin |
+
+## GroupJoinRequestState (backend-only)
+
+Join-request lifecycle (M5). Backend-only.
+
+| Wire value | Meaning |
+|---|---|
+| `pending` | Awaiting an admin/moderator decision |
+| `approved` | Approved → membership formed |
+| `rejected` | Rejected (silent; re-request allowed after 14d) |
+| `withdrawn` | Requester withdrew |
+
+## GroupInviteState (backend-only)
+
+Invite lifecycle — direct + link (M5). Backend-only.
+
+| Wire value | Meaning |
+|---|---|
+| `pending` | Live invite |
+| `accepted` | Accepted → membership formed |
+| `declined` | Invitee declined |
+| `revoked` | Admin revoked |
+| `expired` | Past its expiry |
+
 ## MessageType
 
 | Wire value | Meaning |
@@ -201,6 +285,10 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `conversation_request_received` | `conversation_id, sender_id` (M4, no PHI) — a message request became visible |
 | `conversation_request_accepted` | `conversation_id, user_id` (M4) — recipient accepted; sent to the initiator |
 | `conversation_request_declined` | `conversation_id` (M4) — silent, sent ONLY to the decliner's own devices |
+| `group_invite_received` | `group_id, invite_id, inviter_id, inviter_name, group_name` (M5, no PHI) |
+| `group_join_request` | `group_id, request_id, user_id, user_name` (M5) — sent to admins/moderators |
+| `group_member_joined` | `group_id, user_id, user_name` (M5) — a member joined |
+| `group_join_request_approved` | `group_id` (M5) — sent to the approved requester |
 
 ## WsEventClient (client → server)
 
@@ -258,6 +346,14 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `message_request_sent` | Message-request conversation created (M4) |
 | `message_request_accepted` | Recipient accepted a message request → conversation opened (M4) |
 | `message_request_declined` | Recipient declined a message request (M4, silent) |
+| `group_created` | A group (+ its network conversation) was created (M5) |
+| `group_joined` | A user joined a group directly (open policy) (M5) |
+| `group_join_approved` | An admin approved a join request (M5) |
+| `group_join_rejected` | An admin rejected a join request (M5, silent) |
+| `group_role_changed` | A member's group role changed (M5) |
+| `group_ownership_transferred` | Group ownership transferred to a new owner (M5) |
+| `group_invite_sent` | A direct or link group invite was created (M5) |
+| `group_invite_accepted` | A group invite was accepted → membership formed (M5) |
 
 ## TranscribeSpecialty (AWS Transcribe Medical)
 

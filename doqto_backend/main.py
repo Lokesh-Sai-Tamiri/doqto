@@ -14,6 +14,7 @@ from app.api.v1 import (
     admin,
     auth,
     conversations,
+    groups,
     messages,
     network,
     notifications,
@@ -123,6 +124,7 @@ app.include_router(messages.router, prefix=ApiPrefix.MESSAGES, tags=["messages"]
 app.include_router(admin.router, prefix=ApiPrefix.ADMIN, tags=["admin"])
 app.include_router(network.router, prefix=ApiPrefix.NETWORK, tags=["network"])
 app.include_router(people.router, prefix=ApiPrefix.PEOPLE, tags=["people"])
+app.include_router(groups.router, prefix=ApiPrefix.GROUPS, tags=["groups"])
 app.include_router(
     notifications.router, prefix=ApiPrefix.NOTIFICATIONS, tags=["notifications"]
 )

@@ -98,6 +98,71 @@ class ReportStatus(StrEnum):
     DISMISSED = "dismissed"
 
 
+class GroupVisibility(StrEnum):
+    # SHARED (client renders): who can find/see the group in discovery (§6.4).
+    PUBLIC = "public"
+    PRIVATE = "private"
+    SECRET = "secret"
+
+
+class GroupJoinPolicy(StrEnum):
+    # SHARED (client renders): how a non-member becomes a member.
+    OPEN = "open"
+    REQUEST = "request"
+    INVITE_ONLY = "invite_only"
+
+
+class GroupRole(StrEnum):
+    # SHARED (client renders role pills): §9.3 capability ladder.
+    OWNER = "owner"
+    ADMIN = "admin"
+    MODERATOR = "moderator"
+    MEMBER = "member"
+
+
+class GroupPostPolicy(StrEnum):
+    """Backend-only — who may post in the group conversation."""
+
+    ALL_MEMBERS = "all_members"
+    ADMINS_ONLY = "admins_only"
+
+
+class GroupMemberDmPolicy(StrEnum):
+    """Backend-only — whether a member may DM a co-member from group context."""
+
+    OPEN = "open"
+    REQUEST = "request"
+    DISABLED = "disabled"
+
+
+class GroupMemberState(StrEnum):
+    """Client may render active/left; banned/removed are moderation states."""
+
+    ACTIVE = "active"
+    BANNED = "banned"
+    LEFT = "left"
+    REMOVED = "removed"
+
+
+class GroupJoinRequestState(StrEnum):
+    """Backend-only — join-request lifecycle."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"
+
+
+class GroupInviteState(StrEnum):
+    """Backend-only — invite lifecycle (direct + link)."""
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+
+
 class MessageType(StrEnum):
     TEXT = "text"
     VOICE_NOTE = "voice_note"
@@ -140,6 +205,11 @@ class WsEventServer(StrEnum):
     CONVERSATION_REQUEST_RECEIVED = "conversation_request_received"
     CONVERSATION_REQUEST_ACCEPTED = "conversation_request_accepted"
     CONVERSATION_REQUEST_DECLINED = "conversation_request_declined"
+    # Groups (M5) — recipient-scoped. SHARED (client renders them).
+    GROUP_INVITE_RECEIVED = "group_invite_received"
+    GROUP_JOIN_REQUEST = "group_join_request"
+    GROUP_MEMBER_JOINED = "group_member_joined"
+    GROUP_JOIN_REQUEST_APPROVED = "group_join_request_approved"
 
 
 class WsEventClient(StrEnum):
@@ -192,6 +262,15 @@ class AuditAction(StrEnum):
     MESSAGE_REQUEST_SENT = "message_request_sent"
     MESSAGE_REQUEST_ACCEPTED = "message_request_accepted"
     MESSAGE_REQUEST_DECLINED = "message_request_declined"
+    # Groups (M5) — backend-only. GROUP_MEMBER_REMOVED (above) covers remove/ban.
+    GROUP_CREATED = "group_created"
+    GROUP_JOINED = "group_joined"
+    GROUP_JOIN_APPROVED = "group_join_approved"
+    GROUP_JOIN_REJECTED = "group_join_rejected"
+    GROUP_ROLE_CHANGED = "group_role_changed"
+    GROUP_OWNERSHIP_TRANSFERRED = "group_ownership_transferred"
+    GROUP_INVITE_SENT = "group_invite_sent"
+    GROUP_INVITE_ACCEPTED = "group_invite_accepted"
 
 
 class TranscribeSpecialty(StrEnum):

@@ -12,6 +12,9 @@ class ApiPrefix:
     NETWORK = "/api/v1/network"
     NOTIFICATIONS = "/api/v1/notifications"
     PEOPLE = "/api/v1/people"
+    # Groups (M5) — mounted at the bare V1 prefix so it can also own the
+    # sibling /group-invites and /me/groups surfaces.
+    GROUPS = "/api/v1"
 
 
 class ApiRoutes:
@@ -77,6 +80,26 @@ class ApiRoutes:
     # Messages
     MESSAGES_READ = "/{message_id}/read"
     MESSAGES_FILE_URL = "/{message_id}/file-url"
+
+    # Groups (M5) — router mounted at /api/v1 (see ApiPrefix.GROUPS).
+    GROUPS_LIST = "/groups"
+    GROUPS_CREATE = "/groups"
+    GROUPS_DETAIL = "/groups/{group_id}"
+    GROUPS_JOIN = "/groups/{group_id}/join"
+    GROUPS_JOIN_REQUESTS = "/groups/{group_id}/join-requests"
+    GROUPS_JOIN_REQUEST_APPROVE = "/groups/{group_id}/join-requests/{request_id}/approve"
+    GROUPS_JOIN_REQUEST_REJECT = "/groups/{group_id}/join-requests/{request_id}/reject"
+    GROUPS_JOIN_REQUEST_WITHDRAW = "/groups/{group_id}/join-requests/me"
+    GROUPS_INVITES = "/groups/{group_id}/invites"
+    GROUPS_INVITE_DETAIL = "/groups/{group_id}/invites/{invite_id}"
+    GROUPS_INVITE_ACCEPT = "/groups/{group_id}/invites/{invite_id}/accept"
+    GROUPS_INVITE_DECLINE = "/groups/{group_id}/invites/{invite_id}/decline"
+    GROUP_INVITE_TOKEN_ACCEPT = "/group-invites/{token}/accept"
+    GROUPS_MEMBER_DETAIL = "/groups/{group_id}/members/{user_id}"
+    GROUPS_MEMBERS = "/groups/{group_id}/members"
+    GROUPS_MEMBER_BAN = "/groups/{group_id}/members/{user_id}/ban"
+    GROUPS_TRANSFER_OWNERSHIP = "/groups/{group_id}/transfer-ownership"
+    ME_GROUPS = "/me/groups"
 
     # Admin
     ADMIN_ORGS = "/orgs"

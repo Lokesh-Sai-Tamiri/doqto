@@ -21,3 +21,8 @@ class Tables:
     REPORTS = "reports"
     USER_PRIVACY_SETTINGS = "user_privacy_settings"
     NOTIFICATIONS = "notifications"
+    # Groups (M5)
+    GROUPS = "groups"
+    GROUP_MEMBERS = "group_members"
+    GROUP_JOIN_REQUESTS = "group_join_requests"
+    GROUP_INVITES = "group_invites"

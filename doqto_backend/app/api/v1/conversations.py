@@ -42,6 +42,7 @@ from app.schemas.conversation import (
 )
 from app.schemas.message import MessageOut, MessageSendIn
 from app.services.audit_service import AuditService, request_meta
+from app.services.group_service import GroupService
 from app.services.message_service import MessageError, MessageService
 from app.services.notification_service import NotificationService
 from app.services.push_service import PushService
@@ -373,6 +374,14 @@ async def send_message(
 ) -> MessageOut:
     await enforce_rate_limit(user.id, "send_message")
     conv = await _assert_member(conversation_id, user.id, db)
+    # Group post-policy gate (M5): when this conversation has a linked group with
+    # post_policy=admins_only, only owner/admin members may post. Legacy org
+    # group chats (no groups row) are unaffected.
+    if conv.type == ConversationType.GROUP:
+        if not await GroupService.check_post_allowed(
+            conversation_id=conversation_id, user_id=user.id, db=db
+        ):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="post_restricted")
     # Pre-state captured BEFORE send_text (which may flip access on auto-accept).
     pre_access = conv.access
     initiator_id = conv.initiator_id

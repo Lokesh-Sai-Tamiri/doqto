@@ -140,6 +140,19 @@ DISAPPEAR_OPTIONS_SEC = {
     60 * 60 * 24 * 30: "30 days",
     60 * 60 * 24 * 90: "90 days",
 }
+# --- Groups (M5) ----------------------------------------------------------- #
+GROUP_NAME_MAX_LEN = 100
+GROUP_DESCRIPTION_MAX_LEN = 1000
+GROUP_JOIN_REQUEST_MESSAGE_MAX_LEN = 300
+# Group creation quotas (via enforce_rate_limit + an active-ownership cap).
+GROUP_CREATE_QUOTA_PER_DAY = 5
+GROUP_MAX_OWNED = 20  # max groups a user may actively own at once
+# A rejected join request cannot be re-submitted for this many days.
+GROUP_REJOIN_COOLDOWN_DAYS = 14
+GROUPS_PAGE_SIZE = 30
+# Link-invite token length (url-safe).
+GROUP_INVITE_TOKEN_BYTES = 24
+
 DISAPPEAR_PURGE_INTERVAL_SEC = 60
 # Hard-delete grace: content of soft-deleted/expired messages is crypto-shredded
 # (encrypted blobs nulled, S3 objects deleted) once older than this.

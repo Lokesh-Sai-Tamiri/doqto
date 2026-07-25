@@ -11,6 +11,7 @@ import '../../../core/tokens/motion.dart';
 import '../../../core/tokens/radii.dart';
 import '../../../core/tokens/typography.dart';
 import '../../../state/chat_state.dart';
+import '../../../state/network_state.dart';
 import '../../widgets/app_pressable.dart';
 
 /// Total unread across all conversations — drives the badge on the Chats tab.
@@ -21,30 +22,49 @@ final _totalUnreadProvider = Provider<int>((ref) {
   return convs.fold<int>(0, (sum, c) => sum + c.unreadCount);
 });
 
+/// Pending received-invitation count — drives the badge on the Network tab.
+final _pendingInvitesProvider = Provider<int>((ref) {
+  return ref.watch(invitationsProvider).asData?.value.length ?? 0;
+});
+
+/// One nav-bar entry, bound to a shell branch index.
+class _NavSpec {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final int branch;
+  const _NavSpec(this.icon, this.activeIcon, this.label, this.branch);
+}
+
+const List<_NavSpec> _navSpecs = [
+  _NavSpec(Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded,
+      Strings.tabChats, 0),
+  _NavSpec(Icons.people_alt_outlined, Icons.people_alt_rounded,
+      Strings.netTabNetwork, 1),
+  _NavSpec(Icons.groups_outlined, Icons.groups_rounded, Strings.netTabGroups, 2),
+  _NavSpec(Icons.apartment_outlined, Icons.apartment_rounded, Strings.tabMyOrg,
+      3),
+];
+
 /// App shell: content runs edge-to-edge behind a floating frosted-glass nav
 /// bar (2025 chrome — no solid slabs, no notched FAB cutout). The mic action
-/// is a raised gradient button overlapping the bar.
+/// is a raised gradient button overlapping the bar. Four branches
+/// ([Chats] [Network] (mic) [Groups] [My Org]) render via an IndexedStack, so
+/// each tab keeps its own navigation state.
 class MainShell extends StatelessWidget {
-  final Widget child;
-  const MainShell({super.key, required this.child});
-
-  int _indexForLocation(String location) {
-    if (location.startsWith(AppRoutes.myOrg)) return 1;
-    return 0;
-  }
+  final StatefulNavigationShell navigationShell;
+  const MainShell({super.key, required this.navigationShell});
 
   @override
   Widget build(BuildContext context) {
-    final location = GoRouterState.of(context).matchedLocation;
-    final index = _indexForLocation(location);
     return Scaffold(
       extendBody: true, // content scrolls behind the translucent bar
-      body: child,
+      body: navigationShell,
       floatingActionButton: _MicButton(
         onPressed: () => context.push(AppRoutes.record),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: _FrostedNavBar(index: index),
+      bottomNavigationBar: _FrostedNavBar(navigationShell: navigationShell),
     );
   }
 }
@@ -84,12 +104,45 @@ class _MicButton extends StatelessWidget {
 }
 
 class _FrostedNavBar extends ConsumerWidget {
-  final int index;
-  const _FrostedNavBar({required this.index});
+  final StatefulNavigationShell navigationShell;
+  const _FrostedNavBar({required this.navigationShell});
+
+  void _go(int branch) {
+    // initialLocation:true resets a re-tapped tab to its root; a hop to a new
+    // tab restores that branch's saved stack.
+    navigationShell.goBranch(
+      branch,
+      initialLocation: branch == navigationShell.currentIndex,
+    );
+  }
+
+  int _badgeFor(int branch, int unread, int invites) => switch (branch) {
+        0 => unread,
+        1 => invites,
+        _ => 0,
+      };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final totalUnread = ref.watch(_totalUnreadProvider);
+    final unread = ref.watch(_totalUnreadProvider);
+    final invites = ref.watch(_pendingInvitesProvider);
+    final current = navigationShell.currentIndex;
+
+    // Items 0–1 sit left of the mic gap, 2–3 to its right.
+    final left = _navSpecs.where((s) => s.branch < 2);
+    final right = _navSpecs.where((s) => s.branch >= 2);
+
+    Widget item(_NavSpec s) => Expanded(
+          child: _NavItem(
+            icon: s.icon,
+            activeIcon: s.activeIcon,
+            label: s.label,
+            isSelected: current == s.branch,
+            badgeCount: _badgeFor(s.branch, unread, invites),
+            onTap: () => _go(s.branch),
+          ),
+        );
+
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       child: BackdropFilter(
@@ -110,26 +163,9 @@ class _FrostedNavBar extends ConsumerWidget {
               height: 64,
               child: Row(
                 children: [
-                  Expanded(
-                    child: _NavItem(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      activeIcon: Icons.chat_bubble_rounded,
-                      label: Strings.tabChats,
-                      isSelected: index == 0,
-                      badgeCount: totalUnread,
-                      onTap: () => context.go(AppRoutes.chats),
-                    ),
-                  ),
-                  const SizedBox(width: 72), // clearance for the mic button
-                  Expanded(
-                    child: _NavItem(
-                      icon: Icons.apartment_outlined,
-                      activeIcon: Icons.apartment_rounded,
-                      label: Strings.tabMyOrg,
-                      isSelected: index == 1,
-                      onTap: () => context.go(AppRoutes.myOrg),
-                    ),
-                  ),
+                  for (final s in left) item(s),
+                  const SizedBox(width: 64), // clearance for the mic button
+                  for (final s in right) item(s),
                 ],
               ),
             ),
@@ -170,7 +206,7 @@ class _NavItem extends StatelessWidget {
         child: AnimatedContainer(
           duration: duration,
           curve: AppMotion.standard,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
             color: isSelected ? AppColors.medBlueLight : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
@@ -182,8 +218,8 @@ class _NavItem extends StatelessWidget {
                 clipBehavior: Clip.none,
                 children: [
                   Icon(isSelected ? activeIcon : icon, color: color, size: 23),
-                  // Unread badge — overlays the icon corner so it never
-                  // shifts layout; scales in/out as the count crosses zero.
+                  // Badge — overlays the icon corner so it never shifts
+                  // layout; scales in/out as the count crosses zero.
                   Positioned(
                     top: -5,
                     right: -10,
@@ -213,12 +249,19 @@ class _NavItem extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 2),
-              Text(
-                label,
-                style: AppText.button.copyWith(
-                  fontSize: 10,
-                  color: color,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              // FittedBox is the 320dp safety valve — the label scales down
+              // rather than overflowing when four tabs share a narrow bar.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: AppText.button.copyWith(
+                    fontSize: 10,
+                    color: color,
+                    fontWeight:
+                        isSelected ? FontWeight.w700 : FontWeight.w600,
+                  ),
                 ),
               ),
             ],

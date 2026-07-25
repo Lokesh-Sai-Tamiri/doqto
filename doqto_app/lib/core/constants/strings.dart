@@ -75,6 +75,18 @@ class Strings {
   static const String netInvitations = 'Invitations';
   static const String netConnections = 'Connections';
   static const String netMutualConnections = 'Mutual connections';
+  static const String netMyNetwork = 'My Network';
+  static const String netReceived = 'Received';
+  static const String netSent = 'Sent';
+  static const String netManageAll = 'Manage all';
+  static const String netDiscoverPeople = 'Discover people';
+  static const String netViewProfile = 'View profile';
+  static const String netSearchPeopleHint = 'Search doctors by name…';
+  static const String netSearchConnectionsHint = 'Search your connections…';
+  static const String netSearchPrompt = 'Search for colleagues by name.';
+  static const String netYourConnections = 'Your connections';
+  static String netSeeAllInvitations(int n) =>
+      'See all $n invitation${n == 1 ? '' : 's'}';
   static const String netDegreeFirst = '1st';
   static const String netDegreeSecond = '2nd';
   static const String netDegreeGroup = 'Group';
@@ -117,9 +129,15 @@ class Strings {
   static const String netEmptyConnections =
       'No connections yet. Search for colleagues to get started.';
   static const String netEmptySearch = 'No people found. Try a different name.';
+  static const String netEmptyNetwork =
+      'Grow your network. Search for colleagues to connect.';
+  static const String netEmptySent = 'No pending sent invitations';
   static const String netEmptyRequests = 'No message requests';
   static const String netEmptyGroups =
       'No groups yet. Create one to collaborate across organizations.';
+  static const String netGroupsComingTitle = 'Groups are coming';
+  static const String netGroupsComingBody =
+      'Cross-organization groups will live here soon.';
   // -- Groups
   static const String groupJoin = 'Join';
   static const String groupRequestToJoin = 'Request to join';

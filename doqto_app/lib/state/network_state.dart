@@ -202,8 +202,50 @@ class InvitationsNotifier extends AsyncNotifier<List<Invitation>> {
       // Keep showing what we have.
     }
   }
+
+  void _removeLocally(String invitationId) {
+    final list = state.valueOrNull;
+    if (list == null) return;
+    state = AsyncData(list.where((i) => i.id != invitationId).toList());
+  }
+
+  /// Optimistically drop the invitation, accept it server-side, and refresh the
+  /// connections list. Restores truth (via [refresh]) if the call fails.
+  Future<void> accept(Invitation inv) async {
+    _removeLocally(inv.id);
+    try {
+      await ref.read(networkRepositoryProvider).acceptInvitation(inv.id);
+      ref.invalidate(connectionsProvider);
+    } catch (e) {
+      await refresh();
+      rethrow;
+    }
+  }
+
+  /// Optimistically drop the invitation and ignore it server-side (silent to
+  /// the sender). No undo, per plan. Restores truth if the call fails.
+  Future<void> ignore(Invitation inv) async {
+    _removeLocally(inv.id);
+    try {
+      await ref.read(networkRepositoryProvider).ignoreInvitation(inv.id);
+    } catch (e) {
+      await refresh();
+      rethrow;
+    }
+  }
 }
 
 final invitationsProvider =
     AsyncNotifierProvider<InvitationsNotifier, List<Invitation>>(
         InvitationsNotifier.new);
+
+/// The signed-in user's still-pending *sent* invitations (the "Sent" tab of the
+/// invitations screen). Network-only, auto-disposed — refetched each time the
+/// screen mounts; invalidated after a withdraw.
+final sentInvitationsProvider =
+    FutureProvider.autoDispose<List<Invitation>>((ref) async {
+  final page = await ref
+      .read(networkRepositoryProvider)
+      .listInvitations(direction: 'sent', status: 'pending');
+  return page.data;
+});

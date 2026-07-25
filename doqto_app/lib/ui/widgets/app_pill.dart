@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/strings.dart';
+import '../../core/enums/app_enums.dart';
 import '../../core/tokens/colors.dart';
 import '../../core/tokens/radii.dart';
 import '../../core/tokens/spacing.dart';
@@ -79,6 +81,22 @@ class DegreeBadge extends StatelessWidget {
   final String label;
 
   const DegreeBadge(this.label, {super.key});
+
+  /// Short wire label for a [ConnectionDegree], or null for [out]/[third]
+  /// (nothing worth badging — degrees past 2nd read as "not in network").
+  static String? labelFor(ConnectionDegree degree) => switch (degree) {
+        ConnectionDegree.first => Strings.netDegreeFirst,
+        ConnectionDegree.second => Strings.netDegreeSecond,
+        ConnectionDegree.third => null,
+        ConnectionDegree.out => null,
+      };
+
+  /// Typed convenience: a badge for [degree], or null when there's nothing to
+  /// show (so callers can `?? const SizedBox.shrink()`).
+  static Widget? forDegree(ConnectionDegree degree) {
+    final l = labelFor(degree);
+    return l == null ? null : DegreeBadge(l);
+  }
 
   @override
   Widget build(BuildContext context) =>

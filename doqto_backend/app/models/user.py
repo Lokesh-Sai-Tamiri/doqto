@@ -22,6 +22,9 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Public handle (nullable, generated lazily on first profile edit) + headline.
+    handle: Mapped[str | None] = mapped_column(String(30), unique=True, nullable=True)
+    headline: Mapped[str | None] = mapped_column(String(120), nullable=True)
     specialty: Mapped[str | None] = mapped_column(String(100), nullable=True)
     npi_number: Mapped[str] = mapped_column(CHAR(10), unique=True, nullable=False, index=True)
     role: Mapped[UserRole] = mapped_column(String(20), default=UserRole.DOCTOR, nullable=False)

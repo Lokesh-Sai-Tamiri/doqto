@@ -135,6 +135,70 @@ class PushService:
         )
 
     @staticmethod
+    def notify_invitation_received(
+        *, recipient_id: uuid.UUID, actor_name: str, invitation_id: uuid.UUID
+    ) -> None:
+        """Directory data (a doctor's name) is NOT PHI — safe in a push body."""
+        asyncio.create_task(
+            PushService._dispatch_simple(
+                recipient_id=recipient_id,
+                title=PUSH_TITLE,
+                body=f"{actor_name} wants to connect",
+                data={"type": "invitation_received", "invitation_id": str(invitation_id)},
+                collapse_key=f"invite:{invitation_id}",
+            )
+        )
+
+    @staticmethod
+    def notify_invitation_accepted(
+        *, recipient_id: uuid.UUID, actor_name: str
+    ) -> None:
+        asyncio.create_task(
+            PushService._dispatch_simple(
+                recipient_id=recipient_id,
+                title=PUSH_TITLE,
+                body=f"{actor_name} accepted your connection request",
+                data={"type": "invitation_accepted"},
+                collapse_key=f"accept:{recipient_id}",
+            )
+        )
+
+    @staticmethod
+    async def _dispatch_simple(
+        *,
+        recipient_id: uuid.UUID,
+        title: str,
+        body: str,
+        data: dict[str, str],
+        collapse_key: str,
+    ) -> None:
+        """Presence-gated single-recipient push (fire-and-forget)."""
+        try:
+            redis = await get_redis()
+            sender = _sender()
+            async with SessionLocal() as db:
+                if await redis.get(presence_key(recipient_id)) == PresenceStatus.ONLINE.value:
+                    return  # live WS covers them
+                rows = (
+                    await db.scalars(
+                        select(DeviceToken).where(DeviceToken.user_id == recipient_id)
+                    )
+                ).all()
+                for row in rows:
+                    ok = await sender.send(
+                        token=row.token,
+                        title=title,
+                        body=body,
+                        data=data,
+                        collapse_key=collapse_key,
+                    )
+                    if not ok:
+                        await db.delete(row)
+                await db.commit()
+        except Exception:  # noqa: BLE001 — never propagate into the caller
+            log.exception("simple push dispatch failed for user %s", recipient_id)
+
+    @staticmethod
     async def _dispatch(
         *,
         conversation_id: uuid.UUID,

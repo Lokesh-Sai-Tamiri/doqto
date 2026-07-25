@@ -10,7 +10,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import websocket as ws_router
 from app.api.ws_manager import ws_manager
-from app.api.v1 import admin, auth, conversations, messages, orgs, users
+from app.api.v1 import (
+    admin,
+    auth,
+    conversations,
+    messages,
+    network,
+    notifications,
+    orgs,
+    people,
+    users,
+)
 from app.core.config import settings
 from app.core.constants import DISAPPEAR_PURGE_INTERVAL_SEC
 from app.core.redis_keys import purge_lock_key
@@ -111,6 +121,11 @@ app.include_router(orgs.router, prefix=ApiPrefix.ORGS, tags=["orgs"])
 app.include_router(conversations.router, prefix=ApiPrefix.CONVERSATIONS, tags=["conversations"])
 app.include_router(messages.router, prefix=ApiPrefix.MESSAGES, tags=["messages"])
 app.include_router(admin.router, prefix=ApiPrefix.ADMIN, tags=["admin"])
+app.include_router(network.router, prefix=ApiPrefix.NETWORK, tags=["network"])
+app.include_router(people.router, prefix=ApiPrefix.PEOPLE, tags=["people"])
+app.include_router(
+    notifications.router, prefix=ApiPrefix.NOTIFICATIONS, tags=["notifications"]
+)
 app.include_router(ws_router.router)
 
 

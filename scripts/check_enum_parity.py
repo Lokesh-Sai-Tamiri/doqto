@@ -32,6 +32,16 @@ SHARED = {
     # so it is gated. ExternalDmPolicy / DirectoryVisibility are backend-only
     # org-admin policy enums — deliberately NOT gated, no Dart mirror needed.
     "ConversationAccess",
+    # Networking graph (M1). InvitationStatus + the three privacy-setting enums
+    # reach the client wire (invitation lists, PATCH /users/me/privacy) so they
+    # are gated. ReportStatus is backend-only (moderation) — deliberately NOT
+    # gated, like ExternalDmPolicy / DirectoryVisibility. NOTE: backend M1 ships
+    # one release ahead of the client, so these will read as "dart-missing"
+    # drift until the client agent mirrors them in its M1 — expected.
+    "InvitationStatus",
+    "InvitePolicy",
+    "DmPolicy",
+    "Discoverability",
     "MessageType",
     "TranscriptStatus",
     "WsEventServer",

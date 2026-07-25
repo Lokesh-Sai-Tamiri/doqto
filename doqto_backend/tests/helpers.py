@@ -18,11 +18,25 @@ def _digits(n: int) -> str:
     return "".join(random.choices("0123456789", k=n))
 
 
-async def create_user(db: AsyncSession, *, full_name: str = "Dr Test") -> User:
+async def create_user(
+    db: AsyncSession,
+    *,
+    full_name: str = "Dr Test",
+    specialty: str | None = None,
+    city: str | None = None,
+    state: str | None = None,
+    headline: str | None = None,
+    handle: str | None = None,
+) -> User:
     user = User(
         phone=f"+1{_digits(10)}",
         full_name=full_name,
         npi_number=_digits(10),
+        specialty=specialty,
+        city=city,
+        state=state,
+        headline=headline,
+        handle=handle,
     )
     db.add(user)
     await db.commit()

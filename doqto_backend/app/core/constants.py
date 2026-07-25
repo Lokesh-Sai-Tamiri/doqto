@@ -75,6 +75,46 @@ PUSH_BODY_NEW_MESSAGE = "New message"
 # Chat list preview
 CHAT_LIST_PREVIEW_MAX_LEN = 140
 
+# --- Networking graph (M1) ------------------------------------------------- #
+# Redis caches for the social graph.
+NET_FD_TTL_SECONDS = 60 * 60 * 24  # first-degree set, lazy-rebuilt on miss
+NET_SD_TTL_SECONDS = 60 * 10  # second-degree set, computed on demand
+ORG_POLICY_CACHE_TTL_SECONDS = 60  # org networking policy snapshot
+SECOND_DEGREE_LIMIT = 500  # cap the fan-out; no third degree ever
+MUTUAL_CONNECTIONS_DEFAULT_LIMIT = 20
+
+# Invitation quotas (via enforce_rate_limit — two stacked windows).
+INVITE_QUOTA_PER_DAY = 50
+INVITE_QUOTA_PER_WEEK = 100
+
+# Invitation re-send cooldowns (days) — measured from the last terminal event.
+COOLDOWN_IGNORED_DAYS = 21
+COOLDOWN_WITHDRAWN_DAYS = 3
+COOLDOWN_REMOVED_DAYS = 30
+
+# Invitation message length (spec: short note).
+INVITATION_MESSAGE_MAX_LEN = 300
+
+# People/network read limits.
+NETWORK_PAGE_SIZE = 30
+REPORT_DETAILS_MAX_LEN = 1000
+
+# --- People search + public profiles (M2) ---------------------------------- #
+# Cross-org directory surface. Cards/profiles NEVER expose phone/email/NPI.
+PEOPLE_SEARCH_PER_MINUTE = 60  # rate limit on GET /people/search
+PEOPLE_SEARCH_PAGE_SIZE = 20  # default page limit
+PEOPLE_SEARCH_MAX_LIMIT = 50  # hard cap on the client-supplied limit
+# Deterministic ranking weights (trgm similarity + graph/org boosts). No ML.
+SEARCH_DEGREE_BOOST_FIRST = 0.5
+SEARCH_DEGREE_BOOST_SECOND = 0.25
+SEARCH_SAME_ORG_BOOST = 0.3
+
+# Profile handle: lowercase slug, [a-z0-9_], 3–30 chars, globally unique.
+HANDLE_MIN_LEN = 3
+HANDLE_MAX_LEN = 30
+HANDLE_PATTERN = r"^[a-z0-9_]{3,30}$"
+HEADLINE_MAX_LEN = 120
+
 # Disappearing messages — allowed timer values (seconds → human label).
 # Mirror of the option list in the Flutter chat details screen.
 DISAPPEAR_OPTIONS_SEC = {

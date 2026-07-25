@@ -84,6 +84,62 @@ in the parity-check SHARED set and has no Dart mirror.
 | `network` | Members discoverable by the professional network |
 | `public` | Members discoverable platform-wide |
 
+## InvitationStatus
+
+Connection-invitation lifecycle (networking graph, M1). Client-facing (invitation lists).
+
+| Wire value | Meaning |
+|---|---|
+| `pending` | Awaiting recipient response |
+| `accepted` | Recipient accepted → connection formed |
+| `ignored` | Recipient ignored (silent to sender) |
+| `withdrawn` | Sender withdrew before response |
+| `expired` | Aged out (lazy computation; no cron) |
+
+## InvitePolicy
+
+Who may send me a connection invitation (`user_privacy_settings`, M1). Client edits it.
+
+| Wire value | Meaning |
+|---|---|
+| `everyone` | Anyone may invite me |
+| `second_degree` | Only people in my extended network |
+| `shared_group_or_org` | Only shared-org / shared-group members |
+| `nobody` | No one may invite me |
+
+## DmPolicy
+
+Who may open a direct conversation with me (`user_privacy_settings`, M1). Client edits it.
+
+| Wire value | Meaning |
+|---|---|
+| `everyone` | Anyone may DM me directly |
+| `connections_and_requests` | Connections DM freely; others via message request |
+| `connections_only` | Only my connections may DM me |
+| `nobody` | No one may DM me |
+
+## Discoverability
+
+Who may find me / view my profile (`user_privacy_settings`, M1). Client edits it.
+
+| Wire value | Meaning |
+|---|---|
+| `everyone` | Discoverable by the whole network |
+| `connections` | Only my connections |
+| `nobody` | Not discoverable |
+
+## ReportStatus (backend-only)
+
+Moderation report lifecycle — never sent to the Flutter client (queue UI is M7),
+so deliberately NOT in the parity-check SHARED set and no Dart mirror.
+
+| Wire value | Meaning |
+|---|---|
+| `open` | Newly filed, unreviewed |
+| `reviewing` | Under moderator review |
+| `actioned` | Resolved with action taken |
+| `dismissed` | Resolved, no action |
+
 ## MessageType
 
 | Wire value | Meaning |
@@ -138,6 +194,10 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `typing_start` | `conversation_id, user_id` |
 | `typing_stop` | `conversation_id, user_id` |
 | `heartbeat_ack` | `{}` — direct reply to a client heartbeat (liveness signal) |
+| `invitation_received` | `invitation_id, sender_id, sender_name` (M1, no PHI) |
+| `invitation_accepted` | `invitation_id, user_id, user_name` (M1, no PHI) |
+| `connection_removed` | `user_id` — the party who removed you (M1) |
+| `notification_created` | `notification_id, type, unread_count` (M1, PHI-free) |
 
 ## WsEventClient (client → server)
 
@@ -183,6 +243,15 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `message_read` | Message marked read |
 | `file_uploaded` | File/voice attachment uploaded |
 | `file_accessed` | Presigned URL issued |
+| `invitation_sent` | Connection invitation created |
+| `invitation_accepted` | Connection invitation accepted → connection formed |
+| `invitation_ignored` | Recipient ignored an invitation |
+| `invitation_withdrawn` | Sender withdrew an invitation |
+| `connection_removed` | Either party removed a connection |
+| `user_blocked` | User blocked another user |
+| `user_unblocked` | User unblocked another user |
+| `report_filed` | Abuse/spam report filed |
+| `networking_policy_denied` | External networking path denied by kill switch / policy |
 
 ## TranscribeSpecialty (AWS Transcribe Medical)
 
@@ -207,3 +276,16 @@ Index-keyed color cycle from `design.md §2`. Not serialized over the wire; deri
 | 2 | purple | `#7C3AED` |
 | 3 | darkBlue | `#0F3499` |
 | 4 | amber | `#F59E0B` |
+
+## PersonCard degree (M2 — deliberately NOT an enum)
+
+`PersonCardOut.degree` and `PublicProfileOut.degree` are serialized as a plain
+wire STRING — one of `1st` | `2nd` | `3rd` | `out` — not a shared enum. This is
+a purely client-facing display badge derived from `RelationshipService`
+(`degree_of`: first-degree → `1st`, second-degree → `2nd`, otherwise → `3rd`,
+self/blocked → `out`). Keeping it a bare string avoids a three-file enum-parity
+dance for a value that never participates in server-side branching. No entry in
+the parity SHARED set; no Dart enum mirror required (client parses the string
+directly). Likewise `connection_state` (`none` | `pending_outgoing` |
+`pending_incoming` | `connected`) and `can_message` (`open` | `request` |
+`denied`) are plain profile strings, not gated enums.

@@ -12,3 +12,12 @@ class Tables:
     MESSAGE_RECEIPTS = "message_receipts"
     AUDIT_LOGS = "audit_logs"
     DEVICE_TOKENS = "device_tokens"
+    # Networking graph (M1)
+    CONNECTION_INVITATIONS = "connection_invitations"
+    CONNECTIONS = "connections"
+    CONNECTION_REMOVALS = "connection_removals"
+    BLOCKS = "blocks"
+    MUTES = "mutes"
+    REPORTS = "reports"
+    USER_PRIVACY_SETTINGS = "user_privacy_settings"
+    NOTIFICATIONS = "notifications"

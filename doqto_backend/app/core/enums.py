@@ -57,6 +57,47 @@ class DirectoryVisibility(StrEnum):
     PUBLIC = "public"
 
 
+class InvitationStatus(StrEnum):
+    # Connection-invitation lifecycle (networking graph, M1).
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    IGNORED = "ignored"
+    WITHDRAWN = "withdrawn"
+    EXPIRED = "expired"
+
+
+class InvitePolicy(StrEnum):
+    # Who may send me a connection invitation (user_privacy_settings, M1).
+    EVERYONE = "everyone"
+    SECOND_DEGREE = "second_degree"
+    SHARED_GROUP_OR_ORG = "shared_group_or_org"
+    NOBODY = "nobody"
+
+
+class DmPolicy(StrEnum):
+    # Who may open a direct conversation with me (user_privacy_settings, M1).
+    EVERYONE = "everyone"
+    CONNECTIONS_AND_REQUESTS = "connections_and_requests"
+    CONNECTIONS_ONLY = "connections_only"
+    NOBODY = "nobody"
+
+
+class Discoverability(StrEnum):
+    # Who may find me in search / view my profile (user_privacy_settings, M1).
+    EVERYONE = "everyone"
+    CONNECTIONS = "connections"
+    NOBODY = "nobody"
+
+
+class ReportStatus(StrEnum):
+    """Moderation report lifecycle — backend-only (queue UI is M7)."""
+
+    OPEN = "open"
+    REVIEWING = "reviewing"
+    ACTIONED = "actioned"
+    DISMISSED = "dismissed"
+
+
 class MessageType(StrEnum):
     TEXT = "text"
     VOICE_NOTE = "voice_note"
@@ -90,6 +131,11 @@ class WsEventServer(StrEnum):
     TYPING_START = "typing_start"
     TYPING_STOP = "typing_stop"
     HEARTBEAT_ACK = "heartbeat_ack"
+    # Networking graph (M1) — recipient-scoped.
+    INVITATION_RECEIVED = "invitation_received"
+    INVITATION_ACCEPTED = "invitation_accepted"
+    CONNECTION_REMOVED = "connection_removed"
+    NOTIFICATION_CREATED = "notification_created"
 
 
 class WsEventClient(StrEnum):
@@ -128,6 +174,16 @@ class AuditAction(StrEnum):
     MESSAGE_READ = "message_read"
     FILE_UPLOADED = "file_uploaded"
     FILE_ACCESSED = "file_accessed"
+    # Networking graph (M1)
+    INVITATION_SENT = "invitation_sent"
+    INVITATION_ACCEPTED = "invitation_accepted"
+    INVITATION_IGNORED = "invitation_ignored"
+    INVITATION_WITHDRAWN = "invitation_withdrawn"
+    CONNECTION_REMOVED = "connection_removed"
+    USER_BLOCKED = "user_blocked"
+    USER_UNBLOCKED = "user_unblocked"
+    REPORT_FILED = "report_filed"
+    NETWORKING_POLICY_DENIED = "networking_policy_denied"
 
 
 class TranscribeSpecialty(StrEnum):

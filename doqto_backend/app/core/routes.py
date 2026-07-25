@@ -9,6 +9,9 @@ class ApiPrefix:
     CONVERSATIONS = "/api/v1/conversations"
     MESSAGES = "/api/v1/messages"
     ADMIN = "/api/v1/admin"
+    NETWORK = "/api/v1/network"
+    NOTIFICATIONS = "/api/v1/notifications"
+    PEOPLE = "/api/v1/people"
 
 
 class ApiRoutes:
@@ -31,6 +34,30 @@ class ApiRoutes:
 
     # Users
     USERS_PUSH_TOKENS = "/me/push-tokens"
+    USERS_PRIVACY = "/me/privacy"
+    USERS_PROFILE = "/{user_id}/profile"  # public profile (M2) — no PHI
+
+    # People search (M2) — cross-org directory surface
+    PEOPLE_SEARCH = "/search"
+
+    # Network (M1)
+    NETWORK_INVITATIONS = "/invitations"
+    NETWORK_INVITATION_ACCEPT = "/invitations/{invitation_id}/accept"
+    NETWORK_INVITATION_IGNORE = "/invitations/{invitation_id}/ignore"
+    NETWORK_INVITATION_DETAIL = "/invitations/{invitation_id}"
+    NETWORK_CONNECTIONS = "/connections"
+    NETWORK_CONNECTION_DETAIL = "/connections/{user_id}"
+    NETWORK_CONNECTIONS_MUTUAL = "/connections/mutual/{user_id}"
+    NETWORK_BLOCKS = "/blocks"
+    NETWORK_BLOCK_DETAIL = "/blocks/{user_id}"
+    NETWORK_MUTES = "/mutes"
+    NETWORK_MUTE_DETAIL = "/mutes/{user_id}"
+    NETWORK_REPORTS = "/reports"
+
+    # Notifications (M1)
+    NOTIFICATIONS_LIST = ""
+    NOTIFICATIONS_READ = "/read"
+    NOTIFICATIONS_UNREAD_COUNT = "/unread-count"
 
     # Conversations
     CONVERSATIONS_LIST = ""

@@ -5,7 +5,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.core.enums import OrgRole, OrgStatus, PracticeType
+from app.core.enums import (
+    DirectoryVisibility,
+    ExternalDmPolicy,
+    OrgRole,
+    OrgStatus,
+    PracticeType,
+)
 from app.schemas.common import ORMModel
 
 
@@ -42,6 +48,20 @@ class OrgApproveIn(BaseModel):
 
 class OrgRejectIn(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
+
+
+class OrgNetworkingSettingsIn(BaseModel):
+    """Partial update — only supplied fields change (admin kill switch + policy)."""
+
+    external_networking_enabled: bool | None = None
+    external_dm_policy: ExternalDmPolicy | None = None
+    directory_visibility: DirectoryVisibility | None = None
+
+
+class OrgNetworkingSettingsOut(ORMModel):
+    external_networking_enabled: bool
+    external_dm_policy: ExternalDmPolicy
+    directory_visibility: DirectoryVisibility
 
 
 class MemberOut(BaseModel):

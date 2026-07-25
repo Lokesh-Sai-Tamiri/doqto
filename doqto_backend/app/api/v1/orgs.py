@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import RATE_LIMIT_READS_PER_MINUTE
 from app.core.dependencies import get_current_user, require_org_admin, require_org_member
+from app.core.enums import AuditAction
 from app.core.rate_limit import enforce_rate_limit
 from app.core.redis_keys import presence_key
 from app.core.routes import ApiRoutes
@@ -16,7 +17,15 @@ from app.db.postgres import get_db
 from app.db.redis import get_redis
 from app.models import OrgMember, Organization, User
 from app.schemas.common import OkResponse
-from app.schemas.organization import MemberOut, OrgCreateIn, OrgJoinIn, OrgOut
+from app.schemas.organization import (
+    MemberOut,
+    OrgCreateIn,
+    OrgJoinIn,
+    OrgNetworkingSettingsIn,
+    OrgNetworkingSettingsOut,
+    OrgOut,
+)
+from app.services.audit_service import AuditService
 from app.services.file_service import FileService
 from app.services.org_service import OrgError, OrgService
 
@@ -138,6 +147,43 @@ async def remove_member(
     except OrgError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     return OkResponse()
+
+
+@router.patch(ApiRoutes.ORGS_NETWORKING_SETTINGS, response_model=OrgNetworkingSettingsOut)
+async def update_networking_settings(
+    org_id: uuid.UUID,
+    body: OrgNetworkingSettingsIn,
+    request: Request,
+    admin: OrgMember = Depends(require_org_admin),
+    db: AsyncSession = Depends(get_db),
+) -> OrgNetworkingSettingsOut:
+    """Org networking kill switch + policy (admin only, audited)."""
+    org = await db.scalar(select(Organization).where(Organization.id == org_id))
+    if org is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="org_not_found")
+    changes: dict[str, str | bool] = {}
+    if body.external_networking_enabled is not None:
+        org.external_networking_enabled = body.external_networking_enabled
+        changes["external_networking_enabled"] = body.external_networking_enabled
+    if body.external_dm_policy is not None:
+        org.external_dm_policy = body.external_dm_policy
+        changes["external_dm_policy"] = body.external_dm_policy.value
+    if body.directory_visibility is not None:
+        org.directory_visibility = body.directory_visibility
+        changes["directory_visibility"] = body.directory_visibility.value
+    if changes:
+        await AuditService.log_request(
+            request,
+            user_id=admin.user_id,
+            action=AuditAction.ORG_POLICY_CHANGED,
+            resource_type="organization",
+            resource_id=org_id,
+            db=db,
+            metadata=changes,
+        )
+        await db.commit()
+        await db.refresh(org)
+    return OrgNetworkingSettingsOut.model_validate(org)
 
 
 @router.get(ApiRoutes.ORGS_INVITE_CODE)

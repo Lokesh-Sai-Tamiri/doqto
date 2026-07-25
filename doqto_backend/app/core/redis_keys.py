@@ -43,6 +43,21 @@ def rate_limit_key(user_id: UUID | str, endpoint: str) -> str:
     return f"rate_limit:{user_id}:{endpoint}"
 
 
+def first_degree_key(user_id: UUID | str) -> str:
+    """Set of a user's first-degree connection ids (networking graph, M1)."""
+    return f"net:fd:{user_id}"
+
+
+def second_degree_key(user_id: UUID | str) -> str:
+    """Cached second-degree connection ids (computed on demand, TTL'd — M1)."""
+    return f"net:sd:{user_id}"
+
+
+def org_policy_key(org_id: UUID | str) -> str:
+    """Cached org networking policy (kill switch / DM policy — M1)."""
+    return f"org:policy:{org_id}"
+
+
 # Pub/sub channel for cross-instance WebSocket fanout.
 WS_EVENTS_CHANNEL = "ws:events"
 

@@ -1,9 +1,15 @@
-"""WebSocket fanout via Redis pub/sub.
+"""WebSocket fanout via Redis pub/sub — user-scoped registry (A1).
 
 Every publish goes through Redis so delivery works across replicas/workers;
 each instance's subscriber task delivers to its locally-connected sockets.
-Events are conversation-scoped (explicit recipient list) except presence,
-which is legitimately org-wide.
+Events are recipient-scoped (explicit user-id list) except presence, which is
+legitimately org-wide and carries a `{"org_id": ...}` recipients marker.
+
+Envelope shape (new): {"type", "data", "recipients"} where recipients is
+either a list of user-id strings OR {"org_id": "..."}.
+For one release deliver_local also tolerates the legacy shape
+{"org_id", "type", "data", "recipients"} from pre-A1 instances during a
+rolling deploy (mirrors the undecryptable-envelope guard).
 """
 
 from __future__ import annotations
@@ -37,51 +43,51 @@ def decode_envelope(data: str) -> dict:
 
 class WsManager:
     def __init__(self) -> None:
-        self._by_org: dict[uuid.UUID, dict[uuid.UUID, set[WebSocket]]] = defaultdict(
-            lambda: defaultdict(set)
-        )
+        self._by_user: dict[uuid.UUID, set[WebSocket]] = defaultdict(set)
+        # Snapshot of each connected user's active org ids, taken at connect —
+        # used only to route org-wide (presence) broadcasts.
+        self._orgs_by_user: dict[uuid.UUID, frozenset[uuid.UUID]] = {}
         self._lock = asyncio.Lock()
 
-    async def connect(self, org_id: uuid.UUID, user_id: uuid.UUID, ws: WebSocket) -> None:
+    async def connect(
+        self, user_id: uuid.UUID, ws: WebSocket, org_ids: frozenset[uuid.UUID]
+    ) -> None:
         async with self._lock:
-            self._by_org[org_id][user_id].add(ws)
+            self._by_user[user_id].add(ws)
+            self._orgs_by_user[user_id] = org_ids
 
-    async def disconnect(self, org_id: uuid.UUID, user_id: uuid.UUID, ws: WebSocket) -> None:
+    async def disconnect(self, user_id: uuid.UUID, ws: WebSocket) -> None:
         async with self._lock:
-            sockets = self._by_org.get(org_id, {}).get(user_id)
+            sockets = self._by_user.get(user_id)
             if sockets is not None:
                 sockets.discard(ws)
                 if not sockets:
-                    self._by_org[org_id].pop(user_id, None)
-                if not self._by_org[org_id]:
-                    self._by_org.pop(org_id, None)
+                    self._by_user.pop(user_id, None)
+                    self._orgs_by_user.pop(user_id, None)
 
     # ---- publishing (any instance) -------------------------------------
 
     async def publish_to_users(
         self,
-        org_id: uuid.UUID,
         user_ids: list[uuid.UUID],
         event: WsEventServer,
         data: dict,
     ) -> None:
         """Deliver only to the given users — the normal, conversation-scoped path."""
-        await self._publish(org_id, event, data, recipients=[str(u) for u in user_ids])
+        await self._publish(event, data, recipients=[str(u) for u in user_ids])
 
     async def publish_org(self, org_id: uuid.UUID, event: WsEventServer, data: dict) -> None:
         """Org-wide delivery — presence only."""
-        await self._publish(org_id, event, data, recipients=None)
+        await self._publish(event, data, recipients={"org_id": str(org_id)})
 
     async def _publish(
         self,
-        org_id: uuid.UUID,
         event: WsEventServer,
         data: dict,
         *,
-        recipients: list[str] | None,
+        recipients: list[str] | dict,
     ) -> None:
         envelope = {
-            "org_id": str(org_id),
             "type": event.value,
             "data": data,
             "recipients": recipients,
@@ -92,19 +98,32 @@ class WsManager:
     # ---- delivery (subscriber → local sockets) -------------------------
 
     async def deliver_local(self, envelope: dict) -> None:
-        org_id = uuid.UUID(envelope["org_id"])
-        recipients: list[str] | None = envelope.get("recipients")
+        recipients = envelope.get("recipients")
         payload = {"type": envelope["type"], "data": envelope["data"]}
+
+        # Normalize old + new shapes into (user list | org broadcast).
+        org_id: uuid.UUID | None = None
+        user_ids: list[uuid.UUID] | None = None
+        if isinstance(recipients, dict):  # new org-broadcast marker
+            org_id = uuid.UUID(recipients["org_id"])
+        elif isinstance(recipients, list):  # user list (new AND legacy shapes)
+            user_ids = [uuid.UUID(u) for u in recipients]
+        elif recipients is None and "org_id" in envelope:
+            # Legacy org broadcast: top-level org_id, recipients=None.
+            org_id = uuid.UUID(envelope["org_id"])
+        else:
+            logger.warning("dropping ws envelope with unrecognized recipients shape")
+            return
 
         sockets: list[WebSocket] = []
         async with self._lock:
-            users = self._by_org.get(org_id, {})
-            if recipients is None:
-                for user_sockets in users.values():
-                    sockets.extend(user_sockets)
+            if user_ids is not None:
+                for uid in user_ids:
+                    sockets.extend(self._by_user.get(uid, set()))
             else:
-                for uid in recipients:
-                    sockets.extend(users.get(uuid.UUID(uid), set()))
+                for uid, orgs in self._orgs_by_user.items():
+                    if org_id in orgs:
+                        sockets.extend(self._by_user.get(uid, set()))
         for ws in sockets:
             try:
                 await ws.send_json(payload)

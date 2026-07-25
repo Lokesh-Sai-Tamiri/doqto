@@ -104,7 +104,7 @@ async def upload_file(
 
     out = MessageService.to_out(msg)
     await ws_manager.publish_to_users(
-        conv.org_id, recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
+        recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
     )
     # Presence-gated push for members without a live WS (fire-and-forget).
     PushService.notify_new_message(
@@ -172,7 +172,7 @@ async def upload_voice_note(
 
     out = MessageService.to_out(msg)
     await ws_manager.publish_to_users(
-        conv.org_id, recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
+        recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
     )
     # Presence-gated push for members without a live WS (fire-and-forget).
     PushService.notify_new_message(
@@ -187,7 +187,6 @@ async def upload_voice_note(
             msg.transcript_status = TranscriptStatus.COMPLETED
             await db.commit()
             await ws_manager.publish_to_users(
-                conv.org_id,
                 recipients,
                 WsEventServer.TRANSCRIPT_READY,
                 {"message_id": str(msg.id), "transcript": server_transcript},
@@ -212,7 +211,6 @@ async def mark_read(
             conversation_id=msg.conversation_id, db=db
         )
         await ws_manager.publish_to_users(
-            conv.org_id,
             recipients,
             WsEventServer.MESSAGE_READ,
             {

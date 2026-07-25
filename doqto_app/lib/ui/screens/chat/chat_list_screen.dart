@@ -515,6 +515,10 @@ class _ChatRow extends ConsumerWidget {
         break;
       case MessageType.system:
         return c.lastMessagePreview ?? '';
+      case MessageType.unknown:
+        // Tolerant fallback (A5): render like text, never crash.
+        body = c.lastMessagePreview ?? '';
+        break;
     }
     if (body.isEmpty) return 'Tap to start chatting';
     if (isMine) return 'You: $body';

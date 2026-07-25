@@ -27,6 +27,7 @@ class ApiRoutes:
     ORGS_MEMBERS = "/{org_id}/members"
     ORGS_MEMBER_DETAIL = "/{org_id}/members/{user_id}"
     ORGS_INVITE_CODE = "/{org_id}/invite-code"
+    ORGS_NETWORKING_SETTINGS = "/{org_id}/settings/networking"
 
     # Users
     USERS_PUSH_TOKENS = "/me/push-tokens"
@@ -53,4 +54,5 @@ class ApiRoutes:
     ADMIN_REJECT_ORG = "/orgs/{org_id}/reject"
 
     # WebSocket
-    WS_ORG = "/ws/{org_id}"
+    WS = "/ws"  # user-scoped socket (A1)
+    WS_ORG = "/ws/{org_id}"  # legacy alias — path org ignored, one release only

@@ -35,6 +35,28 @@ class ConversationType(StrEnum):
     GROUP = "group"
 
 
+class ConversationAccess(StrEnum):
+    OPEN = "open"
+    PENDING_REQUEST = "pending_request"
+    DECLINED = "declined"
+
+
+class ExternalDmPolicy(StrEnum):
+    """Backend-only org admin policy — not mirrored in Dart (no client wire use)."""
+
+    DISABLED = "disabled"
+    CONNECTIONS_ONLY = "connections_only"
+    CONNECTIONS_AND_REQUESTS = "connections_and_requests"
+
+
+class DirectoryVisibility(StrEnum):
+    """Backend-only org admin policy — not mirrored in Dart (no client wire use)."""
+
+    ORG_ONLY = "org_only"
+    NETWORK = "network"
+    PUBLIC = "public"
+
+
 class MessageType(StrEnum):
     TEXT = "text"
     VOICE_NOTE = "voice_note"
@@ -95,6 +117,7 @@ class AuditAction(StrEnum):
     ORG_CREATED = "org_created"
     ORG_JOINED = "org_joined"
     ORG_VERIFIED = "org_verified"
+    ORG_POLICY_CHANGED = "org_policy_changed"
     MEMBER_REMOVED = "member_removed"
     CONVERSATION_CREATED = "conversation_created"
     CONVERSATION_ACCESSED = "conversation_accessed"

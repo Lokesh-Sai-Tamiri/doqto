@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
 
@@ -19,8 +20,10 @@ from app.core.redis_keys import presence_key
 from app.core.security import TokenError, decode_token
 from app.db.postgres import SessionLocal
 from app.db.redis import get_redis
-from app.models import OrgMember
+from app.models import OrgMember, User
 from app.services.message_service import MessageService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -44,20 +47,25 @@ async def _cached_member_ids(conversation_id: str) -> list[uuid.UUID]:
     return ids
 
 
-async def _authorize(token: str, org_id: uuid.UUID) -> uuid.UUID:
+async def _authorize(token: str) -> tuple[uuid.UUID, frozenset[uuid.UUID]]:
+    """User-scoped auth (A1): the socket belongs to a user, not an org.
+
+    Returns (user_id, active org ids) — the org snapshot routes org-wide
+    (presence) broadcasts for this connection's lifetime."""
     payload = decode_token(token, JwtTokenType.ACCESS)
     user_id = uuid.UUID(payload["sub"])
     async with SessionLocal() as db:
-        member = await db.scalar(
-            select(OrgMember).where(OrgMember.org_id == org_id, OrgMember.user_id == user_id)
+        user = await db.scalar(select(User).where(User.id == user_id))
+        if user is None:
+            raise TokenError("user_not_found")
+        rows = await db.execute(
+            select(OrgMember.org_id).where(OrgMember.user_id == user_id)
         )
-    if member is None:
-        raise TokenError("not_an_org_member")
-    return user_id
+        org_ids = frozenset(rows.scalars().all())
+    return user_id, org_ids
 
 
-@router.websocket("/ws/{org_id}")
-async def websocket_endpoint(websocket: WebSocket, org_id: uuid.UUID) -> None:
+async def _run_socket(websocket: WebSocket) -> None:
     # Auth-frame only: the token must arrive in a first `auth` frame.
     # A `?token=` query string is never read (query strings end up in
     # proxy/access logs — M1).
@@ -66,18 +74,21 @@ async def websocket_endpoint(websocket: WebSocket, org_id: uuid.UUID) -> None:
         first = await asyncio.wait_for(websocket.receive_json(), timeout=5)
         if first.get("type") != "auth" or not isinstance(first.get("token"), str):
             raise TokenError("missing_auth_frame")
-        user_id = await _authorize(first["token"], org_id)
+        user_id, org_ids = await _authorize(first["token"])
     except Exception:
         await websocket.close(code=4401)
         return
-    await ws_manager.connect(org_id, user_id, websocket)
+    await ws_manager.connect(user_id, websocket, org_ids)
     redis: Redis = await get_redis()
     await redis.setex(presence_key(user_id), PRESENCE_ONLINE_TTL_SECONDS, PresenceStatus.ONLINE.value)
-    await ws_manager.publish_org(
-        org_id,
-        WsEventServer.PRESENCE_UPDATE,
-        {"user_id": str(user_id), "status": PresenceStatus.ONLINE.value},
-    )
+    # One presence broadcast per org the user belongs to (org-wide is
+    # legitimate for presence only).
+    for org_id in org_ids:
+        await ws_manager.publish_org(
+            org_id,
+            WsEventServer.PRESENCE_UPDATE,
+            {"user_id": str(user_id), "status": PresenceStatus.ONLINE.value},
+        )
 
     try:
         while True:
@@ -117,7 +128,6 @@ async def websocket_endpoint(websocket: WebSocket, org_id: uuid.UUID) -> None:
                 if user_id not in recipients:
                     continue  # not a member: drop, don't leak typing signals
                 await ws_manager.publish_to_users(
-                    org_id,
                     recipients,
                     event,
                     {"conversation_id": conv_id, "user_id": str(user_id)},
@@ -125,10 +135,25 @@ async def websocket_endpoint(websocket: WebSocket, org_id: uuid.UUID) -> None:
     except WebSocketDisconnect:
         pass
     finally:
-        await ws_manager.disconnect(org_id, user_id, websocket)
+        await ws_manager.disconnect(user_id, websocket)
         await redis.setex(presence_key(user_id), PRESENCE_AWAY_TTL_SECONDS, PresenceStatus.AWAY.value)
-        await ws_manager.publish_org(
-            org_id,
-            WsEventServer.PRESENCE_UPDATE,
-            {"user_id": str(user_id), "status": PresenceStatus.AWAY.value},
-        )
+        for org_id in org_ids:
+            await ws_manager.publish_org(
+                org_id,
+                WsEventServer.PRESENCE_UPDATE,
+                {"user_id": str(user_id), "status": PresenceStatus.AWAY.value},
+            )
+
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket) -> None:
+    """User-scoped socket (A1): any active user, org membership optional."""
+    await _run_socket(websocket)
+
+
+@router.websocket("/ws/{org_id}")
+async def websocket_endpoint_org_alias(websocket: WebSocket, org_id: uuid.UUID) -> None:
+    """Legacy alias for one release: the path org is ignored for auth/routing
+    (logged only) — same user-scoped registry, presence for ALL the user's orgs."""
+    logger.debug("legacy /ws/%s alias connection", org_id)
+    await _run_socket(websocket)

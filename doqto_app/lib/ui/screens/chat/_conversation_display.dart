@@ -35,7 +35,10 @@ ConversationDisplay conversationDisplay({
   required String? meId,
   required int fallbackColorIndex,
 }) {
-  if (c.type == ConversationType.direct) {
+  // Tolerant (A5): anything that isn't explicitly a group — including
+  // ConversationType.unknown — renders through the direct path, which has
+  // safe fallbacks (server displayName → 'Direct chat').
+  if (c.type != ConversationType.group) {
     String? otherId;
     for (final id in c.memberIds) {
       if (id != meId) {

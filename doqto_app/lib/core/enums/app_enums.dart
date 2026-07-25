@@ -13,10 +13,10 @@ enum UserRole {
         UserRole.superAdmin => 'super_admin',
       };
 
+  // Tolerant (A5): unknown wire values map to the least-privileged role.
   static UserRole fromWire(String s) => switch (s) {
-        'doctor' => UserRole.doctor,
         'super_admin' => UserRole.superAdmin,
-        _ => throw ArgumentError('Unknown UserRole: $s'),
+        _ => UserRole.doctor,
       };
 }
 
@@ -31,11 +31,12 @@ enum OrgStatus {
         OrgStatus.suspended => 'suspended',
       };
 
+  // Tolerant (A5): unknown wire values fail safe to `pending`
+  // (benign "verification in progress" state, never grants access).
   static OrgStatus fromWire(String s) => switch (s) {
-        'pending' => OrgStatus.pending,
         'active' => OrgStatus.active,
         'suspended' => OrgStatus.suspended,
-        _ => throw ArgumentError('Unknown OrgStatus: $s'),
+        _ => OrgStatus.pending,
       };
 }
 
@@ -48,10 +49,10 @@ enum OrgRole {
         OrgRole.doctor => 'doctor',
       };
 
+  // Tolerant (A5): unknown wire values map to the least-privileged role.
   static OrgRole fromWire(String s) => switch (s) {
         'admin' => OrgRole.admin,
-        'doctor' => OrgRole.doctor,
-        _ => throw ArgumentError('Unknown OrgRole: $s'),
+        _ => OrgRole.doctor,
       };
 }
 
@@ -69,17 +70,22 @@ enum PracticeType {
 
 enum ConversationType {
   @JsonValue('direct') direct,
-  @JsonValue('group') group;
+  @JsonValue('group') group,
+
+  /// Tolerant fallback for wire values this client doesn't know yet (A5).
+  /// Consumers must treat it like [direct] (safest render path) — never crash.
+  @JsonValue('unknown') unknown;
 
   String get wire => switch (this) {
         ConversationType.direct => 'direct',
         ConversationType.group => 'group',
+        ConversationType.unknown => 'unknown',
       };
 
   static ConversationType fromWire(String s) => switch (s) {
         'direct' => ConversationType.direct,
         'group' => ConversationType.group,
-        _ => throw ArgumentError('Unknown ConversationType: $s'),
+        _ => ConversationType.unknown,
       };
 }
 
@@ -88,7 +94,11 @@ enum MessageType {
   @JsonValue('voice_note') voiceNote,
   @JsonValue('image') image,
   @JsonValue('file') file,
-  @JsonValue('system') system;
+  @JsonValue('system') system,
+
+  /// Tolerant fallback for wire values this client doesn't know yet (A5).
+  /// Consumers must treat it like [text] (generic bubble) — never crash.
+  @JsonValue('unknown') unknown;
 
   String get wire => switch (this) {
         MessageType.text => 'text',
@@ -96,6 +106,7 @@ enum MessageType {
         MessageType.image => 'image',
         MessageType.file => 'file',
         MessageType.system => 'system',
+        MessageType.unknown => 'unknown',
       };
 
   static MessageType fromWire(String s) => switch (s) {
@@ -104,7 +115,33 @@ enum MessageType {
         'image' => MessageType.image,
         'file' => MessageType.file,
         'system' => MessageType.system,
-        _ => throw ArgumentError('Unknown MessageType: $s'),
+        _ => MessageType.unknown,
+      };
+}
+
+/// Access tier of a conversation (networking layer, plan M0/A5).
+/// `open` = normal thread; `pending_request` = message-request tier;
+/// `declined` = recipient declined the request.
+enum ConversationAccess {
+  @JsonValue('open') open,
+  @JsonValue('pending_request') pendingRequest,
+  @JsonValue('declined') declined,
+
+  /// Tolerant fallback (A5) — consumers must treat it like [open].
+  @JsonValue('unknown') unknown;
+
+  String get wire => switch (this) {
+        ConversationAccess.open => 'open',
+        ConversationAccess.pendingRequest => 'pending_request',
+        ConversationAccess.declined => 'declined',
+        ConversationAccess.unknown => 'unknown',
+      };
+
+  static ConversationAccess fromWire(String s) => switch (s) {
+        'open' => ConversationAccess.open,
+        'pending_request' => ConversationAccess.pendingRequest,
+        'declined' => ConversationAccess.declined,
+        _ => ConversationAccess.unknown,
       };
 }
 

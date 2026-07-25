@@ -28,6 +28,10 @@ SHARED = {
     "OrgRole",
     "PracticeType",
     "ConversationType",
+    # ConversationAccess reaches the client wire from M3 (ConversationOut.access)
+    # so it is gated. ExternalDmPolicy / DirectoryVisibility are backend-only
+    # org-admin policy enums — deliberately NOT gated, no Dart mirror needed.
+    "ConversationAccess",
     "MessageType",
     "TranscriptStatus",
     "WsEventServer",
@@ -117,7 +121,11 @@ def parse_dart(path: Path) -> dict[str, set[str]]:
                     break
         switch_body = body[sstart + 1 : send]
         arms = re.findall(r"=>\s*'([^']+)'", switch_body)
-        out[name] = set(arms)
+        # A5 enum tolerance: Dart enums carry a client-only `unknown` sentinel
+        # that fromWire falls back to for unrecognized wire values. The server
+        # never emits 'unknown', so it is not part of the wire contract and is
+        # excluded from the parity comparison.
+        out[name] = set(arms) - {"unknown"}
     return out
 
 

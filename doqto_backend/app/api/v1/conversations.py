@@ -259,7 +259,6 @@ async def send_message(
     recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
     await db.commit()  # flush before broadcasting so receivers can query
     await ws_manager.publish_to_users(
-        conv.org_id,
         recipients,
         WsEventServer.NEW_MESSAGE,
         out.model_dump(mode="json"),
@@ -294,7 +293,6 @@ async def mark_conversation_read(
     await db.commit()
     # One conversation-level event: senders flip all their ticks to read.
     await ws_manager.publish_to_users(
-        conv.org_id,
         recipients,
         WsEventServer.MESSAGE_READ,
         {"conversation_id": str(conversation_id), "user_id": str(user.id)},
@@ -318,7 +316,6 @@ async def mark_conversation_delivered(
         recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
         await db.commit()
         await ws_manager.publish_to_users(
-            conv.org_id,
             recipients,
             WsEventServer.MESSAGE_DELIVERED,
             {"conversation_id": str(conversation_id), "user_id": str(user.id)},
@@ -362,7 +359,6 @@ async def add_members(
         recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
         for uid in added:
             await ws_manager.publish_to_users(
-                conv.org_id,
                 recipients,
                 WsEventServer.MEMBER_ADDED,
                 {"conversation_id": str(conversation_id), "user_id": str(uid)},
@@ -408,7 +404,6 @@ async def remove_or_leave(
     # Remaining members + the removed user (they need to see themselves leave).
     recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
     await ws_manager.publish_to_users(
-        conv.org_id,
         [*recipients, user_id],
         WsEventServer.MEMBER_REMOVED,
         {"conversation_id": str(conversation_id), "user_id": str(user_id)},
@@ -447,6 +442,6 @@ async def update_settings(
     # Broadcast as NEW_MESSAGE: clients already insert it into the open thread and
     # refresh the conversation list (which refetches disappear_after_sec).
     await ws_manager.publish_to_users(
-        conv.org_id, recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
+        recipients, WsEventServer.NEW_MESSAGE, out.model_dump(mode="json")
     )
     return OkResponse()

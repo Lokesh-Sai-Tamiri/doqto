@@ -52,6 +52,38 @@
 | `direct` | 1:1 between two doctors |
 | `group` | 3+ members, has name |
 
+## ConversationAccess
+
+Networking tier of a conversation (M0 substrate; wired to clients from M3/M4).
+
+| Wire value | Meaning |
+|---|---|
+| `open` | Normal conversation — both sides message freely |
+| `pending_request` | Message request awaiting recipient accept |
+| `declined` | Recipient declined the request |
+
+## ExternalDmPolicy (backend-only)
+
+Org admin policy — never sent to the Flutter client, so it is deliberately NOT
+in the parity-check SHARED set and has no Dart mirror.
+
+| Wire value | Meaning |
+|---|---|
+| `disabled` | Members cannot DM outside the org |
+| `connections_only` | External DMs only between connected users |
+| `connections_and_requests` | Connections DM freely; others via message request |
+
+## DirectoryVisibility (backend-only)
+
+Org admin policy — never sent to the Flutter client, so it is deliberately NOT
+in the parity-check SHARED set and has no Dart mirror.
+
+| Wire value | Meaning |
+|---|---|
+| `org_only` | Members discoverable inside their org only |
+| `network` | Members discoverable by the professional network |
+| `public` | Members discoverable platform-wide |
+
 ## MessageType
 
 | Wire value | Meaning |
@@ -141,6 +173,7 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `org_created` | Organization created |
 | `org_joined` | User joined an organization |
 | `org_verified` | Super-admin verified an org |
+| `org_policy_changed` | Org admin changed networking policy (kill switch / DM policy / directory visibility) |
 | `member_removed` | Admin removed a doctor |
 | `conversation_created` | Direct/group created |
 | `group_member_added` | Doctor added to group |

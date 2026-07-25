@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import MESSAGES_PAGE_SIZE, PURGE_CONTENT_GRACE_SEC
@@ -12,6 +13,7 @@ from app.core.security import decrypt_message, encrypt_message
 from app.models import (
     Conversation,
     ConversationMember,
+    DirectConversationKey,
     Message,
     MessageReceipt,
     User,
@@ -44,21 +46,14 @@ class MessageService:
         if conv_type == ConversationType.DIRECT and len(full_member_ids) != 2:
             raise MessageError("direct_requires_two_distinct")
 
-        # Reuse existing direct conversation if any.
+        # Direct dedup (A2): the direct_conversation_keys unique pair is the
+        # source of truth — one direct conversation per user pair, platform-wide.
+        user_lo: uuid.UUID | None = None
+        user_hi: uuid.UUID | None = None
         if conv_type == ConversationType.DIRECT:
-            subq = (
-                select(ConversationMember.conversation_id)
-                .where(ConversationMember.user_id.in_(full_member_ids))
-                .group_by(ConversationMember.conversation_id)
-                .having(func.count() == 2)
-                .subquery()
-            )
-            existing = await db.scalar(
-                select(Conversation)
-                .where(Conversation.id.in_(select(subq)))
-                .where(Conversation.type == ConversationType.DIRECT)
-                .where(Conversation.org_id == org_id)
-                .limit(1)
+            user_lo, user_hi = sorted(full_member_ids)
+            existing = await MessageService._direct_by_pair(
+                user_lo=user_lo, user_hi=user_hi, db=db
             )
             if existing is not None:
                 return existing
@@ -71,6 +66,24 @@ class MessageService:
         )
         db.add(conv)
         await db.flush()
+        if conv_type == ConversationType.DIRECT:
+            db.add(
+                DirectConversationKey(
+                    conversation_id=conv.id, user_lo=user_lo, user_hi=user_hi
+                )
+            )
+            try:
+                await db.flush()
+            except IntegrityError:
+                # Lost a concurrent-create race: the unique (user_lo, user_hi)
+                # violation means the pair's conversation exists — re-select it.
+                await db.rollback()
+                existing = await MessageService._direct_by_pair(
+                    user_lo=user_lo, user_hi=user_hi, db=db
+                )
+                if existing is None:
+                    raise MessageError("direct_conversation_conflict")
+                return existing
         for uid in full_member_ids:
             db.add(ConversationMember(conversation_id=conv.id, user_id=uid))
         await AuditService.log(
@@ -81,6 +94,23 @@ class MessageService:
             resource_id=conv.id,
         )
         return conv
+
+    @staticmethod
+    async def _direct_by_pair(
+        *, user_lo: uuid.UUID, user_hi: uuid.UUID, db: AsyncSession
+    ) -> Conversation | None:
+        """The pair's direct conversation via its dedup key, if any."""
+        return await db.scalar(
+            select(Conversation)
+            .join(
+                DirectConversationKey,
+                DirectConversationKey.conversation_id == Conversation.id,
+            )
+            .where(
+                DirectConversationKey.user_lo == user_lo,
+                DirectConversationKey.user_hi == user_hi,
+            )
+        )
 
     @staticmethod
     async def list_for_user(*, user_id: uuid.UUID, db: AsyncSession) -> list[Conversation]:

@@ -17,6 +17,13 @@ class Conversation {
   final MessageType? lastMessageType;
   final int unreadCount;
 
+  /// Networking (M0, additive — nothing consumes these yet).
+  /// null/absent = legacy payload; treat as an open (focused) conversation.
+  final ConversationAccess? access;
+
+  /// Set when this conversation backs a network group (M5). null otherwise.
+  final String? groupId;
+
   const Conversation({
     required this.id,
     required this.orgId,
@@ -33,6 +40,8 @@ class Conversation {
     required this.lastMessageSenderId,
     required this.lastMessageType,
     required this.unreadCount,
+    this.access,
+    this.groupId,
   });
 
   factory Conversation.fromJson(Map<String, dynamic> j) => Conversation(
@@ -55,6 +64,34 @@ class Conversation {
             ? MessageType.fromWire(j['last_message_type'] as String)
             : null,
         unreadCount: (j['unread_count'] ?? 0) as int,
+        access: j['access'] != null
+            ? ConversationAccess.fromWire(j['access'] as String)
+            : null,
+        groupId: j['group_id'] as String?,
+      );
+
+  Conversation copyWith({
+    ConversationAccess? access,
+    String? groupId,
+  }) =>
+      Conversation(
+        id: id,
+        orgId: orgId,
+        type: type,
+        name: name,
+        createdBy: createdBy,
+        disappearAfterSec: disappearAfterSec,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+        memberIds: memberIds,
+        displayName: displayName,
+        lastMessageAt: lastMessageAt,
+        lastMessagePreview: lastMessagePreview,
+        lastMessageSenderId: lastMessageSenderId,
+        lastMessageType: lastMessageType,
+        unreadCount: unreadCount,
+        access: access ?? this.access,
+        groupId: groupId ?? this.groupId,
       );
 
   /// Round-trips through [Conversation.fromJson] — used by the offline cache.
@@ -74,5 +111,7 @@ class Conversation {
         'last_message_sender_id': lastMessageSenderId,
         'last_message_type': lastMessageType?.wire,
         'unread_count': unreadCount,
+        'access': access?.wire,
+        'group_id': groupId,
       };
 }

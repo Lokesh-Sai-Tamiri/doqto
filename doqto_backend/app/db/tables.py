@@ -7,6 +7,7 @@ class Tables:
     ORG_MEMBERS = "org_members"
     CONVERSATIONS = "conversations"
     CONVERSATION_MEMBERS = "conversation_members"
+    DIRECT_CONVERSATION_KEYS = "direct_conversation_keys"
     MESSAGES = "messages"
     MESSAGE_RECEIPTS = "message_receipts"
     AUDIT_LOGS = "audit_logs"

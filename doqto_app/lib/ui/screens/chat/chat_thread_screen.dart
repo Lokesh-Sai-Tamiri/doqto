@@ -40,7 +40,18 @@ import 'voice_recorder_panel.dart';
 
 class ChatThreadScreen extends ConsumerStatefulWidget {
   final String conversationId;
-  const ChatThreadScreen({super.key, required this.conversationId});
+
+  /// When false, the screen renders without its own AppBar — used when the
+  /// thread is embedded inside another screen's segment (e.g. a group detail's
+  /// Chat tab, which already shows the group header). All message plumbing
+  /// (MessagesNotifier, composer, receipts) is reused unchanged.
+  final bool showAppBar;
+
+  const ChatThreadScreen({
+    super.key,
+    required this.conversationId,
+    this.showAppBar = true,
+  });
 
   @override
   ConsumerState<ChatThreadScreen> createState() => _ChatThreadScreenState();
@@ -630,7 +641,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             RelationshipState.connected;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: !widget.showAppBar
+          ? null
+          : AppBar(
         titleSpacing: 0,
         title: display == null
             ? const Text('Chat')

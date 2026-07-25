@@ -11,6 +11,8 @@ import '../../ui/screens/chat/chat_details_screen.dart';
 import '../../ui/screens/chat/chat_list_screen.dart';
 import '../../ui/screens/chat/chat_thread_screen.dart';
 import '../../ui/screens/chat/create_group_screen.dart';
+import '../../ui/screens/groups/create_group_flow_screen.dart';
+import '../../ui/screens/groups/group_detail_screen.dart';
 import '../../ui/screens/groups/groups_tab_screen.dart';
 import '../../ui/screens/home/main_shell.dart';
 import '../../ui/screens/my_org/my_org_screen.dart';
@@ -53,8 +55,13 @@ class AppRoutes {
   static const networkConnections = '/network/connections';
   // People search (M3) — pushed full-screen over the shell.
   static const peopleSearch = '/people/search';
-  // Groups branch placeholder (real content is M5).
+  // Groups branch (M5). Detail/create/requests live INSIDE the branch so tab
+  // state is preserved. `/groups/create` MUST precede `/groups/:id` (the colon
+  // segment would otherwise swallow "create").
   static const groups = '/groups';
+  static const groupsCreate = '/groups/create';
+  static String group(String id) => '/groups/$id';
+  static String groupRequests(String id) => '/groups/$id/requests';
   static const settings = '/settings';
   static const profile = '/profile';
   static const profileEdit = '/profile/edit';
@@ -175,13 +182,31 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Branch 2 — Groups (placeholder; real content is M5).
+          // Branch 2 — Groups (M5). Detail/create/requests live inside the
+          // branch so tab state is preserved. `/groups/create` precedes
+          // `/groups/:id`, and `/groups/:id/requests` precedes `/groups/:id`.
           StatefulShellBranch(
             navigatorKey: _groupsNavKey,
             routes: [
               GoRoute(
                 path: AppRoutes.groups,
                 builder: (_, s) => const GroupsTabScreen(),
+              ),
+              GoRoute(
+                path: AppRoutes.groupsCreate,
+                builder: (_, s) => const CreateGroupFlowScreen(),
+              ),
+              GoRoute(
+                path: '/groups/:id/requests',
+                builder: (_, state) => GroupDetailScreen(
+                  groupId: state.pathParameters['id']!,
+                  initialSegment: 3,
+                ),
+              ),
+              GoRoute(
+                path: '/groups/:id',
+                builder: (_, state) =>
+                    GroupDetailScreen(groupId: state.pathParameters['id']!),
               ),
             ],
           ),

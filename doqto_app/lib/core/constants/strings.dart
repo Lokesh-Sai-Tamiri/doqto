@@ -160,6 +160,58 @@ class Strings {
   static const String groupJoinRequestSentToast = 'Join request sent';
   static const String groupJoinedToast = 'You joined the group';
   static const String groupLeftToast = 'You left the group';
+  // -- Groups tab (M5)
+  static const String groupsMyGroups = 'My groups';
+  static const String groupsDiscover = 'Discover';
+  static const String groupsCreate = 'Create group';
+  static const String groupsChatLabel = 'Chat';
+  static const String groupsOpenChat = 'Open chat';
+  static const String groupsView = 'View';
+  static const String groupsAdmins = 'Admins';
+  static const String groupsInviteOnlyCaption =
+      'This group is invite only. You need an invitation to join.';
+  static const String groupsWithdrawRequest = 'Withdraw request';
+  static const String groupsWithdrawConfirm = 'Withdraw your join request?';
+  static const String groupsSearchHint = 'Search groups by name…';
+  static const String groupsNoRequests = 'No pending join requests';
+  static const String groupsNoMembers = 'No members yet';
+  static const String groupsNoDiscover = 'No groups found. Try a different name.';
+  static const String groupsCreatedLabel = 'Created';
+  static const String groupsRulesLabel = 'Rules';
+  static const String groupsMemberMessagingLabel = 'Member messaging';
+  static const String groupsAdminOnly = 'Admins only';
+  static const String groupsPolicyOpen = 'Anyone can join instantly.';
+  static const String groupsPolicyRequest = 'People request to join; admins approve.';
+  static const String groupsPolicyInviteOnly = 'People join by invitation only.';
+  static const String groupsVisPublic = 'Anyone can find and see this group.';
+  static const String groupsVisPrivate =
+      'Anyone can find it, but only members see who\'s in it.';
+  static const String groupsVisSecret = 'Only members can find this group.';
+  static const String groupsDmOpen = 'Members can message each other directly.';
+  static const String groupsDmRequest =
+      'Members can send each other message requests.';
+  static const String groupsDmDisabled =
+      'Members cannot message each other from this group.';
+  static const String groupsApprove = 'Approve';
+  static const String groupsReject = 'Reject';
+  // -- Create-group flow (M5)
+  static const String groupsStepIdentity = 'Identity';
+  static const String groupsStepAccess = 'Access';
+  static const String groupsStepInvite = 'Invite';
+  static const String groupsNameLabel = 'Group name';
+  static const String groupsDescriptionLabel = 'Description';
+  static const String groupsDescriptionHint =
+      'What is this group about? (optional)';
+  static const String groupsVisibilityLabel = 'Who can find this group?';
+  static const String groupsJoinPolicyLabel = 'How do people join?';
+  static const String groupsInviteStepTitle = 'Invite colleagues';
+  static const String groupsInviteStepBody =
+      'Invite connections now, or share a link after the group is created.';
+  static const String groupsCopyLink = 'Copy invite link';
+  static const String groupsLinkCopiedToast = 'Invite link copied';
+  static const String groupsCreateCta = 'Create group';
+  static const String groupsNext = 'Next';
+  static const String groupsBack = 'Back';
   // -- Inline explanations
   static const String netExplainRequestTier =
       'Messages from people outside your network arrive as requests.';

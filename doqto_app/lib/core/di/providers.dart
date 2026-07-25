@@ -5,10 +5,12 @@ import '../../data/api/token_storage.dart';
 import '../../data/api/websocket_client.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/chat_repository.dart';
+import '../../data/repositories/groups_repository.dart';
 import '../../data/repositories/network_repository.dart';
 import '../../data/repositories/org_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../data/services/chat_cache.dart';
+import '../../data/services/groups_cache.dart';
 import '../../data/services/network_cache.dart';
 import '../../data/services/outbox.dart';
 import '../../data/services/push_token_provider.dart';
@@ -33,6 +35,10 @@ final chatRepositoryProvider = Provider<ChatRepository>(
 
 final userRepositoryProvider = Provider<UserRepository>(
   (ref) => UserRepository(ref.watch(apiClientProvider)),
+);
+
+final groupsRepositoryProvider = Provider<GroupsRepository>(
+  (ref) => GroupsRepository(ref.watch(apiClientProvider)),
 );
 
 final networkRepositoryProvider = Provider<NetworkRepository>(
@@ -62,3 +68,5 @@ final pushTokenProviderProvider =
 final chatCacheProvider = Provider<ChatCache>((ref) => ChatCache());
 
 final networkCacheProvider = Provider<NetworkCache>((ref) => NetworkCache());
+
+final groupsCacheProvider = Provider<GroupsCache>((ref) => GroupsCache());

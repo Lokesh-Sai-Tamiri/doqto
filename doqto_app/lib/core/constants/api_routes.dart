@@ -70,6 +70,35 @@ class ApiRoutes {
   static const String notificationsRead = '$apiV1/notifications/read';
   static const String notificationsUnreadCount = '$apiV1/notifications/unread-count';
 
+  // Groups (M5) — router mounted at /api/v1.
+  static const String groups = '$apiV1/groups';
+  static String group(String id) => '$apiV1/groups/$id';
+  static String groupJoin(String id) => '$apiV1/groups/$id/join';
+  static String groupJoinRequests(String id) => '$apiV1/groups/$id/join-requests';
+  static String groupJoinRequestWithdraw(String id) =>
+      '$apiV1/groups/$id/join-requests/me';
+  static String groupJoinRequestApprove(String groupId, String reqId) =>
+      '$apiV1/groups/$groupId/join-requests/$reqId/approve';
+  static String groupJoinRequestReject(String groupId, String reqId) =>
+      '$apiV1/groups/$groupId/join-requests/$reqId/reject';
+  static String groupInvites(String id) => '$apiV1/groups/$id/invites';
+  static String groupInvite(String groupId, String inviteId) =>
+      '$apiV1/groups/$groupId/invites/$inviteId';
+  static String groupInviteAccept(String groupId, String inviteId) =>
+      '$apiV1/groups/$groupId/invites/$inviteId/accept';
+  static String groupInviteDecline(String groupId, String inviteId) =>
+      '$apiV1/groups/$groupId/invites/$inviteId/decline';
+  static String groupInviteTokenAccept(String token) =>
+      '$apiV1/group-invites/$token/accept';
+  static String groupMembers(String id) => '$apiV1/groups/$id/members';
+  static String groupMember(String groupId, String userId) =>
+      '$apiV1/groups/$groupId/members/$userId';
+  static String groupMemberBan(String groupId, String userId) =>
+      '$apiV1/groups/$groupId/members/$userId/ban';
+  static String groupTransferOwnership(String id) =>
+      '$apiV1/groups/$id/transfer-ownership';
+  static const String meGroups = '$apiV1/me/groups';
+
   // Admin endpoints live in the separate Next.js admin panel — not in the mobile app.
 
   // WebSocket

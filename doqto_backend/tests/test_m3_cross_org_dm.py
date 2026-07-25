@@ -236,15 +236,18 @@ async def test_idempotent_client_message_id_one_row_same_seq(cross_org, client, 
 # --------------------------------------------- disconnected + denied paths
 
 
-async def test_disconnected_cross_org_pair_is_not_reachable(cross_org, client):
-    """No shared org, not connected, no request tier yet → 403."""
+async def test_disconnected_cross_org_pair_opens_message_request(cross_org, client):
+    """No shared org, not connected, target allows requests → M4 request tier:
+    a pending_request conversation is created (was 403 not_reachable pre-M4)."""
     r = await client.post(
         "/api/v1/conversations",
         json={"type": "direct", "member_ids": [str(cross_org.bob.id)]},
         headers=cross_org.alice_headers,
     )
-    assert r.status_code == 403
-    assert r.json()["detail"] == "not_reachable"
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["access"] == "pending_request"
+    assert body["initiator_id"] == str(cross_org.alice.id)
 
 
 async def test_block_freezes_sends_both_ways(cross_org, client, db):

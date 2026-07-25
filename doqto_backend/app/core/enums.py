@@ -136,6 +136,10 @@ class WsEventServer(StrEnum):
     INVITATION_ACCEPTED = "invitation_accepted"
     CONNECTION_REMOVED = "connection_removed"
     NOTIFICATION_CREATED = "notification_created"
+    # Message-request tier (M4) — recipient-scoped. SHARED (client renders them).
+    CONVERSATION_REQUEST_RECEIVED = "conversation_request_received"
+    CONVERSATION_REQUEST_ACCEPTED = "conversation_request_accepted"
+    CONVERSATION_REQUEST_DECLINED = "conversation_request_declined"
 
 
 class WsEventClient(StrEnum):
@@ -184,6 +188,10 @@ class AuditAction(StrEnum):
     USER_UNBLOCKED = "user_unblocked"
     REPORT_FILED = "report_filed"
     NETWORKING_POLICY_DENIED = "networking_policy_denied"
+    # Message-request tier (M4) — backend-only (NOT in the parity SHARED set).
+    MESSAGE_REQUEST_SENT = "message_request_sent"
+    MESSAGE_REQUEST_ACCEPTED = "message_request_accepted"
+    MESSAGE_REQUEST_DECLINED = "message_request_declined"
 
 
 class TranscribeSpecialty(StrEnum):

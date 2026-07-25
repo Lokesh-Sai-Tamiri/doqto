@@ -71,6 +71,8 @@ OTP_RESEND_COOLDOWN_SECONDS = 30
 # numbers) into push title/body.
 PUSH_TITLE = "Doqto"
 PUSH_BODY_NEW_MESSAGE = "New message"
+# Message-request push copy — generic, PHI-free, NO content/preview ever (M4).
+PUSH_BODY_MESSAGE_REQUEST = "New message request"
 
 # Chat list preview
 CHAT_LIST_PREVIEW_MAX_LEN = 140
@@ -98,6 +100,21 @@ INVITATION_MESSAGE_MAX_LEN = 300
 # People/network read limits.
 NETWORK_PAGE_SIZE = 30
 REPORT_DETAILS_MAX_LEN = 1000
+
+# --- Message-request tier (M4) --------------------------------------------- #
+# The initiator may send exactly ONE opening message, capped at this length,
+# text-only, no contact info (URL/phone) — see spam_heuristics.
+REQUEST_MESSAGE_MAX_LEN = 500
+# Message-request quota: how many new requests one sender may open per day.
+MESSAGE_REQUEST_QUOTA_PER_DAY = 25
+# Spam scoring for hiding a request (compute-on-read; no migration). A request
+# is "hidden" (no push, no badge) when its score reaches the threshold.
+#   +1 opening message contains a URL/phone   (unreachable via the send guard,
+#       which rejects such messages — kept for completeness + invitation reuse)
+#   +1 sender account younger than this many days
+#   +1 no shared context (no shared org AND no mutual connections)
+NEW_ACCOUNT_REQUEST_DAYS = 7
+REQUEST_HIDDEN_THRESHOLD = 2
 
 # --- People search + public profiles (M2) ---------------------------------- #
 # Cross-org directory surface. Cards/profiles NEVER expose phone/email/NPI.

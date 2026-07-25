@@ -198,6 +198,9 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `invitation_accepted` | `invitation_id, user_id, user_name` (M1, no PHI) |
 | `connection_removed` | `user_id` — the party who removed you (M1) |
 | `notification_created` | `notification_id, type, unread_count` (M1, PHI-free) |
+| `conversation_request_received` | `conversation_id, sender_id` (M4, no PHI) — a message request became visible |
+| `conversation_request_accepted` | `conversation_id, user_id` (M4) — recipient accepted; sent to the initiator |
+| `conversation_request_declined` | `conversation_id` (M4) — silent, sent ONLY to the decliner's own devices |
 
 ## WsEventClient (client → server)
 
@@ -252,6 +255,9 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `user_unblocked` | User unblocked another user |
 | `report_filed` | Abuse/spam report filed |
 | `networking_policy_denied` | External networking path denied by kill switch / policy |
+| `message_request_sent` | Message-request conversation created (M4) |
+| `message_request_accepted` | Recipient accepted a message request → conversation opened (M4) |
+| `message_request_declined` | Recipient declined a message request (M4, silent) |
 
 ## TranscribeSpecialty (AWS Transcribe Medical)
 

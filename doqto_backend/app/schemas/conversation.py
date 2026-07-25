@@ -34,6 +34,9 @@ class ConversationOut(ORMModel):
     access: ConversationAccess = ConversationAccess.OPEN
     initiator_id: uuid.UUID | None = None
     is_network: bool = False
+    # Requests filter only (M4, compute-on-read): a low-quality request the
+    # client hides from the badge / surfaces separately. Always False elsewhere.
+    is_hidden: bool = False
     disappear_after_sec: int | None
     created_at: datetime
     updated_at: datetime

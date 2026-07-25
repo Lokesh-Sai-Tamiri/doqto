@@ -16,6 +16,7 @@ from app.core.constants import (
 from app.core.dependencies import get_current_user
 from app.core.enums import (
     AuditAction,
+    ConversationAccess,
     MessageType,
     TranscriptStatus,
     WsEventServer,
@@ -53,6 +54,15 @@ async def _assert_conv_member(
     return conv
 
 
+def _reject_media_pre_accept(conv: Conversation) -> None:
+    """No attachments while a request is still pending (M4) — the opening
+    exchange is text-only until the recipient accepts."""
+    if conv.access == ConversationAccess.PENDING_REQUEST:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="request_media_blocked"
+        )
+
+
 @router.post("/upload/{conversation_id}", response_model=MessageOut)
 async def upload_file(
     conversation_id: uuid.UUID,
@@ -63,6 +73,7 @@ async def upload_file(
 ) -> MessageOut:
     await enforce_rate_limit(user.id, "upload_file")
     conv = await _assert_conv_member(conversation_id, user.id, db)
+    _reject_media_pre_accept(conv)
 
     # Idempotency: a retried upload (same outbox client_id) returns the
     # original row — no re-upload, no re-broadcast.
@@ -133,6 +144,7 @@ async def upload_voice_note(
 ) -> MessageOut:
     await enforce_rate_limit(user.id, "upload_voice_note")
     conv = await _assert_conv_member(conversation_id, user.id, db)
+    _reject_media_pre_accept(conv)
 
     # Idempotency: a retried upload (same outbox client_id) returns the
     # original row — no re-upload, no re-broadcast.

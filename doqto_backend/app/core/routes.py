@@ -70,6 +70,9 @@ class ApiRoutes:
     CONVERSATIONS_MEMBERS = "/{conversation_id}/members"
     CONVERSATIONS_MEMBER_DETAIL = "/{conversation_id}/members/{user_id}"
     CONVERSATIONS_SETTINGS = "/{conversation_id}/settings"
+    # Message-request tier (M4) — recipient-only accept / decline.
+    CONVERSATIONS_REQUEST_ACCEPT = "/{conversation_id}/request/accept"
+    CONVERSATIONS_REQUEST_DECLINE = "/{conversation_id}/request/decline"
 
     # Messages
     MESSAGES_READ = "/{message_id}/read"

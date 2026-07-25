@@ -200,7 +200,11 @@ enum WsEventServer {
   invitationReceived,
   invitationAccepted,
   connectionRemoved,
-  notificationCreated;
+  notificationCreated,
+  // Message-request tier (M4) — recipient/initiator-scoped, PHI-free.
+  conversationRequestReceived,
+  conversationRequestAccepted,
+  conversationRequestDeclined;
 
   String get wire => switch (this) {
         WsEventServer.newMessage => 'new_message',
@@ -218,6 +222,12 @@ enum WsEventServer {
         WsEventServer.invitationAccepted => 'invitation_accepted',
         WsEventServer.connectionRemoved => 'connection_removed',
         WsEventServer.notificationCreated => 'notification_created',
+        WsEventServer.conversationRequestReceived =>
+          'conversation_request_received',
+        WsEventServer.conversationRequestAccepted =>
+          'conversation_request_accepted',
+        WsEventServer.conversationRequestDeclined =>
+          'conversation_request_declined',
       };
 
   static WsEventServer? fromWire(String s) => switch (s) {
@@ -236,6 +246,12 @@ enum WsEventServer {
         'invitation_accepted' => WsEventServer.invitationAccepted,
         'connection_removed' => WsEventServer.connectionRemoved,
         'notification_created' => WsEventServer.notificationCreated,
+        'conversation_request_received' =>
+          WsEventServer.conversationRequestReceived,
+        'conversation_request_accepted' =>
+          WsEventServer.conversationRequestAccepted,
+        'conversation_request_declined' =>
+          WsEventServer.conversationRequestDeclined,
         _ => null,
       };
 }

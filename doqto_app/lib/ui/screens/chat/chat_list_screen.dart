@@ -18,12 +18,15 @@ import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
 import '../../../state/org_state.dart';
+import '../../../data/models/network_profile.dart';
 import '../../widgets/app_pressable.dart';
+import '../../widgets/app_segmented.dart';
 import '../../widgets/app_skeleton.dart';
 import '../../widgets/connectivity_banner.dart';
 import '../../widgets/doctor_avatar.dart';
 import '../../widgets/fade_slide_in.dart';
 import '../../widgets/primary_button.dart';
+import '../../widgets/request_card.dart';
 import '../../widgets/search_bar.dart';
 import '../../widgets/typing_indicator.dart';
 import '_conversation_display.dart';
@@ -37,6 +40,8 @@ class ChatListScreen extends ConsumerStatefulWidget {
 
 class _ChatListScreenState extends ConsumerState<ChatListScreen> {
   String _query = '';
+  // 0 = Focused (default conversations), 1 = Requests (received pending).
+  int _tab = 0;
   final Set<String> _selectedIds = {};
   bool _deleting = false;
   // Rows stagger-animate only on the very first data paint; refreshes and
@@ -165,35 +170,55 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
       body: Column(
         children: [
           const ConnectivityBanner(),
+          // Focused | Requests segmented header — hidden during multi-select.
           if (!_isSelecting)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.screenHorizontal,
+                AppSpacing.sm,
+                AppSpacing.screenHorizontal,
+                AppSpacing.xs,
+              ),
+              child: AppSegmented(
+                tabs: const [
+                  Strings.netFilterFocused,
+                  Strings.netFilterRequests,
+                ],
+                index: _tab,
+                badges: [null, ref.watch(requestsCountProvider)],
+                onChanged: (i) => setState(() => _tab = i),
+              ),
+            ),
+          if (_tab == 0 && !_isSelecting)
             AppSearchBar(
               hint: 'Search chats or people…',
               onChanged: (q) => setState(() => _query = q),
             ),
           Expanded(
-            // Search results fade in/out over the list — no hard snap.
             child: AnimatedSwitcher(
               duration: AppMotion.maybe(context, AppMotion.enter),
               switchInCurve: AppMotion.curveEnter,
               switchOutCurve: AppMotion.curveExit,
-              child: _query.isNotEmpty && !_isSelecting
-                  ? _SearchResults(
-                      key: const ValueKey('search'),
-                      query: _query,
-                      conversations: convs.asData?.value ?? const [],
-                      orgMembers: orgMembers,
-                      meId: user?.id,
-                    )
-                  : _ConversationList(
-                      key: const ValueKey('list'),
-                      convs: convs,
-                      orgMembers: orgMembers,
-                      meId: user?.id,
-                      selectedIds: _selectedIds,
-                      isSelecting: _isSelecting,
-                      onSelect: _toggleSelect,
-                      staggerEntrance: !_entranceDone,
-                    ),
+              child: _tab == 1 && !_isSelecting
+                  ? const _RequestsTab(key: ValueKey('requests'))
+                  : _query.isNotEmpty && !_isSelecting
+                      ? _SearchResults(
+                          key: const ValueKey('search'),
+                          query: _query,
+                          conversations: convs.asData?.value ?? const [],
+                          orgMembers: orgMembers,
+                          meId: user?.id,
+                        )
+                      : _ConversationList(
+                          key: const ValueKey('list'),
+                          convs: convs,
+                          orgMembers: orgMembers,
+                          meId: user?.id,
+                          selectedIds: _selectedIds,
+                          isSelecting: _isSelecting,
+                          onSelect: _toggleSelect,
+                          staggerEntrance: !_entranceDone,
+                        ),
             ),
           ),
         ],
@@ -652,20 +677,192 @@ class _NewChatFab extends StatelessWidget {
   }
 }
 
+/// Requests tab: received pending message requests as [RequestCard]s. Visible
+/// (non-hidden) requests list first; hidden ones fold under an expandable
+/// "Hidden requests" footer (no badge). Optimistic accept/delete/block via
+/// [requestsProvider]; tapping a card opens the thread.
+class _RequestsTab extends ConsumerStatefulWidget {
+  const _RequestsTab({super.key});
+
+  @override
+  ConsumerState<_RequestsTab> createState() => _RequestsTabState();
+}
+
+class _RequestsTabState extends ConsumerState<_RequestsTab> {
+  bool _showHidden = false;
+
+  Future<void> _accept(Conversation c) async {
+    try {
+      await ref.read(requestsProvider.notifier).accept(c.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(Strings.netRequestAcceptedToast)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ErrorMessages.forApi(e)),
+        backgroundColor: AppColors.red,
+      ));
+    }
+  }
+
+  Future<void> _delete(Conversation c) async {
+    // Silent decline — no toast, per plan.
+    try {
+      await ref.read(requestsProvider.notifier).decline(c.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ErrorMessages.forApi(e)),
+        backgroundColor: AppColors.red,
+      ));
+    }
+  }
+
+  Future<void> _block(Conversation c) async {
+    final otherId = c.initiatorId;
+    ref.read(requestsProvider.notifier).removeLocally(c.id);
+    try {
+      if (otherId != null) {
+        await ref.read(networkRepositoryProvider).block(otherId);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(Strings.netBlockedToast)),
+      );
+    } catch (e) {
+      await ref.read(requestsProvider.notifier).refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ErrorMessages.forApi(e)),
+        backgroundColor: AppColors.red,
+      ));
+    }
+  }
+
+  RequestCard _card(Conversation c) {
+    final name = (c.displayName?.trim().isNotEmpty ?? false)
+        ? c.displayName!.trim()
+        : 'Doctor';
+    return RequestCard(
+      key: ValueKey(c.id),
+      name: name,
+      initials: initialsOf(name),
+      avatarColorIndex: avatarIndexFrom(null, c.initiatorId ?? c.id),
+      messagePreview: c.lastMessagePreview,
+      heroTag: c.initiatorId != null ? 'member-avatar-${c.initiatorId}' : null,
+      onAccept: () => _accept(c),
+      onDelete: () => _delete(c),
+      onBlock: () => _block(c),
+      onTap: () => context.push(AppRoutes.chat(c.id)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(requestsProvider);
+    return async.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
+      loading: () => const SkeletonList(),
+      error: (e, _) => _StatusPane(
+        icon: Icons.cloud_off_rounded,
+        title: 'Couldn’t load requests',
+        subtitle: ErrorMessages.forApi(e),
+        actionLabel: 'Retry',
+        onAction: () => ref.invalidate(requestsProvider),
+      ),
+      data: (all) {
+        final visible = all.where((c) => !c.isHidden).toList();
+        final hidden = all.where((c) => c.isHidden).toList();
+        if (visible.isEmpty && hidden.isEmpty) {
+          return ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              SizedBox(height: MediaQuery.of(context).size.height * 0.18),
+              const _StatusPane(
+                icon: Icons.mark_email_unread_outlined,
+                title: Strings.netEmptyRequests,
+                subtitle: Strings.netExplainRequestTier,
+              ),
+            ],
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: () => ref.read(requestsProvider.notifier).refresh(),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(
+              top: AppSpacing.sm,
+              left: AppSpacing.screenHorizontal,
+              right: AppSpacing.screenHorizontal,
+              bottom: MediaQuery.paddingOf(context).bottom + AppSpacing.sm,
+            ),
+            children: [
+              for (var i = 0; i < visible.length; i++) ...[
+                FadeSlideIn.staggered(
+                  i,
+                  _card(visible[i]),
+                  enabled: i <= AppMotion.staggerCap,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+              if (hidden.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xs),
+                AppPressable(
+                  onTap: () => setState(() => _showHidden = !_showHidden),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          '${Strings.netHiddenRequests} (${hidden.length})',
+                          style: AppText.button.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        Icon(
+                          _showHidden
+                              ? Icons.expand_less_rounded
+                              : Icons.chevron_right_rounded,
+                          color: AppColors.textSecondary,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_showHidden)
+                  for (final c in hidden) ...[
+                    _card(c),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// Shared empty/error pane: icon + one line + one action. No blank screens.
 class _StatusPane extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final String actionLabel;
-  final VoidCallback onAction;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   const _StatusPane({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.actionLabel,
-    required this.onAction,
+    this.actionLabel,
+    this.onAction,
   });
 
   @override
@@ -684,8 +881,10 @@ class _StatusPane extends StatelessWidget {
             Text(title, style: AppText.heading, textAlign: TextAlign.center),
             const SizedBox(height: AppSpacing.xs),
             Text(subtitle, style: AppText.caption, textAlign: TextAlign.center),
-            const SizedBox(height: AppSpacing.lg),
-            AppButton(label: actionLabel, onPressed: onAction),
+            if (actionLabel != null && actionLabel!.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.lg),
+              AppButton(label: actionLabel!, onPressed: onAction),
+            ],
           ],
         ),
       ),

@@ -17,9 +17,24 @@ class Conversation {
   final MessageType? lastMessageType;
   final int unreadCount;
 
-  /// Networking (M0, additive — nothing consumes these yet).
+  /// Networking (M0, additive). Read from the LIST endpoint only —
+  /// `GET /conversations/{id}` (detail) returns access=null (known backend gap),
+  /// so the tier is always sourced from the conversations/requests list.
   /// null/absent = legacy payload; treat as an open (focused) conversation.
   final ConversationAccess? access;
+
+  /// Who opened a pending message request (M4). For a received request this is
+  /// the sender; when it equals me, I'm the initiator ("Request sent").
+  final String? initiatorId;
+
+  /// True when this conversation lives on the network bus (org_id NULL) rather
+  /// than an org (M3/M4). Drives the "not connected" composer banner gate.
+  final bool isNetwork;
+
+  /// True when a received message request has been hidden by the recipient
+  /// (M4). Hidden requests live under the "Hidden requests" footer, not the
+  /// badge count.
+  final bool isHidden;
 
   /// Set when this conversation backs a network group (M5). null otherwise.
   final String? groupId;
@@ -41,6 +56,9 @@ class Conversation {
     required this.lastMessageType,
     required this.unreadCount,
     this.access,
+    this.initiatorId,
+    this.isNetwork = false,
+    this.isHidden = false,
     this.groupId,
   });
 
@@ -67,11 +85,17 @@ class Conversation {
         access: j['access'] != null
             ? ConversationAccess.fromWire(j['access'] as String)
             : null,
+        initiatorId: j['initiator_id'] as String?,
+        isNetwork: (j['is_network'] ?? false) as bool,
+        isHidden: (j['is_hidden'] ?? false) as bool,
         groupId: j['group_id'] as String?,
       );
 
   Conversation copyWith({
     ConversationAccess? access,
+    String? initiatorId,
+    bool? isNetwork,
+    bool? isHidden,
     String? groupId,
   }) =>
       Conversation(
@@ -91,6 +115,9 @@ class Conversation {
         lastMessageType: lastMessageType,
         unreadCount: unreadCount,
         access: access ?? this.access,
+        initiatorId: initiatorId ?? this.initiatorId,
+        isNetwork: isNetwork ?? this.isNetwork,
+        isHidden: isHidden ?? this.isHidden,
         groupId: groupId ?? this.groupId,
       );
 
@@ -112,6 +139,9 @@ class Conversation {
         'last_message_type': lastMessageType?.wire,
         'unread_count': unreadCount,
         'access': access?.wire,
+        'initiator_id': initiatorId,
+        'is_network': isNetwork,
+        'is_hidden': isHidden,
         'group_id': groupId,
       };
 }

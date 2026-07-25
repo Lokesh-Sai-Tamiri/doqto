@@ -34,6 +34,11 @@ class ApiRoutes {
   static String conversationMember(String convId, String userId) =>
       '$apiV1/conversations/$convId/members/$userId';
   static String conversationSettings(String id) => '$apiV1/conversations/$id/settings';
+  // Message-request tier (M4) — recipient-only accept/decline.
+  static String conversationRequestAccept(String id) =>
+      '$apiV1/conversations/$id/request/accept';
+  static String conversationRequestDecline(String id) =>
+      '$apiV1/conversations/$id/request/decline';
 
   // Messages
   static String messageUpload(String convId) => '$apiV1/messages/upload/$convId';

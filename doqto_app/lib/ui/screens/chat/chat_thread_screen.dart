@@ -19,10 +19,12 @@ import '../../../core/tokens/shadows.dart';
 import '../../../core/tokens/spacing.dart';
 import '../../../core/tokens/typography.dart';
 import '../../../core/utils/error_messages.dart';
+import '../../../data/models/conversation.dart';
 import '../../../data/models/message.dart';
 import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
+import '../../../state/network_state.dart';
 import '../../../state/notification_state.dart';
 import '../../../state/org_state.dart';
 import '../../widgets/app_pressable.dart';
@@ -30,6 +32,7 @@ import '../../widgets/attachment_bubbles.dart';
 import '../../widgets/connectivity_banner.dart';
 import '../../widgets/doctor_avatar.dart';
 import '../../widgets/message_bubble.dart';
+import '../../widgets/request_composer_bar.dart';
 import '../../widgets/typing_indicator.dart';
 import '../../widgets/voice_note_bubble.dart';
 import '_conversation_display.dart';
@@ -63,6 +66,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   static const double _jumpThresholdPx = 400;
   bool _showJump = false;
   int _unseenCount = 0;
+
+  // --- Request-tier composer state (M4). Tier is read from the conversations/
+  // requests LIST providers (never a detail fetch — detail returns access=null).
+  ConversationAccess? _accessOverride; // set after accept / recipient reply
+  bool _sentInRequest = false; // initiator sent their one message this session
+  bool _notConnectedDismissed = false;
+  bool _requestBusy = false;
+  // Snapshot of the current tier, recomputed each build and read by _send.
+  bool _curRecipientPending = false;
+  bool _curInitiatorBeforeFirst = false;
 
   @override
   void initState() {
@@ -179,6 +192,66 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     await ref
         .read(messagesProvider(widget.conversationId).notifier)
         .sendText(text);
+    // Request-tier reflection (server enforces the actual rules):
+    if (_curRecipientPending) {
+      // A recipient reply auto-accepts server-side → flip to open locally and
+      // move the thread out of Requests into Focused.
+      if (mounted) setState(() => _accessOverride = ConversationAccess.open);
+      ref.read(requestsProvider.notifier).removeLocally(widget.conversationId);
+      ref.read(conversationsProvider.notifier).refresh();
+    } else if (_curInitiatorBeforeFirst) {
+      // The one allowed message is now sent → lock the composer.
+      if (mounted) setState(() => _sentInRequest = true);
+    }
+  }
+
+  // ---- Request-tier actions (recipient) -----------------------------------
+
+  Future<void> _acceptRequest() async {
+    if (_requestBusy) return;
+    setState(() => _requestBusy = true);
+    try {
+      await ref.read(requestsProvider.notifier).accept(widget.conversationId);
+      if (!mounted) return;
+      setState(() => _accessOverride = ConversationAccess.open);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(Strings.netRequestAcceptedToast)),
+      );
+    } catch (e) {
+      if (mounted) _showError(ErrorMessages.forApi(e));
+    } finally {
+      if (mounted) setState(() => _requestBusy = false);
+    }
+  }
+
+  Future<void> _declineRequest() async {
+    if (_requestBusy) return;
+    setState(() => _requestBusy = true);
+    try {
+      await ref.read(requestsProvider.notifier).decline(widget.conversationId);
+      if (mounted) context.pop(); // silent — leave the thread
+    } catch (e) {
+      if (mounted) {
+        setState(() => _requestBusy = false);
+        _showError(ErrorMessages.forApi(e));
+      }
+    }
+  }
+
+  Future<void> _blockFromThread(String otherId) async {
+    if (_requestBusy) return;
+    setState(() => _requestBusy = true);
+    ref.read(requestsProvider.notifier).removeLocally(widget.conversationId);
+    try {
+      await ref.read(networkRepositoryProvider).block(otherId);
+      if (mounted) context.pop();
+    } catch (e) {
+      await ref.read(requestsProvider.notifier).refresh();
+      if (mounted) {
+        setState(() => _requestBusy = false);
+        _showError(ErrorMessages.forApi(e));
+      }
+    }
   }
 
   // ---- Attachments ---------------------------------------------------------
@@ -488,11 +561,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             .markConversationRead(widget.conversationId);
       }
     });
-    final convs = ref.watch(conversationsProvider).asData?.value ?? const [];
-    final conv = convs
-        .where((c) => c.id == widget.conversationId)
-        .cast<dynamic>()
-        .firstOrNull;
+    // Tier source: the LIST providers. Focused holds open + initiator-pending
+    // conversations; requests holds received pending ones. Detail endpoint
+    // returns access=null, so it is never consulted for the tier.
+    final focused = ref.watch(conversationsProvider).asData?.value ?? const [];
+    final requests = ref.watch(requestsProvider).valueOrNull ?? const [];
+    Conversation? conv;
+    for (final c in [...focused, ...requests]) {
+      if (c.id == widget.conversationId) {
+        conv = c;
+        break;
+      }
+    }
     final currentOrg = ref.watch(orgProvider).current;
     final orgMembers = currentOrg == null
         ? const <OrgMember>[]
@@ -506,6 +586,49 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             meId: me?.id,
             fallbackColorIndex: 0,
           );
+
+    // ---- Request-tier / not-connected computation (M4) --------------------
+    final meId = me?.id;
+    final access = _accessOverride ?? conv?.access ?? ConversationAccess.open;
+    final initiatorId = conv?.initiatorId;
+    final isPending = access == ConversationAccess.pendingRequest;
+    final isRecipientPending =
+        isPending && initiatorId != null && initiatorId != meId;
+    final isInitiatorPending =
+        isPending && initiatorId != null && initiatorId == meId;
+    final initiatorFirstSent = isInitiatorPending &&
+        ((conv?.lastMessageType != null) || _sentInRequest);
+    final isInitiatorBeforeFirst = isInitiatorPending && !initiatorFirstSent;
+    final isDeclined = access == ConversationAccess.declined;
+    // The other participant (direct threads only) — drives block + Connect.
+    String? otherId;
+    if (conv != null) {
+      for (final id in conv.memberIds) {
+        if (id != meId) {
+          otherId = id;
+          break;
+        }
+      }
+    }
+    // Cache the tier for _send.
+    _curRecipientPending = isRecipientPending;
+    _curInitiatorBeforeFirst = isInitiatorBeforeFirst;
+
+    // Composer visibility: locked when the request is one-directional/terminal.
+    final composerLocked = isDeclined || initiatorFirstSent;
+    final composerTextOnly = isInitiatorBeforeFirst;
+
+    // Non-connected direct network chat (open) → dismissible Connect banner.
+    final showNotConnected = access == ConversationAccess.open &&
+        conv != null &&
+        conv.isNetwork &&
+        (display?.isDirect ?? false) &&
+        otherId != null &&
+        !_notConnectedDismissed &&
+        ref.watch(relationshipProvider(otherId)).valueOrNull?.relationship
+                .connectionState !=
+            RelationshipState.connected;
+
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -630,107 +753,134 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ),
           ),
           if (otherTyping) const TypingIndicator(),
-          if (_showRecorder)
-            VoiceRecorderPanel(
-              conversationId: widget.conversationId,
-              onSent: () => setState(() => _showRecorder = false),
-              onCancel: () => setState(() => _showRecorder = false),
-            )
-          else
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                border: Border(top: BorderSide(color: AppColors.divider)),
-              ),
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 44),
-                          child: TextField(
-                            controller: _input,
-                            minLines: 1,
-                            maxLines: 5,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.send,
-                            decoration: InputDecoration(
-                              hintText: Strings.chatMessageHint,
-                              border: OutlineInputBorder(
-                                borderRadius: AppRadii.rXl,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.md + 2,
-                                vertical: AppSpacing.md - 2,
-                              ),
-                            ),
-                            onChanged: _onInputChanged,
-                            onSubmitted: (_) => _send(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                      // WhatsApp-style morph: attach + mic when idle,
-                      // send while typing — scale+fade swap, never a snap.
-                      AnimatedSwitcher(
-                        duration: AppMotion.maybe(context, AppMotion.micro),
-                        switchInCurve: AppMotion.curveEnter,
-                        switchOutCurve: AppMotion.curveExit,
-                        transitionBuilder: (child, anim) => ScaleTransition(
-                          scale: anim,
-                          child: FadeTransition(opacity: anim, child: child),
-                        ),
-                        child: _hasText
-                            ? AppPressable(
-                                key: const ValueKey('composer-send'),
-                                haptic: true,
-                                minTarget: true,
-                                onTap: _send,
-                                child: Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.medBlue,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.send_rounded,
-                                    color: AppColors.white,
-                                    size: 20,
-                                  ),
-                                ),
-                              )
-                            : Row(
-                                key: const ValueKey('composer-idle'),
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    onPressed: _pickAttachment,
-                                    icon: const Icon(Icons.attach_file,
-                                        color: AppColors.medBlue),
-                                  ),
-                                  IconButton(
-                                    onPressed: () =>
-                                        setState(() => _showRecorder = true),
-                                    icon: const Icon(Icons.mic,
-                                        color: AppColors.medBlue),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          // Request-tier region: banners + (composer | locked bar). Tier comes
+          // from the LIST providers above — never a thread-detail fetch.
+          RequestComposerBar(
+            isRecipientPending: isRecipientPending,
+            isInitiatorBeforeFirst: isInitiatorBeforeFirst,
+            composerLocked: composerLocked,
+            isDeclined: isDeclined,
+            showNotConnected: showNotConnected,
+            otherId: otherId,
+            otherName: display?.title ?? '',
+            busy: _requestBusy,
+            onAccept: _acceptRequest,
+            onDelete: _declineRequest,
+            onBlock: _blockFromThread,
+            onDismissNotConnected: () =>
+                setState(() => _notConnectedDismissed = true),
+            composer: _showRecorder
+                ? VoiceRecorderPanel(
+                    conversationId: widget.conversationId,
+                    onSent: () => setState(() => _showRecorder = false),
+                    onCancel: () => setState(() => _showRecorder = false),
+                  )
+                : _composer(hideAttachments: composerTextOnly),
+          ),
         ],
       ),
     );
   }
+
+  /// The normal message composer. [hideAttachments] drops the attach/mic
+  /// affordances (request tier allows exactly one text message, no media).
+  Widget _composer({bool hideAttachments = false}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.divider)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: TextField(
+                    controller: _input,
+                    minLines: 1,
+                    maxLines: 5,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.send,
+                    decoration: InputDecoration(
+                      hintText: Strings.chatMessageHint,
+                      border: OutlineInputBorder(
+                        borderRadius: AppRadii.rXl,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md + 2,
+                        vertical: AppSpacing.md - 2,
+                      ),
+                    ),
+                    onChanged: _onInputChanged,
+                    onSubmitted: (_) => _send(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              // WhatsApp-style morph: attach + mic when idle, send while
+              // typing — scale+fade swap, never a snap. In request mode the
+              // idle affordances collapse to nothing (text-only).
+              AnimatedSwitcher(
+                duration: AppMotion.maybe(context, AppMotion.micro),
+                switchInCurve: AppMotion.curveEnter,
+                switchOutCurve: AppMotion.curveExit,
+                transitionBuilder: (child, anim) => ScaleTransition(
+                  scale: anim,
+                  child: FadeTransition(opacity: anim, child: child),
+                ),
+                child: _hasText
+                    ? AppPressable(
+                        key: const ValueKey('composer-send'),
+                        haptic: true,
+                        minTarget: true,
+                        onTap: _send,
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: const BoxDecoration(
+                            color: AppColors.medBlue,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.send_rounded,
+                            color: AppColors.white,
+                            size: 20,
+                          ),
+                        ),
+                      )
+                    : hideAttachments
+                        ? const SizedBox(
+                            key: ValueKey('composer-idle-empty'), height: 44)
+                        : Row(
+                            key: const ValueKey('composer-idle'),
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                onPressed: _pickAttachment,
+                                icon: const Icon(Icons.attach_file,
+                                    color: AppColors.medBlue),
+                              ),
+                              IconButton(
+                                onPressed: () =>
+                                    setState(() => _showRecorder = true),
+                                icon: const Icon(Icons.mic,
+                                    color: AppColors.medBlue),
+                              ),
+                            ],
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 }
 
 /// One-shot entrance for a NEW message bubble: fade + horizontal slide

@@ -63,6 +63,7 @@ class Strings {
   static const String netSendMessageRequest = 'Send message request';
   static const String netAccept = 'Accept';
   static const String netDecline = 'Decline';
+  static const String netDelete = 'Delete';
   static const String netIgnore = 'Ignore';
   static const String netWithdraw = 'Withdraw';
   static const String netRemoveConnection = 'Remove connection';
@@ -108,6 +109,16 @@ class Strings {
   static const String netRequestDeclinedToast = 'Request declined';
   static const String netRequestHint =
       'One short text message, no links or attachments, until they accept.';
+  // -- Request-tier composer (M4)
+  static const String netRequestWaiting =
+      'Waiting for them to accept your message request.';
+  static const String netRequestFirstHint =
+      'They\'ll get this as a message request. You can send one message until they accept.';
+  static const String netRequestDeclinedTerminal =
+      'This message request was declined.';
+  static const String netHiddenRequests = 'Hidden requests';
+  static String netNotConnectedWith(String name) =>
+      'You\'re not connected with $name.';
   // -- Toasts
   static const String netInviteSentToast = 'Invitation sent';
   static const String netInviteWithdrawnToast = 'Invitation withdrawn';

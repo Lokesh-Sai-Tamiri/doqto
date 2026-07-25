@@ -10,6 +10,7 @@ import 'core/router/app_router.dart';
 import 'core/theme.dart';
 import 'data/local/box_key_storage.dart';
 import 'data/services/chat_cache.dart';
+import 'data/services/network_cache.dart';
 import 'data/services/outbox.dart';
 import 'state/auth_state.dart';
 import 'state/chat_state.dart';
@@ -31,6 +32,7 @@ Future<void> main() async {
   final cipher = HiveAesCipher(await BoxKeyStorage().getOrCreateKey());
   await _openEncryptedBox(Outbox.boxName, cipher); // durable unsent messages
   await _openEncryptedBox(ChatCache.boxName, cipher); // offline read cache
+  await _openEncryptedBox(NetworkCache.boxName, cipher); // offline connections
   runApp(const ProviderScope(child: DoqtoApp()));
 }
 

@@ -41,6 +41,30 @@ class ApiRoutes {
   static String messageRead(String id) => '$apiV1/messages/$id/read';
   static String messageFileUrl(String id) => '$apiV1/messages/$id/file-url';
 
+  // People / profiles (networking M1/M2)
+  static String userProfile(String userId) => '$apiV1/users/$userId/profile';
+  static const String peopleSearch = '$apiV1/people/search';
+
+  // Network graph (M1)
+  static const String invitations = '$apiV1/network/invitations';
+  static String invitationAccept(String id) => '$apiV1/network/invitations/$id/accept';
+  static String invitationIgnore(String id) => '$apiV1/network/invitations/$id/ignore';
+  static String invitation(String id) => '$apiV1/network/invitations/$id';
+  static const String connections = '$apiV1/network/connections';
+  static String connection(String userId) => '$apiV1/network/connections/$userId';
+  static String mutualConnections(String userId) => '$apiV1/network/connections/mutual/$userId';
+  static String block(String userId) => '$apiV1/network/blocks/$userId';
+  static const String blocks = '$apiV1/network/blocks';
+  static const String reports = '$apiV1/network/reports';
+
+  // Privacy settings (M1)
+  static const String usersMePrivacy = '$apiV1/users/me/privacy';
+
+  // Notifications (M1)
+  static const String notifications = '$apiV1/notifications';
+  static const String notificationsRead = '$apiV1/notifications/read';
+  static const String notificationsUnreadCount = '$apiV1/notifications/unread-count';
+
   // Admin endpoints live in the separate Next.js admin panel — not in the mobile app.
 
   // WebSocket

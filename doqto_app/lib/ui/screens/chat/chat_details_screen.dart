@@ -69,8 +69,7 @@ class ChatDetailsScreen extends ConsumerWidget {
             0,
             AppPressable(
               onTap: display.isDirect && display.otherUser != null
-                  ? () => context.push(AppRoutes.profile,
-                      extra: display.otherUser)
+                  ? () => context.push(AppRoutes.person(display.otherUser!.id))
                   : null,
               child: Column(
                 children: [

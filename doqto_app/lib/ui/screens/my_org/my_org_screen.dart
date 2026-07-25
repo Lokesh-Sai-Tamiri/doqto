@@ -142,11 +142,13 @@ class _MemberRowState extends ConsumerState<_MemberRow> {
   }
 
   void _openProfile() {
-    // For self, omit `extra` so we see the editable self view.
-    context.push(
-      AppRoutes.profile,
-      extra: widget.isSelf ? null : widget.member,
-    );
+    // Self opens the editable self view; other members open the addressable
+    // networking profile by id (hero pairs on `member-avatar-<id>`).
+    if (widget.isSelf) {
+      context.push(AppRoutes.profile);
+    } else {
+      context.push(AppRoutes.person(widget.member.id));
+    }
   }
 
   @override

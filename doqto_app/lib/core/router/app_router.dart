@@ -17,6 +17,7 @@ import '../../ui/screens/org/create_org_screen.dart';
 import '../../ui/screens/org/join_org_screen.dart';
 import '../../ui/screens/org/org_selection_screen.dart';
 import '../../ui/screens/org/pending_verification_screen.dart';
+import '../../ui/screens/people/person_profile_screen.dart';
 import '../../ui/screens/profile/profile_edit_screen.dart';
 import '../../ui/screens/profile/profile_screen.dart';
 import '../../ui/screens/settings/settings_screen.dart';
@@ -45,6 +46,9 @@ class AppRoutes {
   static const profile = '/profile';
   static const profileEdit = '/profile/edit';
   static const record = '/record';
+  // Addressable person profile by user id (networking M1). Root-level route;
+  // the shell retrofit that moves it into a branch is the next pass.
+  static String person(String userId) => '/people/$userId';
 }
 
 /// Re-evaluates redirects whenever AuthStage changes.
@@ -90,6 +94,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.profile,
         builder: (_, state) => ProfileScreen(member: state.extra as OrgMember?),
+      ),
+      GoRoute(
+        path: '/people/:userId',
+        builder: (_, state) =>
+            PersonProfileScreen(userId: state.pathParameters['userId']!),
       ),
       GoRoute(path: AppRoutes.profileEdit, builder: (_, __) => const ProfileEditScreen()),
       GoRoute(path: AppRoutes.record, builder: (_, __) => const VoiceBroadcastScreen()),

@@ -432,7 +432,7 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
           ),
           for (final m in matchingMembers)
             AppPressable(
-              onTap: () => context.push(AppRoutes.profile, extra: m),
+              onTap: () => context.push(AppRoutes.person(m.id)),
               child: ListTile(
                 leading: DoctorAvatar(
                   initials: m.initials,

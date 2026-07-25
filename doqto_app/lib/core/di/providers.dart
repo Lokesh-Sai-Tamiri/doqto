@@ -5,9 +5,11 @@ import '../../data/api/token_storage.dart';
 import '../../data/api/websocket_client.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/chat_repository.dart';
+import '../../data/repositories/network_repository.dart';
 import '../../data/repositories/org_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../data/services/chat_cache.dart';
+import '../../data/services/network_cache.dart';
 import '../../data/services/outbox.dart';
 import '../../data/services/push_token_provider.dart';
 
@@ -33,6 +35,10 @@ final userRepositoryProvider = Provider<UserRepository>(
   (ref) => UserRepository(ref.watch(apiClientProvider)),
 );
 
+final networkRepositoryProvider = Provider<NetworkRepository>(
+  (ref) => NetworkRepository(ref.watch(apiClientProvider)),
+);
+
 final websocketClientProvider = Provider<WebsocketClient>((ref) {
   final ws = WebsocketClient();
   ref.onDispose(ws.dispose);
@@ -54,3 +60,5 @@ final pushTokenProviderProvider =
     Provider<PushTokenProvider>((ref) => StubPushTokenProvider());
 
 final chatCacheProvider = Provider<ChatCache>((ref) => ChatCache());
+
+final networkCacheProvider = Provider<NetworkCache>((ref) => NetworkCache());

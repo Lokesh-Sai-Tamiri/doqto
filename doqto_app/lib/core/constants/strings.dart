@@ -60,6 +60,7 @@ class Strings {
   static const String netPending = 'Pending';
   static const String netConnected = 'Connected';
   static const String netMessage = 'Message';
+  static const String netSendMessageRequest = 'Send message request';
   static const String netAccept = 'Accept';
   static const String netDecline = 'Decline';
   static const String netIgnore = 'Ignore';
@@ -146,6 +147,11 @@ class Strings {
   static const String netErrorUserUnavailable = 'This user is unavailable.';
   static const String netErrorRequestClosed =
       'You can\'t reply until your request is accepted.';
+
+  // Profile sections
+  static const String profileAbout = 'About';
+  static const String profileExperience = 'Experience';
+  static const String profileSkills = 'Skills';
 
   // Common
   static const String copy = 'Copy';

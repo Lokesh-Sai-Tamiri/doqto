@@ -19,10 +19,31 @@ final activeConversationProvider = StateProvider<String?>((ref) => null);
 
 /// App-wide listener: turns incoming WS messages into banner notifications.
 /// Activate once by watching it from the root widget.
+/// Maps a notification/deep-link payload to a router path. Payloads may be a
+/// bare conversation id (legacy local notifications), a `doqto:///people/<id>`
+/// or `doqto:///chat/<id>` deep-link URI, or a bare `/path`. Unknown shapes
+/// fall back to treating the payload as a conversation id.
+String routePathForPayload(String payload) {
+  final uri = Uri.tryParse(payload);
+  if (uri != null && (uri.scheme == 'doqto' || payload.startsWith('/'))) {
+    final segs = uri.pathSegments;
+    if (segs.length >= 2) {
+      switch (segs[0]) {
+        case 'people':
+          return AppRoutes.person(segs[1]);
+        case 'chat':
+          return AppRoutes.chat(segs[1]);
+      }
+    }
+  }
+  // Legacy local-notification payload: a bare conversation id.
+  return AppRoutes.chat(payload);
+}
+
 final notificationListenerProvider = Provider<void>((ref) {
   final service = ref.watch(notificationServiceProvider);
-  service.init(onTap: (conversationId) {
-    ref.read(routerProvider).push(AppRoutes.chat(conversationId));
+  service.init(onTap: (payload) {
+    ref.read(routerProvider).push(routePathForPayload(payload));
   });
 
   final sub = ref.watch(websocketClientProvider).events.listen((event) async {

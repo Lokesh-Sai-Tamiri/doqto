@@ -53,5 +53,20 @@
 	<string>Doqto needs microphone access to record voice notes.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Doqto uses speech recognition to transcribe your voice notes.</string>
+	<!-- Deep links: doqto://people/<id>, doqto://chat/<id> (networking M1).
+	     Universal links (https) are deferred. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>ai.wyra.doqto</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>doqto</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

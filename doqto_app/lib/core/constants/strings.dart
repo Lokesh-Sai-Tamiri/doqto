@@ -73,6 +73,26 @@ class Strings {
   // -- Labels
   static const String netTabNetwork = 'Network';
   static const String netTabGroups = 'Groups';
+  static const String netConnectedNotificationTitle = 'You are now connected';
+  static String netConnectedNotificationBody(String name) =>
+      '$name accepted your connection request';
+  static const String netConnectedNotificationBodyGeneric =
+      'Your connection request was accepted';
+  static const String netRequestAcceptedNotificationTitle = 'Request accepted';
+  static String netRequestAcceptedNotificationBody(String name) =>
+      '$name accepted your message request';
+  static const String netRequestAcceptedNotificationBodyGeneric =
+      'Your message request was accepted';
+  static const String netRequestNotificationTitle = 'Message request';
+  static String netRequestNotificationBody(String name) =>
+      '$name sent you a message request';
+  static const String netRequestNotificationBodyGeneric =
+      'You have a new message request';
+  static const String netInvitationNotificationTitle = 'Connection request';
+  static String netInvitationNotificationBody(String name) =>
+      '$name sent you a connection request';
+  static const String netInvitationNotificationBodyGeneric =
+      'Someone sent you a connection request';
   static const String netInvitations = 'Invitations';
   static const String netConnections = 'Connections';
   static const String netMutualConnections = 'Mutual connections';
@@ -84,7 +104,6 @@ class Strings {
   static const String netViewProfile = 'View profile';
   static const String netSearchPeopleHint = 'Search doctors by name…';
   static const String netSearchConnectionsHint = 'Search your connections…';
-  static const String netSearchPrompt = 'Search for colleagues by name.';
   static const String netYourConnections = 'Your connections';
   static String netSeeAllInvitations(int n) =>
       'See all $n invitation${n == 1 ? '' : 's'}';
@@ -156,8 +175,6 @@ class Strings {
   static const String groupInvited = 'Invited';
   static const String groupMembersLabel = 'Members';
   static const String groupAboutLabel = 'About';
-  static const String groupRequestsLabel = 'Requests';
-  static const String groupJoinRequestSentToast = 'Join request sent';
   static const String groupJoinedToast = 'You joined the group';
   static const String groupLeftToast = 'You left the group';
   // -- Groups tab (M5)
@@ -205,6 +222,9 @@ class Strings {
   static const String groupsVisibilityLabel = 'Who can find this group?';
   static const String groupsJoinPolicyLabel = 'How do people join?';
   static const String groupsInviteStepTitle = 'Invite colleagues';
+  static const String groupsInviteSearchHint = 'Search by name or specialty…';
+  static const String groupsNoInvitablePeople =
+      'No colleagues or connections yet. You can invite people later from the group.';
   static const String groupsInviteStepBody =
       'Invite connections now, or share a link after the group is created.';
   static const String groupsCopyLink = 'Copy invite link';

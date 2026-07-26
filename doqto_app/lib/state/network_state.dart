@@ -5,6 +5,8 @@ import '../core/enums/app_enums.dart';
 import '../data/api/websocket_client.dart';
 import '../data/models/network_profile.dart';
 import '../data/repositories/network_repository.dart';
+import 'auth_state.dart';
+import 'org_state.dart';
 
 /// Self-loading, cached relationship+profile for one user, with optimistic
 /// mutation methods that flip [RelationshipState] locally, call the repo, and
@@ -248,4 +250,47 @@ final sentInvitationsProvider =
       .read(networkRepositoryProvider)
       .listInvitations(direction: 'sent', status: 'pending');
   return page.data;
+});
+
+/// Everyone the signed-in doctor can put in a group: their connections PLUS
+/// every colleague in their organization, deduped by id and name-sorted.
+///
+/// Colleagues belong here even without a connection — you already share an
+/// organization, which is exactly why "no connections yet" was the wrong
+/// answer on the invite step. Org members are best-effort: no org, or a failed
+/// fetch, still leaves the connections list usable.
+final invitablePeopleProvider =
+    FutureProvider.autoDispose<List<PersonCard>>((ref) async {
+  final connections = await ref.watch(connectionsProvider.future);
+  final byId = {for (final p in connections) p.id: p};
+
+  final me = ref.watch(authProvider).user?.id;
+  final orgId = ref.watch(orgProvider).current?.id;
+  if (orgId != null) {
+    try {
+      final members = await ref.watch(orgMembersProvider(orgId).future);
+      for (final m in members) {
+        if (m.id == me || byId.containsKey(m.id)) continue;
+        byId[m.id] = PersonCard(
+          id: m.id,
+          fullName: m.fullName,
+          headline: null,
+          specialty: m.specialty,
+          locationLabel: null,
+          avatarColor: m.avatarColor,
+          avatarUrl: m.avatarUrl,
+          avatarPresignedUrl: m.avatarPresignedUrl,
+          // A colleague need not be connected; `out` just means "no edge yet".
+          degree: ConnectionDegree.out,
+          mutualCount: 0,
+        );
+      }
+    } catch (_) {
+      // Colleagues are an addition, never a precondition.
+    }
+  }
+
+  final all = byId.values.toList()
+    ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+  return all;
 });

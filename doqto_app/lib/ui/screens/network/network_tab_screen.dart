@@ -41,6 +41,10 @@ class NetworkTabScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text(Strings.netMyNetwork),
         actions: [
+          // Always present: the inbox is the only place to see and withdraw
+          // requests you SENT, and those exist whether or not anyone has
+          // written to you.
+          _InvitationsAction(count: invites.length),
           IconButton(
             tooltip: Strings.netDiscoverPeople,
             icon: const Icon(Icons.search),
@@ -80,6 +84,45 @@ class NetworkTabScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
+      ),
+    );
+  }
+}
+
+/// App-bar entry to the invitations inbox, badged with the number of requests
+/// waiting on you. Tapping through also reaches the Sent tab.
+class _InvitationsAction extends StatelessWidget {
+  final int count;
+  const _InvitationsAction({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: Strings.netInvitations,
+      onPressed: () => context.push(AppRoutes.networkInvitations),
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.person_add_alt_1_outlined),
+          if (count > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                constraints: const BoxConstraints(minWidth: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.red,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  textAlign: TextAlign.center,
+                  style: AppText.badge.copyWith(color: AppColors.white),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/strings.dart';
-import '../../../core/enums/app_enums.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/tokens/colors.dart';
 import '../../../core/tokens/motion.dart';
@@ -13,29 +12,19 @@ import '../../../core/utils/error_messages.dart';
 import '../../../data/models/group.dart';
 import '../../../state/groups_state.dart';
 import '../../widgets/app_pill.dart';
-import '../../widgets/app_segmented.dart';
 import '../../widgets/app_skeleton.dart';
 import '../../widgets/doctor_avatar.dart';
 import '../../widgets/fade_slide_in.dart';
 import '../../widgets/member_row.dart';
 import '../../widgets/primary_button.dart';
-import '../../widgets/search_bar.dart';
 
-/// The Groups tab: [My groups | Discover]. Create is a header action (the
-/// center FAB slot is owned by the mic).
-class GroupsTabScreen extends ConsumerStatefulWidget {
+/// The Groups tab: my groups only — groups are not discoverable by browsing.
+/// Create is a header action (the center FAB slot is owned by the mic).
+class GroupsTabScreen extends ConsumerWidget {
   const GroupsTabScreen({super.key});
 
   @override
-  ConsumerState<GroupsTabScreen> createState() => _GroupsTabScreenState();
-}
-
-class _GroupsTabScreenState extends ConsumerState<GroupsTabScreen> {
-  int _segment = 0;
-  String _discoverQuery = '';
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: AppColors.appBg,
       appBar: AppBar(
@@ -48,33 +37,11 @@ class _GroupsTabScreenState extends ConsumerState<GroupsTabScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.screenHorizontal,
-              AppSpacing.sm,
-              AppSpacing.screenHorizontal,
-              AppSpacing.xs,
-            ),
-            child: AppSegmented(
-              tabs: const [Strings.groupsMyGroups, Strings.groupsDiscover],
-              index: _segment,
-              onChanged: (i) => setState(() => _segment = i),
-            ),
-          ),
-          Expanded(
-            child: _segment == 0 ? _buildMyGroups() : _buildDiscover(),
-          ),
-        ],
-      ),
+      body: _buildMyGroups(context, ref),
     );
   }
 
-  // ------------------------------------------------------------------ //
-  // My groups
-  // ------------------------------------------------------------------ //
-  Widget _buildMyGroups() {
+  Widget _buildMyGroups(BuildContext context, WidgetRef ref) {
     final async = ref.watch(myGroupsProvider);
     return async.when(
       skipLoadingOnReload: true,
@@ -91,12 +58,8 @@ class _GroupsTabScreenState extends ConsumerState<GroupsTabScreen> {
             text: Strings.netEmptyGroups,
           );
         }
-        // member first, then requested, then invited.
-        final rows = <Group>[
-          ...data.member,
-          ...data.requested,
-          ...data.invited,
-        ];
+        // member first, then invited.
+        final rows = <Group>[...data.member, ...data.invited];
         return RefreshIndicator(
           onRefresh: () => ref.read(myGroupsProvider.notifier).refresh(),
           child: ListView.builder(
@@ -119,86 +82,21 @@ class _GroupsTabScreenState extends ConsumerState<GroupsTabScreen> {
       },
     );
   }
-
-  // ------------------------------------------------------------------ //
-  // Discover
-  // ------------------------------------------------------------------ //
-  Widget _buildDiscover() {
-    final async = ref.watch(groupDiscoverProvider(_discoverQuery));
-    return Column(
-      children: [
-        AppSearchBar(
-          hint: Strings.groupsSearchHint,
-          onChanged: (q) => setState(() => _discoverQuery = q),
-        ),
-        Expanded(
-          child: async.when(
-            loading: () => const SkeletonList(),
-            error: (e, _) => _ErrorPane(
-              message: ErrorMessages.forApi(e),
-              onRetry: () =>
-                  ref.invalidate(groupDiscoverProvider(_discoverQuery)),
-            ),
-            data: (groups) {
-              if (groups.isEmpty) {
-                return const _EmptyPane(
-                  icon: Icons.search_off_rounded,
-                  text: Strings.groupsNoDiscover,
-                );
-              }
-              return ListView.builder(
-                padding: EdgeInsets.only(
-                  top: AppSpacing.sm,
-                  bottom:
-                      MediaQuery.paddingOf(context).bottom + AppSpacing.xl,
-                ),
-                itemCount: groups.length,
-                itemBuilder: (context, i) => FadeSlideIn.staggered(
-                  i,
-                  _DiscoverCard(
-                    group: groups[i],
-                    onTap: () => context.push(AppRoutes.group(groups[i].id)),
-                  ),
-                  enabled: i <= AppMotion.staggerCap,
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
 }
 
-/// A "My groups" list row: avatar, name, member count, membership chips and an
-/// amber dot when an admin's join-request queue is non-empty.
-class _GroupRow extends ConsumerWidget {
+/// A "My groups" list row: avatar, name, member count, and an Invited chip for
+/// a group you have been asked to join but have not accepted yet.
+class _GroupRow extends StatelessWidget {
   final Group group;
   final VoidCallback onTap;
   const _GroupRow({required this.group, required this.onTap});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final subtitle = _memberCountLabel(group.memberCount);
-    Widget? trailing;
-    if (group.membershipTag == GroupMembershipTag.requested) {
-      trailing = const AppPill(label: Strings.groupRequested, tone: PillTone.warn);
-    } else if (group.membershipTag == GroupMembershipTag.invited) {
-      trailing = const AppPill(label: Strings.groupInvited, tone: PillTone.brand);
-    } else if (group.isAdmin) {
-      // Admin rows: amber dot when the join-request queue is non-empty.
-      final count = ref.watch(adminJoinRequestCountProvider(group.id)).valueOrNull ?? 0;
-      if (count > 0) {
-        trailing = Container(
-          width: 10,
-          height: 10,
-          decoration: const BoxDecoration(
-            color: AppColors.amber,
-            shape: BoxShape.circle,
-          ),
-        );
-      }
-    }
+    final trailing = group.membershipTag == GroupMembershipTag.invited
+        ? const AppPill(label: Strings.groupInvited, tone: PillTone.brand)
+        : null;
     return MemberRow(
       avatar: DoctorAvatar(
         initials: group.initials,
@@ -209,44 +107,6 @@ class _GroupRow extends ConsumerWidget {
       title: group.name,
       subtitle: subtitle,
       trailing: trailing,
-      onTap: onTap,
-    );
-  }
-}
-
-/// A discovery card with a Join / Request / View affordance per join policy.
-class _DiscoverCard extends StatelessWidget {
-  final Group group;
-  final VoidCallback onTap;
-  const _DiscoverCard({required this.group, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, _) = switch (group.joinPolicy) {
-      GroupJoinPolicy.open => (Strings.groupJoin, true),
-      GroupJoinPolicy.request => (Strings.groupRequestToJoin, true),
-      _ => (Strings.groupsView, false),
-    };
-    return MemberRow(
-      avatar: DoctorAvatar(
-        initials: group.initials,
-        colorIndex: group.avatarIndex,
-        imageUrl: group.avatarUrl,
-        heroTag: 'group-avatar-${group.id}',
-      ),
-      title: group.name,
-      subtitle: _memberCountLabel(group.memberCount),
-      trailing: SizedBox(
-        // Tapping the affordance just opens the detail, where the full join
-        // state machine (JoinButton) lives.
-        child: AppButton(
-          label: label,
-          variant: group.joinPolicy == GroupJoinPolicy.open
-              ? AppButtonVariant.primary
-              : AppButtonVariant.secondary,
-          onPressed: onTap,
-        ),
-      ),
       onTap: onTap,
     );
   }

@@ -42,6 +42,11 @@ SHARED = {
     "InvitePolicy",
     "DmPolicy",
     "Discoverability",
+    # Groups (M5). Only GroupRole reaches the client wire (role pills), so it
+    # alone is gated. The rest (post/member-DM policy, member/invite states) are
+    # backend-only — deliberately NOT gated, no Dart mirror needed. Visibility
+    # and join policy were retired when groups became invite-only.
+    "GroupRole",
     "MessageType",
     "TranscriptStatus",
     "WsEventServer",

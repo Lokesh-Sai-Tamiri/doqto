@@ -28,43 +28,22 @@ class _FakeMyGroups extends MyGroupsNotifier {
 }
 
 Widget _app() => ProviderScope(
-      overrides: [
-        myGroupsProvider.overrideWith(_FakeMyGroups.new),
-        groupDiscoverProvider.overrideWith((ref, q) async => <Group>[]),
-      ],
+      overrides: [myGroupsProvider.overrideWith(_FakeMyGroups.new)],
       child: const MaterialApp(home: GroupsTabScreen()),
     );
 
 void main() {
-  testWidgets('renders [My groups | Discover] segmented + my group rows',
+  testWidgets('renders my group rows with no discovery affordances',
       (tester) async {
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
-    // Segmented control with both labels.
-    expect(find.byType(AppSegmented), findsOneWidget);
-    expect(find.text(Strings.groupsMyGroups), findsWidgets);
-    expect(find.text(Strings.groupsDiscover), findsWidgets);
-
-    // My groups list shows both member rows.
     expect(find.text('Cardiology Leads'), findsOneWidget);
     expect(find.text('ICU Rounds'), findsOneWidget);
 
-    // No search bar on the My-groups segment.
+    // Groups are not browsable: no segmented control, no search.
+    expect(find.byType(AppSegmented), findsNothing);
     expect(find.byType(AppSearchBar), findsNothing);
-  });
-
-  testWidgets('tapping Discover swaps to the search + browse segment',
-      (tester) async {
-    await tester.pumpWidget(_app());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text(Strings.groupsDiscover).first);
-    await tester.pumpAndSettle();
-
-    // Discover segment surfaces the search bar; member rows are gone.
-    expect(find.byType(AppSearchBar), findsOneWidget);
-    expect(find.text('Cardiology Leads'), findsNothing);
-    expect(find.text(Strings.groupsNoDiscover), findsOneWidget);
+    expect(find.text(Strings.groupsDiscover), findsNothing);
   });
 }

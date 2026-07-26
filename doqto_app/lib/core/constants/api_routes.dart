@@ -73,14 +73,6 @@ class ApiRoutes {
   // Groups (M5) — router mounted at /api/v1.
   static const String groups = '$apiV1/groups';
   static String group(String id) => '$apiV1/groups/$id';
-  static String groupJoin(String id) => '$apiV1/groups/$id/join';
-  static String groupJoinRequests(String id) => '$apiV1/groups/$id/join-requests';
-  static String groupJoinRequestWithdraw(String id) =>
-      '$apiV1/groups/$id/join-requests/me';
-  static String groupJoinRequestApprove(String groupId, String reqId) =>
-      '$apiV1/groups/$groupId/join-requests/$reqId/approve';
-  static String groupJoinRequestReject(String groupId, String reqId) =>
-      '$apiV1/groups/$groupId/join-requests/$reqId/reject';
   static String groupInvites(String id) => '$apiV1/groups/$id/invites';
   static String groupInvite(String groupId, String inviteId) =>
       '$apiV1/groups/$groupId/invites/$inviteId';

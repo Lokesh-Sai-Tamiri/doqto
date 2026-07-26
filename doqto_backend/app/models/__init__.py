@@ -1,7 +1,7 @@
 from app.models.audit import AuditLog
 from app.models.conversation import Conversation, ConversationMember, DirectConversationKey
 from app.models.device_token import DeviceToken
-from app.models.group import Group, GroupInvite, GroupJoinRequest, GroupMember
+from app.models.group import Group, GroupInvite, GroupMember
 from app.models.message import Message, MessageReceipt
 from app.models.network import (
     Block,
@@ -28,7 +28,6 @@ __all__ = [
     "DirectConversationKey",
     "Group",
     "GroupInvite",
-    "GroupJoinRequest",
     "GroupMember",
     "Message",
     "MessageReceipt",

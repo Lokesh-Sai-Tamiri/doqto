@@ -98,20 +98,6 @@ class ReportStatus(StrEnum):
     DISMISSED = "dismissed"
 
 
-class GroupVisibility(StrEnum):
-    # SHARED (client renders): who can find/see the group in discovery (§6.4).
-    PUBLIC = "public"
-    PRIVATE = "private"
-    SECRET = "secret"
-
-
-class GroupJoinPolicy(StrEnum):
-    # SHARED (client renders): how a non-member becomes a member.
-    OPEN = "open"
-    REQUEST = "request"
-    INVITE_ONLY = "invite_only"
-
-
 class GroupRole(StrEnum):
     # SHARED (client renders role pills): §9.3 capability ladder.
     OWNER = "owner"
@@ -142,15 +128,6 @@ class GroupMemberState(StrEnum):
     BANNED = "banned"
     LEFT = "left"
     REMOVED = "removed"
-
-
-class GroupJoinRequestState(StrEnum):
-    """Backend-only — join-request lifecycle."""
-
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    WITHDRAWN = "withdrawn"
 
 
 class GroupInviteState(StrEnum):
@@ -207,9 +184,7 @@ class WsEventServer(StrEnum):
     CONVERSATION_REQUEST_DECLINED = "conversation_request_declined"
     # Groups (M5) — recipient-scoped. SHARED (client renders them).
     GROUP_INVITE_RECEIVED = "group_invite_received"
-    GROUP_JOIN_REQUEST = "group_join_request"
     GROUP_MEMBER_JOINED = "group_member_joined"
-    GROUP_JOIN_REQUEST_APPROVED = "group_join_request_approved"
 
 
 class WsEventClient(StrEnum):

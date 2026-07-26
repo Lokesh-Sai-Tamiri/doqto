@@ -9,18 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import GROUPS_PAGE_SIZE, RATE_LIMIT_READS_PER_MINUTE
 from app.core.dependencies import get_current_user
-from app.core.enums import GroupMemberState, GroupRole, GroupVisibility
+from app.core.enums import GroupInviteState, GroupMemberState, GroupRole
 from app.core.rate_limit import enforce_rate_limit
 from app.core.routes import ApiRoutes
 from app.db.postgres import get_db
 from app.models import (
     Group,
     GroupInvite,
-    GroupJoinRequest,
     GroupMember,
     User,
 )
-from app.core.enums import GroupInviteState, GroupJoinRequestState
 from app.schemas.common import OkResponse
 from app.schemas.group import (
     GroupCardOut,
@@ -30,8 +28,6 @@ from app.schemas.group import (
     GroupOut,
     GroupUpdateIn,
     InviteCreateIn,
-    JoinRequestCreateIn,
-    JoinRequestOut,
     JoinResultOut,
     MemberRoleUpdateIn,
     TransferOwnershipIn,
@@ -81,8 +77,9 @@ def _detail_out(group: Group, membership: GroupMember | None) -> GroupOut:
     if membership is not None:
         out.my_role = GroupRole(membership.role)
         out.my_state = GroupMemberState(membership.state)
-    # §6.4 redaction: non-members of a non-public group see limited fields.
-    if not _is_active(membership) and group.visibility != GroupVisibility.PUBLIC:
+    # Only members and invitees ever reach a group, but an invitee has not
+    # accepted yet — keep the description behind the door until they do.
+    if not _is_active(membership):
         out.description = None
     return out
 
@@ -91,21 +88,19 @@ def _card_out(group: Group, membership: GroupMember | None) -> GroupCardOut:
     card = GroupCardOut(
         id=group.id,
         name=group.name,
-        visibility=group.visibility,
         member_count=group.member_count,
         avatar_url=group.avatar_url,
     )
     if membership is not None:
         card.my_role = GroupRole(membership.role)
         card.my_state = GroupMemberState(membership.state)
-    if group.visibility == GroupVisibility.PUBLIC or _is_active(membership):
+    if _is_active(membership):
         card.description = group.description
-        card.join_policy = group.join_policy
     return card
 
 
 # ---------------------------------------------------------------------- #
-# Create / discovery / detail / update
+# Create / my groups / detail / update
 # ---------------------------------------------------------------------- #
 @router.post(
     ApiRoutes.GROUPS_CREATE, response_model=GroupOut, status_code=status.HTTP_201_CREATED
@@ -122,8 +117,6 @@ async def create_group(
             owner=user,
             name=body.name,
             description=body.description,
-            visibility=body.visibility,
-            join_policy=body.join_policy,
             post_policy=body.post_policy,
             member_dm_policy=body.member_dm_policy,
             org_id=body.org_id,
@@ -137,63 +130,34 @@ async def create_group(
 
 @router.get(ApiRoutes.GROUPS_LIST, response_model=CursorPage)
 async def list_groups(
-    mine: bool = Query(default=False),
     q: str | None = Query(default=None),
     cursor: str | None = Query(default=None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> CursorPage:
+    """My groups. Groups are invite-only and NOT discoverable — there is no
+    browse mode: you are in a group or you have never heard of it."""
     await enforce_rate_limit(user.id, "list_groups", RATE_LIMIT_READS_PER_MINUTE)
     after = _parse_cursor(cursor)
-
-    if mine:
-        stmt = (
-            select(Group, GroupMember)
-            .join(GroupMember, GroupMember.group_id == Group.id)
-            .where(
-                GroupMember.user_id == user.id,
-                GroupMember.state == GroupMemberState.ACTIVE,
-            )
+    stmt = (
+        select(Group, GroupMember)
+        .join(GroupMember, GroupMember.group_id == Group.id)
+        .where(
+            GroupMember.user_id == user.id,
+            GroupMember.state == GroupMemberState.ACTIVE,
         )
-        if q:
-            stmt = stmt.where(Group.name.ilike(f"%{q}%"))
-        if after is not None:
-            stmt = stmt.where(Group.created_at < after)
-        stmt = stmt.order_by(Group.created_at.desc()).limit(GROUPS_PAGE_SIZE + 1)
-        rows = list((await db.execute(stmt)).all())
-        next_cursor = None
-        if len(rows) > GROUPS_PAGE_SIZE:
-            rows = rows[:GROUPS_PAGE_SIZE]
-            next_cursor = rows[-1][0].created_at.isoformat()
-        data = [_card_out(g, m).model_dump(mode="json") for g, m in rows]
-        return CursorPage(data=data, next_cursor=next_cursor)
-
-    # Discovery: SECRET groups are never listed to anyone here. PRIVATE groups
-    # appear (name/member_count only for non-members); PUBLIC appear in full.
-    stmt = select(Group).where(
-        Group.visibility.in_([GroupVisibility.PUBLIC, GroupVisibility.PRIVATE])
     )
     if q:
         stmt = stmt.where(Group.name.ilike(f"%{q}%"))
     if after is not None:
         stmt = stmt.where(Group.created_at < after)
     stmt = stmt.order_by(Group.created_at.desc()).limit(GROUPS_PAGE_SIZE + 1)
-    groups = list((await db.scalars(stmt)).all())
+    rows = list((await db.execute(stmt)).all())
     next_cursor = None
-    if len(groups) > GROUPS_PAGE_SIZE:
-        groups = groups[:GROUPS_PAGE_SIZE]
-        next_cursor = groups[-1].created_at.isoformat()
-    # Batch my memberships for the returned page.
-    ids = [g.id for g in groups]
-    mine_map: dict[uuid.UUID, GroupMember] = {}
-    if ids:
-        rows = await db.scalars(
-            select(GroupMember).where(
-                GroupMember.group_id.in_(ids), GroupMember.user_id == user.id
-            )
-        )
-        mine_map = {m.group_id: m for m in rows.all()}
-    data = [_card_out(g, mine_map.get(g.id)).model_dump(mode="json") for g in groups]
+    if len(rows) > GROUPS_PAGE_SIZE:
+        rows = rows[:GROUPS_PAGE_SIZE]
+        next_cursor = rows[-1][0].created_at.isoformat()
+    data = [_card_out(g, m).model_dump(mode="json") for g, m in rows]
     return CursorPage(data=data, next_cursor=next_cursor)
 
 
@@ -205,9 +169,18 @@ async def get_group(
 ) -> GroupOut:
     group = await _load_group(group_id, db)
     membership = await _my_membership(group, user.id, db)
-    # SECRET groups are 404 to non-members (indistinguishable from nonexistent).
-    if group.visibility == GroupVisibility.SECRET and not _is_active(membership):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="group_not_found")
+    # Groups are invite-only and undiscoverable: anyone who is neither a member
+    # nor a pending invitee gets the same 404 as a group that does not exist.
+    if not _is_active(membership):
+        invited = await db.scalar(
+            select(GroupInvite).where(
+                GroupInvite.group_id == group.id,
+                GroupInvite.invitee_id == user.id,
+                GroupInvite.state == GroupInviteState.PENDING,
+            )
+        )
+        if invited is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="group_not_found")
     return _detail_out(group, membership)
 
 
@@ -234,113 +207,6 @@ async def update_group(
 
 # ---------------------------------------------------------------------- #
 # Join + join requests
-# ---------------------------------------------------------------------- #
-@router.post(ApiRoutes.GROUPS_JOIN, response_model=JoinResultOut)
-async def join_group(
-    group_id: uuid.UUID,
-    request: Request,
-    body: JoinRequestCreateIn | None = None,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> JoinResultOut:
-    group = await _load_group(group_id, db)
-    try:
-        result = await GroupService.join(
-            request=request,
-            user=user,
-            group=group,
-            message=body.message if body else None,
-            db=db,
-        )
-    except GroupError as e:
-        _raise(e)
-    return JoinResultOut(result=result, group_id=group.id)
-
-
-@router.post(ApiRoutes.GROUPS_JOIN_REQUESTS, response_model=JoinResultOut)
-async def create_join_request(
-    group_id: uuid.UUID,
-    body: JoinRequestCreateIn,
-    request: Request,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> JoinResultOut:
-    group = await _load_group(group_id, db)
-    try:
-        result = await GroupService.join(
-            request=request, user=user, group=group, message=body.message, db=db
-        )
-    except GroupError as e:
-        _raise(e)
-    return JoinResultOut(result=result, group_id=group.id)
-
-
-@router.get(ApiRoutes.GROUPS_JOIN_REQUESTS, response_model=list[JoinRequestOut])
-async def list_join_requests(
-    group_id: uuid.UUID,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> list[JoinRequestOut]:
-    group = await _load_group(group_id, db)
-    try:
-        rows = await GroupService.list_join_requests(actor=user, group=group, db=db)
-    except GroupError as e:
-        _raise(e)
-    return [JoinRequestOut.model_validate(r) for r in rows]
-
-
-@router.delete(ApiRoutes.GROUPS_JOIN_REQUEST_WITHDRAW, response_model=OkResponse)
-async def withdraw_join_request(
-    group_id: uuid.UUID,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> OkResponse:
-    group = await _load_group(group_id, db)
-    try:
-        await GroupService.withdraw_join_request(user=user, group=group, db=db)
-    except GroupError as e:
-        _raise(e)
-    return OkResponse()
-
-
-@router.post(ApiRoutes.GROUPS_JOIN_REQUEST_APPROVE, response_model=OkResponse)
-async def approve_join_request(
-    group_id: uuid.UUID,
-    request_id: uuid.UUID,
-    request: Request,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> OkResponse:
-    group = await _load_group(group_id, db)
-    try:
-        await GroupService.approve_join_request(
-            request=request, actor=user, group=group, request_id=request_id, db=db
-        )
-    except GroupError as e:
-        _raise(e)
-    return OkResponse()
-
-
-@router.post(ApiRoutes.GROUPS_JOIN_REQUEST_REJECT, response_model=OkResponse)
-async def reject_join_request(
-    group_id: uuid.UUID,
-    request_id: uuid.UUID,
-    request: Request,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> OkResponse:
-    group = await _load_group(group_id, db)
-    try:
-        await GroupService.reject_join_request(
-            request=request, actor=user, group=group, request_id=request_id, db=db
-        )
-    except GroupError as e:
-        _raise(e)
-    return OkResponse()
-
-
-# ---------------------------------------------------------------------- #
-# Invites
 # ---------------------------------------------------------------------- #
 @router.post(
     ApiRoutes.GROUPS_INVITES, response_model=GroupInviteOut, status_code=status.HTTP_201_CREATED
@@ -566,7 +432,7 @@ async def transfer_ownership(
 # ---------------------------------------------------------------------- #
 @router.get(ApiRoutes.ME_GROUPS, response_model=list[GroupCardOut])
 async def my_groups(
-    state: str = Query(default="member", pattern="^(member|requested|invited)$"),
+    state: str = Query(default="member", pattern="^(member|invited)$"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[GroupCardOut]:
@@ -582,17 +448,6 @@ async def my_groups(
             .order_by(Group.created_at.desc())
         )
         return [_card_out(g, m) for g, m in rows.all()]
-    if state == "requested":
-        rows = await db.execute(
-            select(Group)
-            .join(GroupJoinRequest, GroupJoinRequest.group_id == Group.id)
-            .where(
-                GroupJoinRequest.user_id == user.id,
-                GroupJoinRequest.state == GroupJoinRequestState.PENDING,
-            )
-            .order_by(Group.created_at.desc())
-        )
-        return [_card_out(g, None) for g in rows.scalars().all()]
     # invited
     rows = await db.execute(
         select(Group)

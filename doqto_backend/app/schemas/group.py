@@ -5,18 +5,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.core.constants import (
-    GROUP_DESCRIPTION_MAX_LEN,
-    GROUP_JOIN_REQUEST_MESSAGE_MAX_LEN,
-    GROUP_NAME_MAX_LEN,
-)
+from app.core.constants import GROUP_DESCRIPTION_MAX_LEN, GROUP_NAME_MAX_LEN
 from app.core.enums import (
-    GroupJoinPolicy,
     GroupMemberDmPolicy,
     GroupMemberState,
     GroupPostPolicy,
     GroupRole,
-    GroupVisibility,
 )
 from app.schemas.common import ORMModel
 
@@ -24,8 +18,6 @@ from app.schemas.common import ORMModel
 class GroupCreateIn(BaseModel):
     name: str = Field(min_length=1, max_length=GROUP_NAME_MAX_LEN)
     description: str | None = Field(default=None, max_length=GROUP_DESCRIPTION_MAX_LEN)
-    visibility: GroupVisibility = GroupVisibility.PRIVATE
-    join_policy: GroupJoinPolicy = GroupJoinPolicy.REQUEST
     post_policy: GroupPostPolicy = GroupPostPolicy.ALL_MEMBERS
     member_dm_policy: GroupMemberDmPolicy = GroupMemberDmPolicy.REQUEST
     org_id: uuid.UUID | None = None
@@ -34,8 +26,6 @@ class GroupCreateIn(BaseModel):
 class GroupUpdateIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=GROUP_NAME_MAX_LEN)
     description: str | None = Field(default=None, max_length=GROUP_DESCRIPTION_MAX_LEN)
-    visibility: GroupVisibility | None = None
-    join_policy: GroupJoinPolicy | None = None
     post_policy: GroupPostPolicy | None = None
     member_dm_policy: GroupMemberDmPolicy | None = None
     avatar_url: str | None = Field(default=None, max_length=1024)
@@ -46,8 +36,6 @@ class GroupOut(ORMModel):
     conversation_id: uuid.UUID
     name: str
     description: str | None
-    visibility: GroupVisibility
-    join_policy: GroupJoinPolicy
     post_policy: GroupPostPolicy
     member_dm_policy: GroupMemberDmPolicy
     owner_id: uuid.UUID
@@ -62,33 +50,16 @@ class GroupOut(ORMModel):
 
 
 class GroupCardOut(BaseModel):
-    """Discovery card — visibility-redacted (§6.4). Private groups drop
-    description/join_policy for non-members; secret groups are never listed."""
+    """A row in "my groups". Groups are invite-only and never discoverable, so
+    every card here is one the viewer belongs to or was invited to."""
 
     id: uuid.UUID
     name: str
-    visibility: GroupVisibility
     member_count: int
     avatar_url: str | None = None
     description: str | None = None
-    join_policy: GroupJoinPolicy | None = None
     my_role: GroupRole | None = None
     my_state: GroupMemberState | None = None
-
-
-class JoinRequestCreateIn(BaseModel):
-    message: str | None = Field(
-        default=None, max_length=GROUP_JOIN_REQUEST_MESSAGE_MAX_LEN
-    )
-
-
-class JoinRequestOut(ORMModel):
-    id: uuid.UUID
-    group_id: uuid.UUID
-    user_id: uuid.UUID
-    message: str | None
-    state: str
-    created_at: datetime
 
 
 class InviteCreateIn(BaseModel):
@@ -132,5 +103,7 @@ class GroupMemberOut(BaseModel):
 
 
 class JoinResultOut(BaseModel):
-    result: str  # 'joined' | 'requested'
+    """The only self-service way in is an invite link."""
+
+    result: str  # 'joined'
     group_id: uuid.UUID

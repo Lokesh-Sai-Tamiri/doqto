@@ -2,10 +2,13 @@
 type=group). Legacy org group chats (a plain type=group conversation with a
 non-NULL org_id and NO groups row) are unaffected and never migrated.
 
+Groups are invite-only and never discoverable: there is no visibility, no join
+policy and no join request. You are added by an invite or you never see it.
+
 Indexes/constraints are declared on the models — not only in the migration — so
-the test harness's Base.metadata.create_all builds them too. The two partial
-indexes (one pending join-request per (group, user); active-member role lookup)
-are load-bearing for the acceptance tests and must exist in the test DB.
+the test harness's Base.metadata.create_all builds them too. The partial
+active-member role index is load-bearing for the acceptance tests and must
+exist in the test DB.
 """
 from __future__ import annotations
 
@@ -28,13 +31,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import (
     GroupInviteState,
-    GroupJoinPolicy,
-    GroupJoinRequestState,
     GroupMemberDmPolicy,
     GroupMemberState,
     GroupPostPolicy,
     GroupRole,
-    GroupVisibility,
 )
 from app.db.postgres import Base
 from app.db.tables import Tables
@@ -44,14 +44,6 @@ class Group(Base):
     __tablename__ = Tables.GROUPS
     __table_args__ = (
         CheckConstraint(
-            "visibility IN ('public', 'private', 'secret')",
-            name="ck_groups_visibility",
-        ),
-        CheckConstraint(
-            "join_policy IN ('open', 'request', 'invite_only')",
-            name="ck_groups_join_policy",
-        ),
-        CheckConstraint(
             "post_policy IN ('all_members', 'admins_only')",
             name="ck_groups_post_policy",
         ),
@@ -59,8 +51,6 @@ class Group(Base):
             "member_dm_policy IN ('open', 'request', 'disabled')",
             name="ck_groups_member_dm_policy",
         ),
-        # Discovery ranking: newest/biggest public groups first.
-        Index("ix_groups_visibility_member_count", "visibility", text("member_count DESC")),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -74,18 +64,6 @@ class Group(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    visibility: Mapped[GroupVisibility] = mapped_column(
-        String(20),
-        default=GroupVisibility.PRIVATE,
-        server_default=GroupVisibility.PRIVATE.value,
-        nullable=False,
-    )
-    join_policy: Mapped[GroupJoinPolicy] = mapped_column(
-        String(20),
-        default=GroupJoinPolicy.REQUEST,
-        server_default=GroupJoinPolicy.REQUEST.value,
-        nullable=False,
-    )
     post_policy: Mapped[GroupPostPolicy] = mapped_column(
         String(20),
         default=GroupPostPolicy.ALL_MEMBERS,
@@ -164,53 +142,6 @@ class GroupMember(Base):
     )
     invited_by: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey(f"{Tables.USERS}.id"), nullable=True
-    )
-
-
-class GroupJoinRequest(Base):
-    __tablename__ = Tables.GROUP_JOIN_REQUESTS
-    __table_args__ = (
-        CheckConstraint(
-            "state IN ('pending', 'approved', 'rejected', 'withdrawn')",
-            name="ck_group_join_requests_state",
-        ),
-        # At most one live (pending) request per (group, user).
-        Index(
-            "uq_group_join_requests_pending",
-            "group_id",
-            "user_id",
-            unique=True,
-            postgresql_where=text("state = 'pending'"),
-        ),
-        Index("ix_group_join_requests_group_state", "group_id", "state"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
-    )
-    group_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True),
-        ForeignKey(f"{Tables.GROUPS}.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True),
-        ForeignKey(f"{Tables.USERS}.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    message: Mapped[str | None] = mapped_column(String(300), nullable=True)
-    state: Mapped[GroupJoinRequestState] = mapped_column(
-        String(20),
-        default=GroupJoinRequestState.PENDING,
-        server_default=GroupJoinRequestState.PENDING.value,
-        nullable=False,
-    )
-    decided_by: Mapped[uuid.UUID | None] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey(f"{Tables.USERS}.id"), nullable=True
-    )
-    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
 

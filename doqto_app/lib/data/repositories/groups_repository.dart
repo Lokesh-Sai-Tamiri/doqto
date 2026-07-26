@@ -4,20 +4,19 @@ import '../api/api_client.dart';
 import '../models/group.dart';
 import '../models/network_profile.dart' show CursorPage;
 
-/// Every group endpoint (M5). Discovery/`GET /groups` return a `{data,
-/// next_cursor}` page; `/me/groups`, members and join-requests return bare
-/// lists; single-object endpoints return the object.
+/// Every group endpoint (M5). Groups are invite-only and undiscoverable, so
+/// there is no browse and no join: `GET /groups` returns a `{data,
+/// next_cursor}` page of the caller's own groups, `/me/groups` and members
+/// return bare lists, and single-object endpoints return the object.
 class GroupsRepository {
   final ApiClient _api;
   GroupsRepository(this._api);
 
-  // --- Create / discovery / detail / update ---
+  // --- Create / list / detail / update ---
 
   Future<Group> createGroup({
     required String name,
     String? description,
-    required GroupVisibility visibility,
-    required GroupJoinPolicy joinPolicy,
     String? memberDmPolicy,
     String? postPolicy,
     String? orgId,
@@ -26,8 +25,6 @@ class GroupsRepository {
       'name': name,
       if (description != null && description.isNotEmpty)
         'description': description,
-      'visibility': visibility.wire,
-      'join_policy': joinPolicy.wire,
       'member_dm_policy': ?memberDmPolicy,
       'post_policy': ?postPolicy,
       'org_id': ?orgId,
@@ -35,15 +32,9 @@ class GroupsRepository {
     return Group.fromJson(j);
   }
 
-  /// Discovery / browse. `mine=true` returns the caller's member groups;
-  /// otherwise public+private (secret hidden). `{data, next_cursor}`.
-  Future<CursorPage<Group>> listGroups({
-    bool mine = false,
-    String? q,
-    String? cursor,
-  }) async {
+  /// The caller's groups as a `{data, next_cursor}` page.
+  Future<CursorPage<Group>> listGroups({String? q, String? cursor}) async {
     final j = await _api.get(ApiRoutes.groups, query: {
-      if (mine) 'mine': 'true',
       if (q != null && q.isNotEmpty) 'q': q,
       'cursor': ?cursor,
     });
@@ -62,8 +53,6 @@ class GroupsRepository {
     String id, {
     String? name,
     String? description,
-    GroupVisibility? visibility,
-    GroupJoinPolicy? joinPolicy,
     String? postPolicy,
     String? memberDmPolicy,
     String? avatarUrl,
@@ -71,8 +60,6 @@ class GroupsRepository {
     final j = await _api.patch(ApiRoutes.group(id), body: {
       'name': ?name,
       'description': ?description,
-      if (visibility != null) 'visibility': visibility.wire,
-      if (joinPolicy != null) 'join_policy': joinPolicy.wire,
       'post_policy': ?postPolicy,
       'member_dm_policy': ?memberDmPolicy,
       'avatar_url': ?avatarUrl,
@@ -80,7 +67,7 @@ class GroupsRepository {
     return Group.fromJson(j);
   }
 
-  /// `/me/groups?state=member|requested|invited` → bare list of cards.
+  /// `/me/groups?state=member|invited` → bare list of cards.
   Future<List<Group>> myGroups({String state = 'member'}) async {
     final list = await _api.getList(ApiRoutes.meGroups, query: {'state': state});
     return list
@@ -88,42 +75,7 @@ class GroupsRepository {
         .toList();
   }
 
-  // --- Join + join requests ---
-
-  /// open → member; request → join-request created; invite_only → 403.
-  Future<JoinResult> join(String groupId, {String? message}) async {
-    final j = await _api.post(
-      ApiRoutes.groupJoin(groupId),
-      body: message != null && message.isNotEmpty ? {'message': message} : null,
-    );
-    return JoinResult.fromJson(j);
-  }
-
-  Future<JoinResult> requestToJoin(String groupId, {String? message}) async {
-    final j = await _api.post(
-      ApiRoutes.groupJoinRequests(groupId),
-      body: {if (message != null && message.isNotEmpty) 'message': message},
-    );
-    return JoinResult.fromJson(j);
-  }
-
-  Future<List<GroupJoinRequest>> joinRequests(String groupId) async {
-    final list = await _api.getList(ApiRoutes.groupJoinRequests(groupId));
-    return list
-        .map((e) => GroupJoinRequest.fromJson((e as Map).cast<String, dynamic>()))
-        .toList();
-  }
-
-  Future<void> withdrawJoinRequest(String groupId) =>
-      _api.delete(ApiRoutes.groupJoinRequestWithdraw(groupId));
-
-  Future<void> approveJoinRequest(String groupId, String requestId) =>
-      _api.post(ApiRoutes.groupJoinRequestApprove(groupId, requestId));
-
-  Future<void> rejectJoinRequest(String groupId, String requestId) =>
-      _api.post(ApiRoutes.groupJoinRequestReject(groupId, requestId));
-
-  // --- Invites ---
+  // --- Invites (the only way into a group) ---
 
   Future<Map<String, dynamic>> inviteUser(String groupId, String userId) =>
       _api.post(ApiRoutes.groupInvites(groupId), body: {'user_id': userId});

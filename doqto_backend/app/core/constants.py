@@ -113,8 +113,16 @@ MESSAGE_REQUEST_QUOTA_PER_DAY = 25
 #       which rejects such messages — kept for completeness + invitation reuse)
 #   +1 sender account younger than this many days
 #   +1 no shared context (no shared org AND no mutual connections)
+#
+# Threshold 3 (not 2) deliberately: "new account, no shared context" IS the
+# request tier's whole reason to exist — a doctor who just joined reaching a
+# colleague they haven't met. At 2 those two benign signals alone buried every
+# legitimate first outreach with no badge and no notification, which read as
+# the feature being broken. Nothing scores 3 today (the send guard rejects
+# contact info before it can count), so nothing is hidden until M7 adds real
+# velocity/reputation signals — that is the honest state, not an oversight.
 NEW_ACCOUNT_REQUEST_DAYS = 7
-REQUEST_HIDDEN_THRESHOLD = 2
+REQUEST_HIDDEN_THRESHOLD = 3
 
 # --- People search + public profiles (M2) ---------------------------------- #
 # Cross-org directory surface. Cards/profiles NEVER expose phone/email/NPI.
@@ -143,7 +151,6 @@ DISAPPEAR_OPTIONS_SEC = {
 # --- Groups (M5) ----------------------------------------------------------- #
 GROUP_NAME_MAX_LEN = 100
 GROUP_DESCRIPTION_MAX_LEN = 1000
-GROUP_JOIN_REQUEST_MESSAGE_MAX_LEN = 300
 # Group creation quotas (via enforce_rate_limit + an active-ownership cap).
 GROUP_CREATE_QUOTA_PER_DAY = 5
 GROUP_MAX_OWNED = 20  # max groups a user may actively own at once

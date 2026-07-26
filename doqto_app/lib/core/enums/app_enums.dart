@@ -207,9 +207,7 @@ enum WsEventServer {
   conversationRequestDeclined,
   // Groups (M5) — recipient-scoped, PHI-free.
   groupInviteReceived,
-  groupJoinRequest,
-  groupMemberJoined,
-  groupJoinRequestApproved;
+  groupMemberJoined;
 
   String get wire => switch (this) {
         WsEventServer.newMessage => 'new_message',
@@ -234,10 +232,7 @@ enum WsEventServer {
         WsEventServer.conversationRequestDeclined =>
           'conversation_request_declined',
         WsEventServer.groupInviteReceived => 'group_invite_received',
-        WsEventServer.groupJoinRequest => 'group_join_request',
         WsEventServer.groupMemberJoined => 'group_member_joined',
-        WsEventServer.groupJoinRequestApproved =>
-          'group_join_request_approved',
       };
 
   static WsEventServer? fromWire(String s) => switch (s) {
@@ -263,10 +258,7 @@ enum WsEventServer {
         'conversation_request_declined' =>
           WsEventServer.conversationRequestDeclined,
         'group_invite_received' => WsEventServer.groupInviteReceived,
-        'group_join_request' => WsEventServer.groupJoinRequest,
         'group_member_joined' => WsEventServer.groupMemberJoined,
-        'group_join_request_approved' =>
-          WsEventServer.groupJoinRequestApproved,
         _ => null,
       };
 }
@@ -408,58 +400,6 @@ enum Discoverability {
         'connections' => Discoverability.connections,
         'nobody' => Discoverability.nobody,
         _ => Discoverability.unknown,
-      };
-}
-
-/// Group discovery visibility (groups, M5). Shared wire enum — mirrors backend
-/// GroupVisibility. `public` = full card in discovery; `private` = name+count
-/// only; `secret` = hidden (404 to non-members).
-enum GroupVisibility {
-  @JsonValue('public') public,
-  @JsonValue('private') private,
-  @JsonValue('secret') secret,
-
-  /// Tolerant fallback (A5) — treat like [secret] (least-exposed, safe default).
-  @JsonValue('unknown') unknown;
-
-  String get wire => switch (this) {
-        GroupVisibility.public => 'public',
-        GroupVisibility.private => 'private',
-        GroupVisibility.secret => 'secret',
-        GroupVisibility.unknown => 'unknown',
-      };
-
-  static GroupVisibility fromWire(String? s) => switch (s) {
-        'public' => GroupVisibility.public,
-        'private' => GroupVisibility.private,
-        'secret' => GroupVisibility.secret,
-        _ => GroupVisibility.unknown,
-      };
-}
-
-/// How a non-member becomes a member (groups, M5). Shared wire enum — mirrors
-/// backend GroupJoinPolicy.
-enum GroupJoinPolicy {
-  @JsonValue('open') open,
-  @JsonValue('request') request,
-  @JsonValue('invite_only') inviteOnly,
-
-  /// Tolerant fallback (A5) — treat like [inviteOnly] (never show a join button
-  /// we weren't told about).
-  @JsonValue('unknown') unknown;
-
-  String get wire => switch (this) {
-        GroupJoinPolicy.open => 'open',
-        GroupJoinPolicy.request => 'request',
-        GroupJoinPolicy.inviteOnly => 'invite_only',
-        GroupJoinPolicy.unknown => 'unknown',
-      };
-
-  static GroupJoinPolicy fromWire(String? s) => switch (s) {
-        'open' => GroupJoinPolicy.open,
-        'request' => GroupJoinPolicy.request,
-        'invite_only' => GroupJoinPolicy.inviteOnly,
-        _ => GroupJoinPolicy.unknown,
       };
 }
 

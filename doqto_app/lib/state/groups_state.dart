@@ -5,25 +5,21 @@ import '../core/enums/app_enums.dart';
 import '../data/api/websocket_client.dart';
 import '../data/models/group.dart';
 
-/// The three "My groups" buckets, tagged by which /me/groups query produced
-/// each entry so the tab can render Requested/Invited chips.
+/// The two "My groups" buckets, tagged by which /me/groups query produced each
+/// entry so the tab can render an Invited chip. Groups are invite-only, so
+/// there is no third "requested" bucket.
 class MyGroupsData {
   final List<Group> member;
-  final List<Group> requested;
   final List<Group> invited;
 
-  const MyGroupsData({
-    this.member = const [],
-    this.requested = const [],
-    this.invited = const [],
-  });
+  const MyGroupsData({this.member = const [], this.invited = const []});
 
-  bool get isEmpty => member.isEmpty && requested.isEmpty && invited.isEmpty;
+  bool get isEmpty => member.isEmpty && invited.isEmpty;
 }
 
 /// The signed-in user's groups. Cache-first (Hive) for the member list so a
 /// cold start offline still paints; live-refreshes on group_member_joined /
-/// group_join_request_approved WS events and on reconnect — same idiom as
+/// group_invite_received WS events and on reconnect — same idiom as
 /// [ConnectionsNotifier].
 class MyGroupsNotifier extends AsyncNotifier<MyGroupsData> {
   @override
@@ -31,7 +27,6 @@ class MyGroupsNotifier extends AsyncNotifier<MyGroupsData> {
     final ws = ref.read(websocketClientProvider);
     final sub = ws.events.listen((event) {
       if (event.type == WsEventServer.groupMemberJoined ||
-          event.type == WsEventServer.groupJoinRequestApproved ||
           event.type == WsEventServer.groupInviteReceived) {
         refresh();
       }
@@ -62,23 +57,17 @@ class MyGroupsNotifier extends AsyncNotifier<MyGroupsData> {
 
   Future<MyGroupsData> _fetch() async {
     final repo = ref.read(groupsRepositoryProvider);
-    // Member list is required; requested/invited are best-effort adornments.
+    // Member list is required; invited is a best-effort adornment.
     final member = (await repo.myGroups(state: 'member'))
         .map((g) => g.copyWith(membershipTag: GroupMembershipTag.member))
         .toList();
-    List<Group> requested = const [];
     List<Group> invited = const [];
-    try {
-      requested = (await repo.myGroups(state: 'requested'))
-          .map((g) => g.copyWith(membershipTag: GroupMembershipTag.requested))
-          .toList();
-    } catch (_) {}
     try {
       invited = (await repo.myGroups(state: 'invited'))
           .map((g) => g.copyWith(membershipTag: GroupMembershipTag.invited))
           .toList();
     } catch (_) {}
-    return MyGroupsData(member: member, requested: requested, invited: invited);
+    return MyGroupsData(member: member, invited: invited);
   }
 
   Future<void> refresh() async {
@@ -95,67 +84,15 @@ class MyGroupsNotifier extends AsyncNotifier<MyGroupsData> {
 final myGroupsProvider =
     AsyncNotifierProvider<MyGroupsNotifier, MyGroupsData>(MyGroupsNotifier.new);
 
-/// Self-loading detail for one group, keyed by id. Carries the join/withdraw/
-/// leave state machine with optimistic flips; every mutation invalidates
-/// [myGroupsProvider] so the tab stays truthful.
+/// Self-loading detail for one group, keyed by id. Carries the leave flow with
+/// an optimistic flip; every mutation invalidates [myGroupsProvider] so the tab
+/// stays truthful. There is no join flow — groups are invite-only.
 class GroupDetailNotifier extends FamilyAsyncNotifier<Group, String> {
   @override
   Future<Group> build(String groupId) =>
       ref.read(groupsRepositoryProvider).getGroup(groupId);
 
   Group? get _g => state.valueOrNull;
-
-  /// open-policy join → optimistic member, then reconcile with the server.
-  Future<JoinResult> join() async {
-    final g = _g;
-    if (g == null) throw StateError('group_not_loaded');
-    state = AsyncData(g.copyWith(
-      myRole: GroupRole.member,
-      myState: GroupMemberState.active,
-      memberCount: g.memberCount + 1,
-      membershipTag: GroupMembershipTag.member,
-    ));
-    try {
-      final res = await ref.read(groupsRepositoryProvider).join(arg);
-      ref.invalidate(myGroupsProvider);
-      // Reconcile from source of truth (redaction/role now that we're in).
-      await _reload();
-      return res;
-    } catch (e) {
-      state = AsyncData(g); // roll back
-      rethrow;
-    }
-  }
-
-  /// request-policy join → optimistic Requested tag (no membership yet).
-  Future<JoinResult> requestToJoin({String? message}) async {
-    final g = _g;
-    if (g == null) throw StateError('group_not_loaded');
-    state = AsyncData(g.copyWith(membershipTag: GroupMembershipTag.requested));
-    try {
-      final res = await ref
-          .read(groupsRepositoryProvider)
-          .requestToJoin(arg, message: message);
-      ref.invalidate(myGroupsProvider);
-      return res;
-    } catch (e) {
-      state = AsyncData(g); // roll back
-      rethrow;
-    }
-  }
-
-  Future<void> withdrawRequest() async {
-    final g = _g;
-    if (g == null) return;
-    state = AsyncData(g.copyWith(membershipTag: GroupMembershipTag.none));
-    try {
-      await ref.read(groupsRepositoryProvider).withdrawJoinRequest(arg);
-      ref.invalidate(myGroupsProvider);
-    } catch (e) {
-      state = AsyncData(g);
-      rethrow;
-    }
-  }
 
   Future<void> leave(String myUserId) async {
     final g = _g;
@@ -175,14 +112,6 @@ class GroupDetailNotifier extends FamilyAsyncNotifier<Group, String> {
     }
   }
 
-  Future<void> _reload() async {
-    try {
-      final fresh = await ref.read(groupsRepositoryProvider).getGroup(arg);
-      state = AsyncData(fresh);
-    } catch (_) {
-      // keep optimistic state
-    }
-  }
 }
 
 final groupDetailProvider =
@@ -195,29 +124,3 @@ final groupMembersProvider =
   return ref.read(groupsRepositoryProvider).members(groupId);
 });
 
-/// Pending join requests (admin-only). 403 for non-admins surfaces as an error.
-final joinRequestsProvider = FutureProvider.autoDispose
-    .family<List<GroupJoinRequest>, String>((ref, groupId) {
-  return ref.read(groupsRepositoryProvider).joinRequests(groupId);
-});
-
-/// Count of pending join requests for an admin row's amber dot. Best-effort:
-/// any failure (403 / offline) yields 0 (no dot).
-final adminJoinRequestCountProvider =
-    FutureProvider.autoDispose.family<int, String>((ref, groupId) async {
-  try {
-    final list = await ref.read(groupsRepositoryProvider).joinRequests(groupId);
-    return list.length;
-  } catch (_) {
-    return 0;
-  }
-});
-
-/// Discovery / browse results for a query (empty query = browse all public +
-/// private). Latest-query wins via the family key; auto-disposed.
-final groupDiscoverProvider =
-    FutureProvider.autoDispose.family<List<Group>, String>((ref, query) async {
-  final page =
-      await ref.read(groupsRepositoryProvider).listGroups(q: query);
-  return page.data;
-});

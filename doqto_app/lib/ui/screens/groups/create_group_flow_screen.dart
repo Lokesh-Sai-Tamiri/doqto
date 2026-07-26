@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/strings.dart';
 import '../../../core/di/providers.dart';
-import '../../../core/enums/app_enums.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/tokens/colors.dart';
 import '../../../core/tokens/spacing.dart';
@@ -17,11 +16,12 @@ import '../../widgets/app_skeleton.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/doctor_avatar.dart';
 import '../../widgets/member_row.dart';
+import '../../widgets/search_bar.dart';
 import '../../widgets/step_flow.dart';
 
-/// 3-step group creation: Identity → Access → Invite. Chrome is the shared
-/// [StepFlow]. Creates a real Group entity (POST /groups), then optionally
-/// sends invites, then opens the group detail.
+/// 2-step group creation: Identity → Invite. Chrome is the shared [StepFlow].
+/// Creates a real Group entity (POST /groups), then sends invites, then opens
+/// the group detail. There is no access step: groups are always invite-only.
 class CreateGroupFlowScreen extends ConsumerStatefulWidget {
   const CreateGroupFlowScreen({super.key});
 
@@ -36,9 +36,8 @@ class _CreateGroupFlowScreenState extends ConsumerState<CreateGroupFlowScreen> {
   final _name = TextEditingController();
   final _description = TextEditingController();
 
-  GroupVisibility _visibility = GroupVisibility.private;
-  GroupJoinPolicy _joinPolicy = GroupJoinPolicy.request;
   final Set<String> _invitees = {};
+  String _inviteQuery = '';
 
   bool _submitting = false;
 
@@ -57,7 +56,7 @@ class _CreateGroupFlowScreenState extends ConsumerState<CreateGroupFlowScreen> {
 
   bool get _identityValid => _name.text.trim().isNotEmpty;
 
-  bool get _isLastStep => _step == 2;
+  bool get _isLastStep => _step == 1;
 
   String get _nextLabel => _isLastStep ? Strings.groupsCreateCta : Strings.groupsNext;
 
@@ -83,8 +82,6 @@ class _CreateGroupFlowScreenState extends ConsumerState<CreateGroupFlowScreen> {
       final group = await repo.createGroup(
         name: _name.text.trim(),
         description: _description.text.trim(),
-        visibility: _visibility,
-        joinPolicy: _joinPolicy,
       );
       // Send invites (best-effort — a failed invite doesn't undo the group).
       for (final id in _invitees) {
@@ -94,8 +91,12 @@ class _CreateGroupFlowScreenState extends ConsumerState<CreateGroupFlowScreen> {
       }
       ref.invalidate(myGroupsProvider);
       if (!mounted) return;
-      // Replace the flow with the new group's detail.
-      context.pushReplacement(AppRoutes.group(group.id));
+      // Leave the full-screen flow, then open the new group inside the Groups
+      // tab. The detail is a branch route, so it has to be pushed from the
+      // shell — pushing it from this root-level page collides page keys.
+      final router = GoRouter.of(context);
+      router.pop();
+      router.push(AppRoutes.group(group.id));
     } catch (e) {
       if (mounted) {
         setState(() => _submitting = false);
@@ -116,7 +117,6 @@ class _CreateGroupFlowScreenState extends ConsumerState<CreateGroupFlowScreen> {
         currentStep: _step,
         stepTitles: const [
           Strings.groupsStepIdentity,
-          Strings.groupsStepAccess,
           Strings.groupsStepInvite,
         ],
         onBack: _step == 0 ? null : () => setState(() => _step--),
@@ -128,16 +128,7 @@ class _CreateGroupFlowScreenState extends ConsumerState<CreateGroupFlowScreen> {
     );
   }
 
-  Widget _stepBody() {
-    switch (_step) {
-      case 0:
-        return _identityStep();
-      case 1:
-        return _accessStep();
-      default:
-        return _inviteStep();
-    }
-  }
+  Widget _stepBody() => _step == 0 ? _identityStep() : _inviteStep();
 
   // ---- Step 1: Identity --------------------------------------------------
   Widget _identityStep() {
@@ -169,65 +160,11 @@ class _CreateGroupFlowScreenState extends ConsumerState<CreateGroupFlowScreen> {
     );
   }
 
-  // ---- Step 2: Access ----------------------------------------------------
-  Widget _accessStep() {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenHorizontal),
-      children: [
-        Text(Strings.groupsVisibilityLabel, style: AppText.label),
-        const SizedBox(height: AppSpacing.sm),
-        SelectableRow(
-          title: 'Public',
-          subtitle: Strings.groupsVisPublic,
-          icon: Icons.public,
-          selected: _visibility == GroupVisibility.public,
-          onTap: () => setState(() => _visibility = GroupVisibility.public),
-        ),
-        SelectableRow(
-          title: 'Private',
-          subtitle: Strings.groupsVisPrivate,
-          icon: Icons.lock_outline,
-          selected: _visibility == GroupVisibility.private,
-          onTap: () => setState(() => _visibility = GroupVisibility.private),
-        ),
-        SelectableRow(
-          title: 'Secret',
-          subtitle: Strings.groupsVisSecret,
-          icon: Icons.visibility_off_outlined,
-          selected: _visibility == GroupVisibility.secret,
-          onTap: () => setState(() => _visibility = GroupVisibility.secret),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Text(Strings.groupsJoinPolicyLabel, style: AppText.label),
-        const SizedBox(height: AppSpacing.sm),
-        SelectableRow(
-          title: Strings.groupJoin,
-          subtitle: Strings.groupsPolicyOpen,
-          icon: Icons.group_add_outlined,
-          selected: _joinPolicy == GroupJoinPolicy.open,
-          onTap: () => setState(() => _joinPolicy = GroupJoinPolicy.open),
-        ),
-        SelectableRow(
-          title: Strings.groupRequestToJoin,
-          subtitle: Strings.groupsPolicyRequest,
-          icon: Icons.how_to_reg_outlined,
-          selected: _joinPolicy == GroupJoinPolicy.request,
-          onTap: () => setState(() => _joinPolicy = GroupJoinPolicy.request),
-        ),
-        SelectableRow(
-          title: 'Invite only',
-          subtitle: Strings.groupsPolicyInviteOnly,
-          icon: Icons.mail_outline,
-          selected: _joinPolicy == GroupJoinPolicy.inviteOnly,
-          onTap: () => setState(() => _joinPolicy = GroupJoinPolicy.inviteOnly),
-        ),
-      ],
-    );
-  }
-
-  // ---- Step 3: Invite ----------------------------------------------------
+  // ---- Step 2: Invite ----------------------------------------------------
+  // Connections AND org colleagues — you can put a colleague in a group
+  // without connecting to them first.
   Widget _inviteStep() {
-    final async = ref.watch(connectionsProvider);
+    final async = ref.watch(invitablePeopleProvider);
     return Column(
       children: [
         Padding(
@@ -246,19 +183,33 @@ class _CreateGroupFlowScreenState extends ConsumerState<CreateGroupFlowScreen> {
             ],
           ),
         ),
+        AppSearchBar(
+          hint: Strings.groupsInviteSearchHint,
+          onChanged: (q) => setState(() => _inviteQuery = q),
+        ),
         Expanded(
           child: async.when(
             loading: () => const SkeletonList(),
             error: (e, _) => Center(
               child: Text(ErrorMessages.forApi(e), style: AppText.caption),
             ),
-            data: (connections) {
-              if (connections.isEmpty) {
+            data: (people) {
+              final q = _inviteQuery.trim().toLowerCase();
+              final list = q.isEmpty
+                  ? people
+                  : people
+                      .where((p) =>
+                          p.fullName.toLowerCase().contains(q) ||
+                          (p.specialty?.toLowerCase().contains(q) ?? false))
+                      .toList();
+              if (list.isEmpty) {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(AppSpacing.xl),
                     child: Text(
-                      Strings.netEmptyConnections,
+                      q.isEmpty
+                          ? Strings.groupsNoInvitablePeople
+                          : Strings.netEmptySearch,
                       style: AppText.body,
                       textAlign: TextAlign.center,
                     ),
@@ -266,9 +217,9 @@ class _CreateGroupFlowScreenState extends ConsumerState<CreateGroupFlowScreen> {
                 );
               }
               return ListView.builder(
-                itemCount: connections.length,
+                itemCount: list.length,
                 itemBuilder: (context, i) {
-                  final c = connections[i];
+                  final c = list[i];
                   final selected = _invitees.contains(c.id);
                   return _InviteRow(
                     person: c,

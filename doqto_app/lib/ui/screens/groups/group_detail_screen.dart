@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/strings.dart';
-import '../../../core/di/providers.dart';
 import '../../../core/enums/app_enums.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/tokens/colors.dart';
@@ -20,7 +19,6 @@ import '../../widgets/app_segmented.dart';
 import '../../widgets/app_skeleton.dart';
 import '../../widgets/doctor_avatar.dart';
 import '../../widgets/fade_slide_in.dart';
-import '../../widgets/join_button.dart';
 import '../../widgets/member_row.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/section_card.dart';
@@ -45,7 +43,6 @@ class GroupDetailScreen extends ConsumerStatefulWidget {
 class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
   int _segment = 0;
   bool _segmentInit = false;
-  bool _busy = false;
 
   @override
   Widget build(BuildContext context) {
@@ -63,40 +60,20 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
     );
   }
 
-  GroupMembershipTag _tagFor(Group g) {
-    if (g.isMember) return GroupMembershipTag.member;
-    if (g.membershipTag != GroupMembershipTag.none) return g.membershipTag;
-    final my = ref.watch(myGroupsProvider).valueOrNull;
-    if (my != null) {
-      if (my.requested.any((x) => x.id == g.id)) {
-        return GroupMembershipTag.requested;
-      }
-      if (my.invited.any((x) => x.id == g.id)) return GroupMembershipTag.invited;
-    }
-    return GroupMembershipTag.none;
-  }
-
   Widget _buildLoaded(BuildContext context, Group group) {
-    final tag = _tagFor(group);
-    final isMember = tag == GroupMembershipTag.member;
-    final isAdmin = group.isAdmin;
+    final isMember = group.isMember;
 
-    // Default the segment to Chat for members, About for outsiders (or the
-    // explicit initialSegment from a deep route, e.g. /groups/:id/requests).
+    // Members land in the chat; a pending invitee lands on About.
     if (!_segmentInit) {
       _segmentInit = true;
       _segment = widget.initialSegment ?? (isMember ? 0 : 2);
     }
 
-    final tabs = <String>[
+    const tabs = <String>[
       Strings.groupsChatLabel,
       Strings.groupMembersLabel,
       Strings.groupAboutLabel,
-      if (isAdmin) Strings.groupRequestsLabel,
     ];
-    final reqCount =
-        isAdmin ? (ref.watch(adminJoinRequestCountProvider(group.id)).valueOrNull ?? 0) : 0;
-    final badges = <int?>[null, null, null, if (isAdmin) reqCount];
     if (_segment >= tabs.length) _segment = 0;
 
     return SafeArea(
@@ -105,100 +82,34 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
           _TopBar(group: group, isMember: isMember, onLeave: () => _leave(group)),
           _Header(group: group),
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.screenHorizontal,
-              AppSpacing.sm,
-              AppSpacing.screenHorizontal,
-              AppSpacing.sm,
-            ),
-            child: JoinButton(
-              joinPolicy: group.joinPolicy,
-              membershipTag: tag,
-              busy: _busy,
-              expand: true,
-              onJoin: () => _join(group),
-              onRequest: () => _requestToJoin(group),
-              onWithdraw: () => _withdraw(group),
-              onOpenChat: () => setState(() => _segment = 0),
-            ),
-          ),
-          Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: AppSpacing.screenHorizontal),
             child: AppSegmented(
               tabs: tabs,
               index: _segment,
-              badges: badges,
               onChanged: (i) => setState(() => _segment = i),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Expanded(child: _segmentBody(group, isMember, isAdmin)),
+          Expanded(child: _segmentBody(group, isMember)),
         ],
       ),
     );
   }
 
-  Widget _segmentBody(Group group, bool isMember, bool isAdmin) {
+  Widget _segmentBody(Group group, bool isMember) {
     switch (_segment) {
       case 0:
         return _ChatSegment(group: group, isMember: isMember);
       case 1:
         return _MembersSegment(groupId: group.id);
-      case 2:
-        return _AboutSegment(group: group);
       default:
-        return _RequestsSegment(groupId: group.id);
+        return _AboutSegment(group: group);
     }
   }
-
-  // ---- Join state machine actions ---------------------------------------
 
   GroupDetailNotifier get _notifier =>
       ref.read(groupDetailProvider(widget.groupId).notifier);
-
-  Future<void> _join(Group group) async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
-      await _notifier.join();
-      if (!mounted) return;
-      setState(() => _segment = 0); // land in the chat
-      _toast(Strings.groupJoinedToast);
-    } catch (e) {
-      _toast(ErrorMessages.forApi(e), error: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _requestToJoin(Group group) async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
-      await _notifier.requestToJoin();
-      if (mounted) _toast(Strings.groupJoinRequestSentToast);
-    } catch (e) {
-      _toast(ErrorMessages.forApi(e), error: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _withdraw(Group group) async {
-    final ok = await _confirm(Strings.groupsWithdrawConfirm,
-        confirmLabel: Strings.groupsWithdrawRequest);
-    if (ok != true) return;
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
-      await _notifier.withdrawRequest();
-    } catch (e) {
-      _toast(ErrorMessages.forApi(e), error: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
 
   Future<void> _leave(Group group) async {
     final me = ref.read(authProvider).user;
@@ -283,16 +194,8 @@ class _Header extends StatelessWidget {
   final Group group;
   const _Header({required this.group});
 
-  (String, PillTone) get _visibility => switch (group.visibility) {
-        GroupVisibility.public => ('Public', PillTone.success),
-        GroupVisibility.private => ('Private', PillTone.brand),
-        GroupVisibility.secret => ('Secret', PillTone.neutral),
-        GroupVisibility.unknown => ('Group', PillTone.neutral),
-      };
-
   @override
   Widget build(BuildContext context) {
-    final (visLabel, visTone) = _visibility;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.screenHorizontal,
@@ -316,16 +219,10 @@ class _Header extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.xs),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AppPill(label: visLabel, tone: visTone, icon: Icons.visibility_outlined),
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                group.memberCount == 1 ? '1 member' : '${group.memberCount} members',
-                style: AppText.caption,
-              ),
-            ],
+          Text(
+            group.memberCount == 1 ? '1 member' : '${group.memberCount} members',
+            style: AppText.caption,
+            textAlign: TextAlign.center,
           ),
           if (group.description != null && group.description!.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -441,13 +338,6 @@ class _AboutSegment extends StatelessWidget {
   final Group group;
   const _AboutSegment({required this.group});
 
-  String get _joinRule => switch (group.joinPolicy) {
-        GroupJoinPolicy.open => Strings.groupsPolicyOpen,
-        GroupJoinPolicy.request => Strings.groupsPolicyRequest,
-        GroupJoinPolicy.inviteOnly => Strings.groupsPolicyInviteOnly,
-        _ => Strings.groupsPolicyInviteOnly,
-      };
-
   String get _dmRule => switch (group.memberDmPolicy) {
         'open' => Strings.groupsDmOpen,
         'request' => Strings.groupsDmRequest,
@@ -481,7 +371,7 @@ class _AboutSegment extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _aboutLine(Strings.groupsRulesLabel, _joinRule),
+              _aboutLine(Strings.groupsRulesLabel, Strings.groupsPolicyInviteOnly),
               const Divider(height: AppSpacing.lg),
               _aboutLine(Strings.groupsMemberMessagingLabel, _dmRule),
               if (group.createdAt != null) ...[
@@ -517,145 +407,6 @@ class _AboutSegment extends StatelessWidget {
   }
 }
 
-class _RequestsSegment extends ConsumerWidget {
-  final String groupId;
-  const _RequestsSegment({required this.groupId});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(joinRequestsProvider(groupId));
-    return async.when(
-      loading: () => const SkeletonList(),
-      error: (e, _) => _InlineError(
-        message: ErrorMessages.forApi(e),
-        onRetry: () => ref.invalidate(joinRequestsProvider(groupId)),
-      ),
-      data: (requests) {
-        if (requests.isEmpty) {
-          return const _EmptyLabel(Strings.groupsNoRequests);
-        }
-        return ListView.builder(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.screenHorizontal,
-            0,
-            AppSpacing.screenHorizontal,
-            MediaQuery.paddingOf(context).bottom + AppSpacing.xl,
-          ),
-          itemCount: requests.length,
-          itemBuilder: (context, i) => FadeSlideIn.staggered(
-            i,
-            _JoinRequestCard(groupId: groupId, request: requests[i]),
-            enabled: i <= AppMotion.staggerCap,
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _JoinRequestCard extends ConsumerStatefulWidget {
-  final String groupId;
-  final GroupJoinRequest request;
-  const _JoinRequestCard({required this.groupId, required this.request});
-
-  @override
-  ConsumerState<_JoinRequestCard> createState() => _JoinRequestCardState();
-}
-
-class _JoinRequestCardState extends ConsumerState<_JoinRequestCard> {
-  bool _busy = false;
-
-  Future<void> _act(bool approve) async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    final repo = ref.read(groupsRepositoryProvider);
-    try {
-      final r = widget.request;
-      if (approve) {
-        await repo.approveJoinRequest(widget.groupId, r.id);
-      } else {
-        await repo.rejectJoinRequest(widget.groupId, r.id);
-      }
-      ref.invalidate(joinRequestsProvider(widget.groupId));
-      ref.invalidate(adminJoinRequestCountProvider(widget.groupId));
-      ref.invalidate(groupMembersProvider(widget.groupId));
-      // Approving adds a member — refresh the detail's member count.
-      ref.invalidate(groupDetailProvider(widget.groupId));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(ErrorMessages.forApi(e)),
-          backgroundColor: AppColors.red,
-        ));
-        setState(() => _busy = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final r = widget.request;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: SectionCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                DoctorAvatar(
-                  initials: r.initials,
-                  colorIndex: r.avatarIndex,
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(r.displayName, style: AppText.subheading),
-                      if (r.specialty != null)
-                        Text(r.specialty!, style: AppText.caption),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (r.message != null && r.message!.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(r.message!, style: AppText.body),
-            ],
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: AppButton(
-                    label: Strings.groupsApprove,
-                    loading: _busy,
-                    onPressed: () => _act(true),
-                    expand: true,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: AppButton(
-                    label: Strings.groupsReject,
-                    variant: AppButtonVariant.ghost,
-                    onPressed: _busy ? null : () => _act(false),
-                    expand: true,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// -------------------------------------------------------------------------- //
-// Small shared panes
-// -------------------------------------------------------------------------- //
 class _EmptyLabel extends StatelessWidget {
   final String text;
   const _EmptyLabel(this.text);

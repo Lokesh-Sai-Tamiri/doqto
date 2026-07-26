@@ -26,8 +26,6 @@ TYPE_INVITATION_ACCEPTED = "invitation_accepted"
 # Groups (M5) — badge-only feed types; group_service fans out the specific WS
 # event itself, so these stay out of _PUSH_WORTHY (no push in M5).
 TYPE_GROUP_INVITE_RECEIVED = "group_invite_received"
-TYPE_GROUP_JOIN_REQUEST = "group_join_request"
-TYPE_GROUP_JOIN_REQUEST_APPROVED = "group_join_request_approved"
 
 _PUSH_WORTHY = {TYPE_INVITATION_RECEIVED, TYPE_INVITATION_ACCEPTED}
 

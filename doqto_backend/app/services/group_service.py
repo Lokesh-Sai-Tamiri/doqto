@@ -28,13 +28,10 @@ from app.core.enums import (
     AuditAction,
     ConversationType,
     GroupInviteState,
-    GroupJoinPolicy,
-    GroupJoinRequestState,
     GroupMemberDmPolicy,
     GroupMemberState,
     GroupPostPolicy,
     GroupRole,
-    GroupVisibility,
     WsEventServer,
 )
 from app.core.permissions import can_add_to_group
@@ -44,7 +41,6 @@ from app.models import (
     ConversationMember,
     Group,
     GroupInvite,
-    GroupJoinRequest,
     GroupMember,
     User,
 )
@@ -52,8 +48,6 @@ from app.services.audit_service import AuditService
 from app.services.message_service import MessageService
 from app.services.notification_service import (
     TYPE_GROUP_INVITE_RECEIVED,
-    TYPE_GROUP_JOIN_REQUEST,
-    TYPE_GROUP_JOIN_REQUEST_APPROVED,
     NotificationService,
 )
 from app.services.relationship_service import RelationshipService
@@ -192,8 +186,6 @@ class GroupService:
         owner: User,
         name: str,
         description: str | None,
-        visibility: GroupVisibility,
-        join_policy: GroupJoinPolicy,
         post_policy: GroupPostPolicy,
         member_dm_policy: GroupMemberDmPolicy,
         org_id: uuid.UUID | None,
@@ -223,8 +215,6 @@ class GroupService:
             conversation_id=conv.id,
             name=name,
             description=description,
-            visibility=visibility,
-            join_policy=join_policy,
             post_policy=post_policy,
             member_dm_policy=member_dm_policy,
             owner_id=owner.id,
@@ -254,34 +244,8 @@ class GroupService:
         return group
 
     # ------------------------------------------------------------------ #
-    # Join (policy state machine)
+    # Membership helpers shared with the invite flow
     # ------------------------------------------------------------------ #
-    @staticmethod
-    async def join(
-        *, request: Request, user: User, group: Group, message: str | None, db: AsyncSession
-    ) -> str:
-        """Returns 'joined' (open policy) or 'requested' (request policy).
-        invite_only → 403 (no self-join)."""
-        existing = await GroupService._get_member(group.id, user.id, db)
-        if existing is not None:
-            if existing.state == GroupMemberState.ACTIVE:
-                raise GroupError("already_a_member", status_code=409)
-            if existing.state == GroupMemberState.BANNED:
-                raise GroupError("banned_from_group", status_code=403)
-
-        if group.join_policy == GroupJoinPolicy.INVITE_ONLY:
-            raise GroupError("join_by_invite_only", status_code=403)
-
-        if group.join_policy == GroupJoinPolicy.OPEN:
-            return await GroupService._join_now(
-                request=request, user=user, group=group, invited_by=None, db=db
-            )
-
-        # REQUEST policy → create (or reuse) a pending join request.
-        return await GroupService._create_join_request(
-            request=request, user=user, group=group, message=message, db=db
-        )
-
     @staticmethod
     async def _join_now(
         *,
@@ -328,214 +292,6 @@ class GroupService:
         )
         return "joined"
 
-    # ------------------------------------------------------------------ #
-    # Join requests
-    # ------------------------------------------------------------------ #
-    @staticmethod
-    async def _create_join_request(
-        *, request: Request, user: User, group: Group, message: str | None, db: AsyncSession
-    ) -> str:
-        # 14-day cooldown after a rejection.
-        last_rejected = await db.scalar(
-            select(GroupJoinRequest.decided_at)
-            .where(
-                GroupJoinRequest.group_id == group.id,
-                GroupJoinRequest.user_id == user.id,
-                GroupJoinRequest.state == GroupJoinRequestState.REJECTED,
-            )
-            .order_by(GroupJoinRequest.decided_at.desc())
-            .limit(1)
-        )
-        if last_rejected is not None:
-            if last_rejected.tzinfo is None:
-                last_rejected = last_rejected.replace(tzinfo=timezone.utc)
-            if _now() < last_rejected + timedelta(
-                days=constants.GROUP_REJOIN_COOLDOWN_DAYS
-            ):
-                raise GroupError("rejoin_cooldown", status_code=429)
-
-        jr = GroupJoinRequest(group_id=group.id, user_id=user.id, message=message)
-        db.add(jr)
-        try:
-            await db.flush()
-        except IntegrityError as e:
-            await db.rollback()
-            raise GroupError("join_request_exists", status_code=409) from e
-
-        # Notify admins/moderators (badge + WS GROUP_JOIN_REQUEST).
-        admins = await GroupService._staff_ids(group.id, db)
-        notifs = []
-        for admin_id in admins:
-            n = await NotificationService.create(
-                db=db,
-                user_id=admin_id,
-                type=TYPE_GROUP_JOIN_REQUEST,
-                actor_id=user.id,
-                subject_type="group",
-                subject_id=group.id,
-                payload={"actor_name": user.full_name, "group_name": group.name},
-            )
-            notifs.append((admin_id, n))
-        await db.commit()
-        for admin_id, n in notifs:
-            unread = await NotificationService.unread_count(db=db, user_id=admin_id)
-            await ws_manager.publish_to_users(
-                [admin_id],
-                WsEventServer.GROUP_JOIN_REQUEST,
-                {
-                    "group_id": str(group.id),
-                    "request_id": str(jr.id),
-                    "user_id": str(user.id),
-                    "user_name": user.full_name,
-                },
-            )
-            await NotificationService.publish(notification=n, unread_count=unread)
-        return "requested"
-
-    @staticmethod
-    async def _staff_ids(group_id: uuid.UUID, db: AsyncSession) -> list[uuid.UUID]:
-        """Active owner/admin/moderator ids — the join-request approvers."""
-        rows = await db.scalars(
-            select(GroupMember.user_id).where(
-                GroupMember.group_id == group_id,
-                GroupMember.state == GroupMemberState.ACTIVE,
-                GroupMember.role.in_(
-                    [GroupRole.OWNER, GroupRole.ADMIN, GroupRole.MODERATOR]
-                ),
-            )
-        )
-        return list(rows.all())
-
-    @staticmethod
-    async def list_join_requests(
-        *, actor: User, group: Group, db: AsyncSession
-    ) -> list[GroupJoinRequest]:
-        member = await GroupService.require_active_member(group, actor.id, db)
-        if _rank(member.role) < _rank(GroupRole.MODERATOR):
-            raise GroupError("not_authorized", status_code=403)
-        rows = await db.scalars(
-            select(GroupJoinRequest)
-            .where(
-                GroupJoinRequest.group_id == group.id,
-                GroupJoinRequest.state == GroupJoinRequestState.PENDING,
-            )
-            .order_by(GroupJoinRequest.created_at.desc())
-        )
-        return list(rows.all())
-
-    @staticmethod
-    async def _decide_request(
-        group: Group, request_id: uuid.UUID, db: AsyncSession
-    ) -> GroupJoinRequest:
-        jr = await db.scalar(
-            select(GroupJoinRequest).where(GroupJoinRequest.id == request_id)
-        )
-        if jr is None or jr.group_id != group.id:
-            raise GroupError("join_request_not_found", status_code=404)
-        if jr.state != GroupJoinRequestState.PENDING:
-            raise GroupError("join_request_not_pending", status_code=409)
-        return jr
-
-    @staticmethod
-    async def approve_join_request(
-        *, request: Request, actor: User, group: Group, request_id: uuid.UUID, db: AsyncSession
-    ) -> None:
-        member = await GroupService.require_active_member(group, actor.id, db)
-        if _rank(member.role) < _rank(GroupRole.MODERATOR):
-            raise GroupError("not_authorized", status_code=403)
-        jr = await GroupService._decide_request(group, request_id, db)
-        jr.state = GroupJoinRequestState.APPROVED
-        jr.decided_by = actor.id
-        jr.decided_at = _now()
-        requester_id = jr.user_id
-        requester = await db.scalar(select(User).where(User.id == requester_id))
-        await GroupService._add_membership(
-            group, requester_id, role=GroupRole.MEMBER, invited_by=actor.id, db=db
-        )
-        await AuditService.log_request(
-            request,
-            user_id=actor.id,
-            action=AuditAction.GROUP_JOIN_APPROVED,
-            resource_type="group",
-            resource_id=group.id,
-            db=db,
-            metadata={"member_id": str(requester_id)},
-        )
-        conv = await db.scalar(
-            select(Conversation).where(Conversation.id == group.conversation_id)
-        )
-        name = requester.full_name if requester else "A member"
-        sys_msg = await MessageService.send_system(
-            conv=conv, sender_id=requester_id, content=f"{name} joined", db=db
-        )
-        sys_out = MessageService.to_out(sys_msg)
-        notif = await NotificationService.create(
-            db=db,
-            user_id=requester_id,
-            type=TYPE_GROUP_JOIN_REQUEST_APPROVED,
-            actor_id=actor.id,
-            subject_type="group",
-            subject_id=group.id,
-            payload={"group_name": group.name},
-        )
-        unread = await NotificationService.unread_count(db=db, user_id=requester_id)
-        recipients = await MessageService.member_ids(
-            conversation_id=group.conversation_id, db=db
-        )
-        await db.commit()
-        await ws_manager.publish_to_users(
-            recipients, WsEventServer.NEW_MESSAGE, sys_out.model_dump(mode="json")
-        )
-        await ws_manager.publish_to_users(
-            [requester_id],
-            WsEventServer.GROUP_JOIN_REQUEST_APPROVED,
-            {"group_id": str(group.id)},
-        )
-        await NotificationService.publish(notification=notif, unread_count=unread)
-
-    @staticmethod
-    async def reject_join_request(
-        *, request: Request, actor: User, group: Group, request_id: uuid.UUID, db: AsyncSession
-    ) -> None:
-        member = await GroupService.require_active_member(group, actor.id, db)
-        if _rank(member.role) < _rank(GroupRole.MODERATOR):
-            raise GroupError("not_authorized", status_code=403)
-        jr = await GroupService._decide_request(group, request_id, db)
-        jr.state = GroupJoinRequestState.REJECTED
-        jr.decided_by = actor.id
-        jr.decided_at = _now()
-        await AuditService.log_request(
-            request,
-            user_id=actor.id,
-            action=AuditAction.GROUP_JOIN_REJECTED,
-            resource_type="group",
-            resource_id=group.id,
-            db=db,
-            metadata={"user_id": str(jr.user_id)},
-        )
-        await db.commit()
-        # SILENT: the requester is not notified (they may re-request after 14d).
-
-    @staticmethod
-    async def withdraw_join_request(
-        *, user: User, group: Group, db: AsyncSession
-    ) -> None:
-        jr = await db.scalar(
-            select(GroupJoinRequest).where(
-                GroupJoinRequest.group_id == group.id,
-                GroupJoinRequest.user_id == user.id,
-                GroupJoinRequest.state == GroupJoinRequestState.PENDING,
-            )
-        )
-        if jr is None:
-            raise GroupError("join_request_not_found", status_code=404)
-        jr.state = GroupJoinRequestState.WITHDRAWN
-        jr.decided_at = _now()
-        await db.commit()
-
-    # ------------------------------------------------------------------ #
-    # Invites
-    # ------------------------------------------------------------------ #
     @staticmethod
     async def create_direct_invite(
         *, request: Request, inviter: User, group: Group, invitee_id: uuid.UUID, db: AsyncSession

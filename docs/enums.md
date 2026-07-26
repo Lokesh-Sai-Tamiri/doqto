@@ -140,26 +140,6 @@ so deliberately NOT in the parity-check SHARED set and no Dart mirror.
 | `actioned` | Resolved with action taken |
 | `dismissed` | Resolved, no action |
 
-## GroupVisibility
-
-Who can find/see a group in discovery (§6.4, M5). SHARED — client renders it.
-
-| Wire value | Meaning |
-|---|---|
-| `public` | Listed in discovery in full; anyone may view |
-| `private` | Listed with name/member_count only; full detail for members |
-| `secret` | Never listed; 404 to non-members |
-
-## GroupJoinPolicy
-
-How a non-member becomes a member (M5). SHARED — client renders join UI.
-
-| Wire value | Meaning |
-|---|---|
-| `open` | Anyone may join immediately |
-| `request` | Join requires an admin-approved request |
-| `invite_only` | No self-join; membership only via invite |
-
 ## GroupRole
 
 Group capability ladder (§9.3, M5). SHARED — client renders role pills.
@@ -168,7 +148,7 @@ Group capability ladder (§9.3, M5). SHARED — client renders role pills.
 |---|---|
 | `owner` | Sole owner; transfers ownership, manages admins, cannot leave without transfer |
 | `admin` | Manages members/roles (except admins), removes/bans, edits group |
-| `moderator` | Approves/rejects join requests |
+| `moderator` | Elevated member; moderates the group conversation |
 | `member` | Regular member |
 
 ## GroupPostPolicy (backend-only)
@@ -200,17 +180,6 @@ Group membership lifecycle (M5). Backend-only (client may render active/left).
 | `banned` | Removed and barred from rejoining |
 | `left` | Voluntarily left |
 | `removed` | Removed by an admin |
-
-## GroupJoinRequestState (backend-only)
-
-Join-request lifecycle (M5). Backend-only.
-
-| Wire value | Meaning |
-|---|---|
-| `pending` | Awaiting an admin/moderator decision |
-| `approved` | Approved → membership formed |
-| `rejected` | Rejected (silent; re-request allowed after 14d) |
-| `withdrawn` | Requester withdrew |
 
 ## GroupInviteState (backend-only)
 
@@ -286,9 +255,7 @@ Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but F
 | `conversation_request_accepted` | `conversation_id, user_id` (M4) — recipient accepted; sent to the initiator |
 | `conversation_request_declined` | `conversation_id` (M4) — silent, sent ONLY to the decliner's own devices |
 | `group_invite_received` | `group_id, invite_id, inviter_id, inviter_name, group_name` (M5, no PHI) |
-| `group_join_request` | `group_id, request_id, user_id, user_name` (M5) — sent to admins/moderators |
 | `group_member_joined` | `group_id, user_id, user_name` (M5) — a member joined |
-| `group_join_request_approved` | `group_id` (M5) — sent to the approved requester |
 
 ## WsEventClient (client → server)
 

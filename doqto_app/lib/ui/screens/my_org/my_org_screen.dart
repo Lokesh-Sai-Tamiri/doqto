@@ -129,8 +129,11 @@ class _MemberRowState extends ConsumerState<_MemberRow> {
             memberIds: [widget.member.id],
           );
       if (!mounted) return;
-      context.push(AppRoutes.chat(conv.id));
-    } catch (e) {
+      openConversation(context, conv.id);
+    } catch (e, st) {
+      // The snackbar collapses every failure into one line; keep the real
+      // error where a developer can see it.
+      debugPrint('startChat failed: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(ErrorMessages.forApi(e)),

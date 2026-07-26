@@ -2,7 +2,10 @@ import '../../core/enums/app_enums.dart';
 
 class Conversation {
   final String id;
-  final String orgId;
+
+  /// NULL for every network-scoped conversation — since M0 that includes ALL
+  /// direct conversations, so this is nullable on the wire and here.
+  final String? orgId;
   final ConversationType type;
   final String? name;
   final String? createdBy;
@@ -64,7 +67,7 @@ class Conversation {
 
   factory Conversation.fromJson(Map<String, dynamic> j) => Conversation(
         id: j['id'] as String,
-        orgId: j['org_id'] as String,
+        orgId: j['org_id'] as String?,
         type: ConversationType.fromWire(j['type'] as String),
         name: j['name'] as String?,
         createdBy: j['created_by'] as String?,

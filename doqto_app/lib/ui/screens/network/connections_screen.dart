@@ -114,7 +114,7 @@ class _ConnectionsScreenState extends ConsumerState<ConnectionsScreen> {
             memberIds: [p.id],
           );
       if (!mounted) return;
-      context.push(AppRoutes.chat(conv.id));
+      openConversation(context, conv.id);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

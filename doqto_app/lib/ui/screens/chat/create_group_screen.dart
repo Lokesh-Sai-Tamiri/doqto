@@ -57,7 +57,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             memberIds: _selected.toList(),
           );
       if (!mounted) return;
-      context.go(AppRoutes.chat(conv.id));
+      // Leave the create screen behind: back from the new thread lands on
+      // the chat list, not the form that made it.
+      context.go(AppRoutes.chats);
+      openConversation(context, conv.id);
     } finally {
       if (mounted) setState(() => _loading = false);
     }

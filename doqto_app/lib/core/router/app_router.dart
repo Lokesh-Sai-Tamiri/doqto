@@ -61,7 +61,6 @@ class AppRoutes {
   static const groups = '/groups';
   static const groupsCreate = '/groups/create';
   static String group(String id) => '/groups/$id';
-  static String groupRequests(String id) => '/groups/$id/requests';
   static const settings = '/settings';
   static const profile = '/profile';
   static const profileEdit = '/profile/edit';
@@ -69,6 +68,15 @@ class AppRoutes {
   // Addressable person profile by user id (networking M1). Root-level route;
   // the shell retrofit that moves it into a branch is the next pass.
   static String person(String userId) => '/people/$userId';
+}
+
+/// Opens a conversation from anywhere in the app.
+///
+/// `/chat/:id` sits on the root navigator, above the tab shell, so this works
+/// from any tab or from a full-screen page and back returns to wherever the
+/// chat was opened from.
+void openConversation(BuildContext context, String conversationId) {
+  context.push(AppRoutes.chat(conversationId));
 }
 
 /// Re-evaluates redirects whenever AuthStage changes.
@@ -133,34 +141,34 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, s) => const PendingVerificationScreen(),
       ),
 
+      // --- Full-screen creation flows (root navigator, no tab bar) ---
+      // `/groups/create` MUST be declared before the shell: the shell's
+      // `/groups/:id` would otherwise swallow "create".
+      GoRoute(
+        path: AppRoutes.groupsCreate,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, s) => const CreateGroupFlowScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.createGroup,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, s) => const CreateGroupScreen(),
+      ),
+
       // --- The 4-tab shell (indexed stack, per-branch state preserved) ---
       StatefulShellRoute.indexedStack(
         builder: (_, s, navigationShell) =>
             MainShell(navigationShell: navigationShell),
         branches: [
-          // Branch 0 — Chats. The chat thread lives INSIDE this branch so a
-          // tab hop preserves the open conversation. More specific
-          // `/chat/:id/details` precedes `/chat/:id`.
+          // Branch 0 — Chats. The thread itself is NOT here: it renders
+          // full-screen above the shell (see below) so the tab bar gets out
+          // of the way while you are reading and typing.
           StatefulShellBranch(
             navigatorKey: _chatsNavKey,
             routes: [
               GoRoute(
                 path: AppRoutes.chats,
                 builder: (_, s) => const ChatListScreen(),
-              ),
-              GoRoute(
-                path: AppRoutes.createGroup,
-                builder: (_, s) => const CreateGroupScreen(),
-              ),
-              GoRoute(
-                path: '/chat/:id/details',
-                builder: (_, state) =>
-                    ChatDetailsScreen(conversationId: state.pathParameters['id']!),
-              ),
-              GoRoute(
-                path: '/chat/:id',
-                builder: (_, state) =>
-                    ChatThreadScreen(conversationId: state.pathParameters['id']!),
               ),
             ],
           ),
@@ -182,26 +190,14 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Branch 2 — Groups (M5). Detail/create/requests live inside the
-          // branch so tab state is preserved. `/groups/create` precedes
-          // `/groups/:id`, and `/groups/:id/requests` precedes `/groups/:id`.
+          // Branch 2 — Groups (M5). The detail lives inside the branch so tab
+          // state is preserved; creation is full-screen above the shell.
           StatefulShellBranch(
             navigatorKey: _groupsNavKey,
             routes: [
               GoRoute(
                 path: AppRoutes.groups,
                 builder: (_, s) => const GroupsTabScreen(),
-              ),
-              GoRoute(
-                path: AppRoutes.groupsCreate,
-                builder: (_, s) => const CreateGroupFlowScreen(),
-              ),
-              GoRoute(
-                path: '/groups/:id/requests',
-                builder: (_, state) => GroupDetailScreen(
-                  groupId: state.pathParameters['id']!,
-                  initialSegment: 3,
-                ),
               ),
               GoRoute(
                 path: '/groups/:id',
@@ -224,6 +220,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
 
       // --- Full-screen pushes OVER the shell (root navigator) ---
+      // The conversation covers the tab bar. More specific
+      // `/chat/:id/details` precedes `/chat/:id`.
+      GoRoute(
+        path: '/chat/:id/details',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, state) =>
+            ChatDetailsScreen(conversationId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/chat/:id',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, state) =>
+            ChatThreadScreen(conversationId: state.pathParameters['id']!),
+      ),
       GoRoute(
         path: AppRoutes.settings,
         parentNavigatorKey: rootNavigatorKey,

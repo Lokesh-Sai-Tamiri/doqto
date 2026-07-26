@@ -59,7 +59,7 @@ class PersonProfileScreen extends ConsumerWidget {
             memberIds: [userId],
           );
       if (!context.mounted) return;
-      context.push(AppRoutes.chat(conv.id));
+      openConversation(context, conv.id);
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -162,8 +162,11 @@ class _ProfileBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rel = profile.relationship;
+    // ConnectButton already IS the message button when connected, and for an
+    // unconnected colleague — don't double up in either case.
     final showMessageButton = rel.connectionState != RelationshipState.connected &&
-        rel.canMessage != CanMessage.denied;
+        rel.canMessage != CanMessage.denied &&
+        !(rel.connectionState == RelationshipState.none && rel.isColleague);
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),

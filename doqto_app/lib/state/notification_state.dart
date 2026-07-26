@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/constants/app_constants.dart';
+import '../core/constants/strings.dart';
 import '../core/di/providers.dart';
 import '../core/enums/app_enums.dart';
 import '../core/router/app_router.dart';
@@ -40,6 +41,72 @@ String routePathForPayload(String payload) {
   return AppRoutes.chat(payload);
 }
 
+/// "Dr X sent you a connection request" — banner + a tap that lands on the
+/// sender's profile, where Accept lives. Fired from the `invitation_received`
+/// WS event, which carries the sender's name (not PHI).
+Future<void> _notifyInvitation(Ref ref, Map<String, dynamic> data) async {
+  final senderId = data['sender_id'] as String?;
+  if (senderId == null) return;
+  final name = (data['sender_name'] as String?)?.trim();
+  await ref.read(notificationServiceProvider).showNetworkEvent(
+        // One banner per sender: a re-sent request replaces, never stacks.
+        tag: 'invitation:$senderId',
+        title: Strings.netInvitationNotificationTitle,
+        body: (name == null || name.isEmpty)
+            ? Strings.netInvitationNotificationBodyGeneric
+            : Strings.netInvitationNotificationBody(name),
+        route: 'doqto:///people/$senderId',
+      );
+}
+
+/// "Dr X sent you a message request" — banner + a tap that opens the request
+/// thread. The event carries a name only; the message itself stays out of the
+/// banner, since a stranger's opening line is the one thing we can't vouch for.
+Future<void> _notifyMessageRequest(Ref ref, Map<String, dynamic> data) async {
+  final conversationId = data['conversation_id'] as String?;
+  if (conversationId == null) return;
+  final name = (data['sender_name'] as String?)?.trim();
+  await ref.read(notificationServiceProvider).showNetworkEvent(
+        tag: 'request:$conversationId',
+        title: Strings.netRequestNotificationTitle,
+        body: (name == null || name.isEmpty)
+            ? Strings.netRequestNotificationBodyGeneric
+            : Strings.netRequestNotificationBody(name),
+        route: 'doqto:///chat/$conversationId',
+      );
+}
+
+/// "Dr X accepted your connection request" — told to the original sender.
+Future<void> _notifyInvitationAccepted(Ref ref, Map<String, dynamic> data) async {
+  final userId = data['user_id'] as String?;
+  if (userId == null) return;
+  final name = (data['user_name'] as String?)?.trim();
+  await ref.read(notificationServiceProvider).showNetworkEvent(
+        tag: 'connected:$userId',
+        title: Strings.netConnectedNotificationTitle,
+        body: (name == null || name.isEmpty)
+            ? Strings.netConnectedNotificationBodyGeneric
+            : Strings.netConnectedNotificationBody(name),
+        route: 'doqto:///people/$userId',
+      );
+}
+
+/// "Dr X accepted your message request" — told to the initiator, and opens the
+/// now-unlocked thread so they can carry on.
+Future<void> _notifyRequestAccepted(Ref ref, Map<String, dynamic> data) async {
+  final conversationId = data['conversation_id'] as String?;
+  if (conversationId == null) return;
+  final name = (data['user_name'] as String?)?.trim();
+  await ref.read(notificationServiceProvider).showNetworkEvent(
+        tag: 'request-accepted:$conversationId',
+        title: Strings.netRequestAcceptedNotificationTitle,
+        body: (name == null || name.isEmpty)
+            ? Strings.netRequestAcceptedNotificationBodyGeneric
+            : Strings.netRequestAcceptedNotificationBody(name),
+        route: 'doqto:///chat/$conversationId',
+      );
+}
+
 final notificationListenerProvider = Provider<void>((ref) {
   final service = ref.watch(notificationServiceProvider);
   service.init(onTap: (payload) {
@@ -47,6 +114,22 @@ final notificationListenerProvider = Provider<void>((ref) {
   });
 
   final sub = ref.watch(websocketClientProvider).events.listen((event) async {
+    if (event.type == WsEventServer.invitationReceived) {
+      await _notifyInvitation(ref, event.data);
+      return;
+    }
+    if (event.type == WsEventServer.conversationRequestReceived) {
+      await _notifyMessageRequest(ref, event.data);
+      return;
+    }
+    if (event.type == WsEventServer.invitationAccepted) {
+      await _notifyInvitationAccepted(ref, event.data);
+      return;
+    }
+    if (event.type == WsEventServer.conversationRequestAccepted) {
+      await _notifyRequestAccepted(ref, event.data);
+      return;
+    }
     if (event.type != WsEventServer.newMessage) return;
 
     final me = ref.read(authProvider).user;

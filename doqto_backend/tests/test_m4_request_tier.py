@@ -384,19 +384,28 @@ async def test_request_quota_per_day_429(pair, client, db):
     assert r.json()["detail"] == "rate_limited"
 
 
-async def test_hidden_request_gets_no_push_or_badge(db, client):
-    """A brand-new account with no shared context → hidden request: no badge
-    notification (and, by the same gate, no push)."""
-    hidden_pair = await _make_pair(db, initiator_age_days=0)  # fresh initiator
-    conv_id = await _create_request(client, hidden_pair)
-    await _send(client, hidden_pair.alice_headers, conv_id, "hello there")
+async def test_new_account_first_request_is_visible(db, client):
+    """A doctor who joined yesterday reaching a stranger is the request tier's
+    whole purpose — it must reach them with a badge, not be silently hidden.
+    Regression: at threshold 2, "new account" + "no shared context" alone buried
+    every legitimate first outreach."""
+    fresh = await _make_pair(db, initiator_age_days=0)  # brand-new initiator
+    conv_id = await _create_request(client, fresh)
+    await _send(client, fresh.alice_headers, conv_id, "hello there")
 
     notifs = (
         await db.scalars(
-            select(Notification).where(Notification.user_id == hidden_pair.bob.id)
+            select(Notification).where(Notification.user_id == fresh.bob.id)
         )
     ).all()
-    assert notifs == []  # hidden → no badge
+    assert len(notifs) == 1  # visible → badge
+
+    # And it is listed, unhidden, under the recipient's requests filter.
+    listing = await client.get(
+        "/api/v1/conversations?filter=requests", headers=fresh.bob_headers
+    )
+    row = next(c for c in listing.json() if c["id"] == str(conv_id))
+    assert row["is_hidden"] is False
 
 
 def test_spam_score_signals():
@@ -415,9 +424,24 @@ def test_spam_score_signals():
         sender_account_age_days=400,
         has_shared_context=True,
     )
-    # Brand-new account, no shared context → hidden even without a URL.
-    assert spam_heuristics.is_hidden_request(
+    # Brand-new account with no shared context scores 2 — benign on its own,
+    # and NOT enough to hide: that describes every honest first outreach.
+    assert (
+        spam_heuristics.request_spam_score(
+            content="Hi, quick question",
+            sender_account_age_days=1,
+            has_shared_context=False,
+        )
+        == 2
+    )
+    assert not spam_heuristics.is_hidden_request(
         content="Hi, quick question",
+        sender_account_age_days=1,
+        has_shared_context=False,
+    )
+    # All three signals together — that is spam.
+    assert spam_heuristics.is_hidden_request(
+        content="call me on +1 555 0100 999",
         sender_account_age_days=1,
         has_shared_context=False,
     )

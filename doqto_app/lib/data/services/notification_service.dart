@@ -19,6 +19,14 @@ class NotificationService {
     priority: Priority.high,
   );
 
+  static const _networkChannel = AndroidNotificationDetails(
+    'network',
+    'Network',
+    channelDescription: 'Connection requests and network activity',
+    importance: Importance.high,
+    priority: Priority.high,
+  );
+
   /// [onTap] receives the notification payload (a conversation id).
   Future<void> init({required void Function(String payload) onTap}) async {
     if (_initialized) return;
@@ -55,6 +63,30 @@ class NotificationService {
         android: _channel,
       ),
       payload: conversationId,
+    );
+  }
+
+  /// Networking banner (connection requests and the like). A name is not PHI,
+  /// and this is a LOCAL notification either way — see the class doc.
+  ///
+  /// [tag] dedupes: a second banner with the same tag replaces the first, so a
+  /// re-sent request never stacks. [route] is a `doqto:///…` deep link opened
+  /// on tap.
+  Future<void> showNetworkEvent({
+    required String tag,
+    required String title,
+    required String body,
+    required String route,
+  }) async {
+    await _plugin.show(
+      id: tag.hashCode,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        iOS: DarwinNotificationDetails(),
+        android: _networkChannel,
+      ),
+      payload: route,
     );
   }
 

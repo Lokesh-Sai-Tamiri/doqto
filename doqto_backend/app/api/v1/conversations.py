@@ -490,7 +490,12 @@ async def send_message(
         await ws_manager.publish_to_users(
             [request_received_for],
             WsEventServer.CONVERSATION_REQUEST_RECEIVED,
-            {"conversation_id": str(conversation_id), "sender_id": str(user.id)},
+            {
+                "conversation_id": str(conversation_id),
+                "sender_id": str(user.id),
+                # A name, never the message — the banner must not leak content.
+                "sender_name": user.full_name,
+            },
         )
         PushService.notify_message_request(
             recipient_id=request_received_for, conversation_id=conversation_id
@@ -509,7 +514,11 @@ async def send_message(
         await ws_manager.publish_to_users(
             [request_accepted_for],
             WsEventServer.CONVERSATION_REQUEST_ACCEPTED,
-            {"conversation_id": str(conversation_id), "user_id": str(user.id)},
+            {
+                "conversation_id": str(conversation_id),
+                "user_id": str(user.id),
+                "user_name": user.full_name,
+            },
         )
         accept_unread = await NotificationService.unread_count(
             db=db, user_id=request_accepted_for
@@ -755,7 +764,11 @@ async def accept_request(
     await ws_manager.publish_to_users(
         [initiator_id],
         WsEventServer.CONVERSATION_REQUEST_ACCEPTED,
-        {"conversation_id": str(conversation_id), "user_id": str(user.id)},
+        {
+            "conversation_id": str(conversation_id),
+            "user_id": str(user.id),
+            "user_name": user.full_name,
+        },
     )
     await ws_manager.publish_to_users(
         [initiator_id],

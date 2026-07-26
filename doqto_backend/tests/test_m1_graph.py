@@ -309,3 +309,36 @@ async def test_invitation_push_fires_for_offline_recipient(db, fake_sender):
     )
     assert len(fake_sender.calls) == 1
     assert fake_sender.calls[0]["body"] == "Dr A wants to connect"
+
+
+# --------------------------------------------------------------------------- #
+# Card payloads carry renderable identity (regression: nameless invitation
+# cards, and a connections list whose `id` was absent so the client routed
+# to /people/ and got a page-not-found).
+# --------------------------------------------------------------------------- #
+async def test_invitation_list_carries_sender_and_recipient_identity(client, db):
+    org = await helpers.create_org(db)
+    a, ah = await _user(db, org, "Dr Alpha")
+    b, bh = await _user(db, org, "Dr Beta")
+
+    assert (await _invite(client, ah, b)).status_code == 201
+
+    got = (await client.get(f"{NETWORK}/invitations?direction=received", headers=bh)).json()
+    card = got["data"][0]
+    assert card["sender"]["id"] == str(a.id)
+    assert card["sender"]["full_name"] == "Dr Alpha"
+    assert card["recipient"]["full_name"] == "Dr Beta"
+    # Minimum-necessary: directory fields only.
+    for leaked in ("phone", "email", "npi_number"):
+        assert leaked not in card["sender"]
+
+
+async def test_connections_list_uses_id_not_user_id(client, db):
+    org = await helpers.create_org(db)
+    a, ah = await _user(db, org, "Dr Alpha")
+    b, bh = await _user(db, org, "Dr Beta")
+    await _connect(client, ah, b, bh, a)
+
+    row = (await client.get(f"{NETWORK}/connections", headers=ah)).json()["data"][0]
+    assert row["id"] == str(b.id)
+    assert "user_id" not in row

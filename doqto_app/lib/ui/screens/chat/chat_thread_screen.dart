@@ -630,15 +630,20 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final composerTextOnly = isInitiatorBeforeFirst;
 
     // Non-connected direct network chat (open) → dismissible Connect banner.
+    // Colleagues are excluded: every direct conversation is network-scoped
+    // since M0, so isNetwork alone would nag people who share an org and
+    // never needed a connection in the first place.
+    final otherRel = otherId == null
+        ? null
+        : ref.watch(relationshipProvider(otherId)).valueOrNull?.relationship;
     final showNotConnected = access == ConversationAccess.open &&
         conv != null &&
         conv.isNetwork &&
         (display?.isDirect ?? false) &&
         otherId != null &&
         !_notConnectedDismissed &&
-        ref.watch(relationshipProvider(otherId)).valueOrNull?.relationship
-                .connectionState !=
-            RelationshipState.connected;
+        !(otherRel?.isColleague ?? false) &&
+        otherRel?.connectionState != RelationshipState.connected;
 
     return Scaffold(
       appBar: !widget.showAppBar

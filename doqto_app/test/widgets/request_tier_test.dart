@@ -10,8 +10,9 @@ import 'package:doqto_app/data/repositories/network_repository.dart';
 import 'package:doqto_app/ui/widgets/request_card.dart';
 import 'package:doqto_app/ui/widgets/request_composer_bar.dart';
 
-/// Minimal network repo returning a not-connected profile so ConnectButton
-/// renders its "Connect" state.
+/// Minimal network repo returning a not-connected stranger (can_message
+/// 'request', not 'open') so ConnectButton renders its "Connect" state —
+/// an openly-messageable colleague would render "Message" instead.
 class _FakeNetworkRepository extends NetworkRepository {
   _FakeNetworkRepository() : super(ApiClient());
 
@@ -22,7 +23,7 @@ class _FakeNetworkRepository extends NetworkRepository {
         'full_name': 'Dr. Other',
         'connection_state': 'none',
         'degree': 'out',
-        'can_message': 'open',
+        'can_message': 'request',
       });
 }
 

@@ -13,6 +13,8 @@ import 'stateful_action_button.dart';
 /// Typed control over a person's [RelationshipState], driven by
 /// `relationshipProvider(userId)`:
 ///   - none            → Connect          (optimistic → pending)
+///                       …or Message for a same-org colleague, who never
+///                       needs a connection to talk to you
 ///   - pending_outgoing→ Pending          (long-press / tap → withdraw)
 ///   - pending_incoming→ Accept + Ignore  (paired)
 ///   - connected       → Message          (calls [onMessage])
@@ -37,6 +39,18 @@ class ConnectButton extends ConsumerWidget {
 
     switch (rel.connectionState) {
       case RelationshipState.none:
+        // Same-org colleagues can be messaged without connecting first, so
+        // messaging IS the action. Not keyed off can_message: an org with
+        // dm_policy 'everyone' is open too, and there Connect still means
+        // something.
+        if (rel.isColleague) {
+          return AppButton(
+            label: Strings.netMessage,
+            icon: Icons.chat_bubble_outline,
+            expand: expand,
+            onPressed: onMessage,
+          );
+        }
         return StatefulActionButton<RelationshipState>(
           state: RelationshipState.none,
           expand: expand,

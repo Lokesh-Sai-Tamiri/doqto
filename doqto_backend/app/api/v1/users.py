@@ -188,6 +188,7 @@ async def get_public_profile(
         mutual_count=mutual_count,
         can_message=msg_mode,
         context_label=context_label,
+        is_colleague=bool(ctx.shared_org_ids),
     )
 
 

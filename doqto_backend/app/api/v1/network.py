@@ -26,12 +26,14 @@ from app.schemas.network import (
     CursorPage,
     InvitationCreateIn,
     InvitationOut,
+    InvitationPartyOut,
     InvitationSendResult,
     MutualConnectionOut,
     MuteOut,
     ReportCreateIn,
 )
 from app.services.connection_service import ConnectionError, ConnectionService
+from app.services.file_service import FileService
 from app.services.relationship_service import RelationshipService
 
 router = APIRouter()
@@ -54,6 +56,34 @@ def _parse_cursor(cursor: str | None) -> datetime | None:
         return datetime.fromisoformat(cursor)
     except ValueError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="invalid_cursor") from e
+
+
+async def _invitation_parties(
+    rows: list[ConnectionInvitation], db: AsyncSession
+) -> dict[uuid.UUID, InvitationPartyOut]:
+    """Directory identities for every party in `rows`, keyed by user id.
+
+    One query for the whole page — an invitation carrying only ids renders as
+    a nameless, avatar-less card.
+    """
+    ids = {r.sender_id for r in rows} | {r.recipient_id for r in rows}
+    if not ids:
+        return {}
+    users = (await db.scalars(select(User).where(User.id.in_(ids)))).all()
+    return {
+        u.id: InvitationPartyOut(
+            id=u.id,
+            full_name=u.full_name,
+            headline=u.headline,
+            specialty=u.specialty,
+            avatar_color=u.avatar_color,
+            avatar_url=u.avatar_url,
+            avatar_presigned_url=(
+                await FileService.presigned_url(key=u.avatar_url) if u.avatar_url else None
+            ),
+        )
+        for u in users
+    }
 
 
 # ---------------------------------------------------------------------- #
@@ -113,8 +143,19 @@ async def list_invitations(
     if len(rows) > NETWORK_PAGE_SIZE:
         rows = rows[:NETWORK_PAGE_SIZE]
         next_cursor = rows[-1].created_at.isoformat()
+    parties = await _invitation_parties(rows, db)
     return CursorPage(
-        data=[InvitationOut.model_validate(r).model_dump(mode="json") for r in rows],
+        data=[
+            InvitationOut.model_validate(r)
+            .model_copy(
+                update={
+                    "sender": parties.get(r.sender_id),
+                    "recipient": parties.get(r.recipient_id),
+                }
+            )
+            .model_dump(mode="json")
+            for r in rows
+        ],
         next_cursor=next_cursor,
     )
 
@@ -196,11 +237,16 @@ async def list_connections(
         next_cursor = rows[-1][0].created_at.isoformat()
     data = [
         ConnectionCardOut(
-            user_id=other.id,
+            id=other.id,
             full_name=other.full_name,
             specialty=other.specialty,
             avatar_color=other.avatar_color,
             avatar_url=other.avatar_url,
+            avatar_presigned_url=(
+                await FileService.presigned_url(key=other.avatar_url)
+                if other.avatar_url
+                else None
+            ),
             connected_at=conn.created_at,
         ).model_dump(mode="json")
         for conn, other in rows

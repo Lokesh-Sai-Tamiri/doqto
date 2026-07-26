@@ -76,3 +76,7 @@ class PublicProfileOut(BaseModel):
     mutual_count: int = 0
     can_message: CanMessage
     context_label: str | None = None
+    # True when viewer and target share an organization. `can_message: open`
+    # alone can't stand in for this — an org with dm_policy 'everyone' also
+    # yields open, and there a Connect prompt is still meaningful.
+    is_colleague: bool = False

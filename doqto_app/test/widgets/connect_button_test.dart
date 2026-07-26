@@ -15,7 +15,11 @@ import 'package:doqto_app/ui/widgets/connect_button.dart';
 class _FakeNetworkRepository extends NetworkRepository {
   final Completer<Invitation> inviteCompleter = Completer<Invitation>();
 
-  _FakeNetworkRepository() : super(ApiClient());
+  /// A colleague shares an org and needs no connection; a stranger must
+  /// connect before the Message affordance appears.
+  final bool isColleague;
+
+  _FakeNetworkRepository({this.isColleague = false}) : super(ApiClient());
 
   @override
   Future<NetworkProfile> getProfile(String userId) async =>
@@ -24,7 +28,8 @@ class _FakeNetworkRepository extends NetworkRepository {
         'full_name': 'Dr. Test Subject',
         'connection_state': 'none',
         'degree': 'out',
-        'can_message': 'open',
+        'can_message': isColleague ? 'open' : 'request',
+        'is_colleague': isColleague,
       });
 
   @override
@@ -83,6 +88,15 @@ void main() {
 
     // Notifier flipped connection_state to pending_outgoing → Pending sticks.
     expect(find.text('Pending'), findsWidgets);
+    expect(find.text('Connect'), findsNothing);
+  });
+
+  testWidgets('a same-org colleague gets Message, never Connect',
+      (tester) async {
+    await tester.pumpWidget(_app(_FakeNetworkRepository(isColleague: true)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Message'), findsWidgets);
     expect(find.text('Connect'), findsNothing);
   });
 }

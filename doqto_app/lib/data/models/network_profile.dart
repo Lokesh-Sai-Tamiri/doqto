@@ -33,12 +33,17 @@ class Relationship {
   final int mutualCount;
   final String? contextLabel;
 
+  /// Viewer and target share an organization. Colleagues need no connection to
+  /// message, so the Connect affordances stay out of their way entirely.
+  final bool isColleague;
+
   const Relationship({
     required this.degree,
     required this.connectionState,
     required this.canMessage,
     required this.mutualCount,
     this.contextLabel,
+    this.isColleague = false,
   });
 
   factory Relationship.fromJson(Map<String, dynamic> j) => Relationship(
@@ -47,6 +52,7 @@ class Relationship {
         canMessage: CanMessage.fromWire(j['can_message'] as String?),
         mutualCount: (j['mutual_count'] as num?)?.toInt() ?? 0,
         contextLabel: j['context_label'] as String?,
+        isColleague: (j['is_colleague'] ?? false) as bool,
       );
 
   Relationship copyWith({
@@ -55,6 +61,7 @@ class Relationship {
     CanMessage? canMessage,
     int? mutualCount,
     String? contextLabel,
+    bool? isColleague,
   }) =>
       Relationship(
         degree: degree ?? this.degree,
@@ -62,6 +69,7 @@ class Relationship {
         canMessage: canMessage ?? this.canMessage,
         mutualCount: mutualCount ?? this.mutualCount,
         contextLabel: contextLabel ?? this.contextLabel,
+        isColleague: isColleague ?? this.isColleague,
       );
 }
 
@@ -158,7 +166,9 @@ class PersonCard {
   });
 
   factory PersonCard.fromJson(Map<String, dynamic> j) => PersonCard(
-        id: (j['id'] ?? '') as String,
+        // `user_id`: the connections endpoint names the same field differently.
+        // An empty id routes to `/people/` — a Page-not-found, not an error.
+        id: (j['id'] ?? j['user_id'] ?? '') as String,
         fullName: (j['full_name'] ?? '') as String,
         headline: j['headline'] as String?,
         specialty: j['specialty'] as String?,

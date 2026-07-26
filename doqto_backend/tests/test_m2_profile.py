@@ -179,3 +179,24 @@ async def test_handle_and_headline_roundtrip(client, db):
     body = r.json()
     assert body["handle"] == "cardio_ace"
     assert body["headline"] == "Heart specialist"
+
+
+async def test_profile_marks_same_org_colleagues(client, db):
+    """`can_message: open` can't stand in for 'colleague' — an org with
+    dm_policy 'everyone' is open too. The client hides its Connect prompts on
+    this flag, so it must be explicit."""
+    org = await helpers.create_org(db)
+    a = await helpers.create_user(db, full_name="Dr Alpha")
+    b = await helpers.create_user(db, full_name="Dr Beta")
+    await helpers.add_org_member(db, org, a)
+    await helpers.add_org_member(db, org, b)
+    ah = await helpers.auth_headers(a.id)
+
+    colleague = (await client.get(f"/api/v1/users/{b.id}/profile", headers=ah)).json()
+    assert colleague["is_colleague"] is True
+
+    other_org = await helpers.create_org(db)
+    c = await helpers.create_user(db, full_name="Dr Gamma")
+    await helpers.add_org_member(db, other_org, c)
+    stranger = (await client.get(f"/api/v1/users/{c.id}/profile", headers=ah)).json()
+    assert stranger["is_colleague"] is False

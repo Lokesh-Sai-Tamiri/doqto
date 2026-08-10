@@ -161,6 +161,7 @@ GROUPS_PAGE_SIZE = 30
 GROUP_INVITE_TOKEN_BYTES = 24
 
 DISAPPEAR_PURGE_INTERVAL_SEC = 60
+SCHEDULED_SEND_INTERVAL_SEC = 15  # delivery granularity for scheduled messages
 # Hard-delete grace: content of soft-deleted/expired messages is crypto-shredded
 # (encrypted blobs nulled, S3 objects deleted) once older than this.
 PURGE_CONTENT_GRACE_SEC = 30 * 24 * 3600  # 30 days

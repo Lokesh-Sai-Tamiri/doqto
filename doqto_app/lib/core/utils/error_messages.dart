@@ -80,6 +80,10 @@ class ErrorMessages {
     'avatar_empty': 'That image looks empty. Please pick another one.',
     'skills_too_many': 'You can add up to 20 skills.',
     'skill_too_long': 'Each skill must be 40 characters or fewer.',
+
+    // Scheduled messages
+    'invalid_schedule_time': 'Pick a time at least a minute in the future.',
+    'conversation_not_open': 'You can\'t schedule messages in this conversation yet.',
   };
 
   /// Translate any thrown error into a physician-friendly single-line message.

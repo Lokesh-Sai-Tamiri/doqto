@@ -65,3 +65,8 @@ WS_EVENTS_CHANNEL = "ws:events"
 def purge_lock_key() -> str:
     """Singleton lock so only one replica runs the disappearing-message purge."""
     return "lock:purge_expired"
+
+
+def scheduled_send_lock_key() -> str:
+    """Singleton lock so only one replica delivers due scheduled messages."""
+    return "lock:scheduled_send"

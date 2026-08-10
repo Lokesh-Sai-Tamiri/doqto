@@ -392,19 +392,19 @@ export default function BAAPage() {
               <p>
                 Email:{" "}
                 <a
-                  href="mailto:privacy@doqto.com"
+                  href="mailto:privacy@doqto.ai"
                   className="text-primary hover:underline"
                 >
-                  privacy@doqto.com
+                  privacy@doqto.ai
                 </a>
               </p>
               <p>
                 General:{" "}
                 <a
-                  href="mailto:hello@doqto.com"
+                  href="mailto:hello@doqto.ai"
                   className="text-primary hover:underline"
                 >
-                  hello@doqto.com
+                  hello@doqto.ai
                 </a>
               </p>
             </div>

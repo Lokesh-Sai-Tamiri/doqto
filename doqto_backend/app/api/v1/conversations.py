@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
@@ -17,7 +18,7 @@ from app.core.constants import (
 )
 from app.core import permissions
 from app.core.config import settings
-from app.core.security import decrypt_message
+from app.core.security import decrypt_message, encrypt_message
 from app.core.dependencies import get_current_user
 from app.core.enums import (
     AuditAction,
@@ -30,7 +31,14 @@ from app.core.enums import (
 from app.core.rate_limit import enforce_rate_limit
 from app.core.routes import ApiRoutes
 from app.db.postgres import get_db
-from app.models import Conversation, ConversationMember, Message, OrgMember, User
+from app.models import (
+    Conversation,
+    ConversationMember,
+    Message,
+    OrgMember,
+    ScheduledMessage,
+    User,
+)
 from app.schemas.common import OkResponse
 from app.services import spam_heuristics
 from app.services.relationship_service import RelationshipService
@@ -40,7 +48,12 @@ from app.schemas.conversation import (
     ConversationOut,
     ConversationSettingsIn,
 )
-from app.schemas.message import MessageOut, MessageSendIn
+from app.schemas.message import (
+    MessageOut,
+    MessageScheduleIn,
+    MessageSendIn,
+    ScheduledMessageOut,
+)
 from app.services.audit_service import AuditService, request_meta
 from app.services.group_service import GroupService
 from app.services.message_service import MessageError, MessageService
@@ -533,6 +546,63 @@ async def send_message(
         PushService.notify_new_message(
             conversation_id=conversation_id, recipient_ids=recipients, sender_id=user.id
         )
+    return out
+
+
+@router.post(ApiRoutes.CONVERSATIONS_MESSAGES_SCHEDULE, response_model=ScheduledMessageOut)
+async def schedule_message(
+    conversation_id: uuid.UUID,
+    body: MessageScheduleIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ScheduledMessageOut:
+    await enforce_rate_limit(user.id, "send_message")
+    conv = await _assert_member(conversation_id, user.id, db)
+    # Scheduling into a pending/declined request thread would sidestep the
+    # request-tier send guard — only open conversations accept schedules.
+    if conv.access != ConversationAccess.OPEN:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="conversation_not_open")
+    if conv.type == ConversationType.GROUP:
+        if not await GroupService.check_post_allowed(
+            conversation_id=conversation_id, user_id=user.id, db=db
+        ):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="post_restricted")
+    try:
+        local = datetime.fromisoformat(body.scheduled_local)
+        tz = ZoneInfo(body.timezone)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="invalid_schedule_time") from e
+    if local.tzinfo is None:
+        local = local.replace(tzinfo=tz)
+    scheduled_at = local.astimezone(timezone.utc)
+    now = datetime.now(tz=timezone.utc)
+    if scheduled_at <= now + timedelta(seconds=30) or scheduled_at > now + timedelta(days=365):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="invalid_schedule_time")
+
+    row = ScheduledMessage(
+        conversation_id=conversation_id,
+        sender_id=user.id,
+        content_encrypted=encrypt_message(body.content),
+        timezone=body.timezone,
+        scheduled_at=scheduled_at,
+    )
+    db.add(row)
+    await db.flush()
+    await AuditService.log(
+        db,
+        user_id=user.id,
+        action=AuditAction.MESSAGE_SENT,
+        resource_type="scheduled_message",
+        resource_id=row.id,
+    )
+    out = ScheduledMessageOut(
+        id=row.id,
+        conversation_id=conversation_id,
+        scheduled_at=scheduled_at,
+        timezone=body.timezone,
+        status=str(row.status),
+    )
+    await db.commit()
     return out
 
 

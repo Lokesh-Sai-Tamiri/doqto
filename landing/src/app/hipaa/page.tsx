@@ -353,28 +353,28 @@ export default function HIPAAPage() {
               <p>
                 Email:{" "}
                 <a
-                  href="mailto:compliance@doqto.com"
+                  href="mailto:compliance@doqto.ai"
                   className="text-primary hover:underline"
                 >
-                  compliance@doqto.com
+                  compliance@doqto.ai
                 </a>
               </p>
               <p>
                 Security:{" "}
                 <a
-                  href="mailto:security@doqto.com"
+                  href="mailto:security@doqto.ai"
                   className="text-primary hover:underline"
                 >
-                  security@doqto.com
+                  security@doqto.ai
                 </a>
               </p>
               <p>
                 General:{" "}
                 <a
-                  href="mailto:hello@doqto.com"
+                  href="mailto:hello@doqto.ai"
                   className="text-primary hover:underline"
                 >
-                  hello@doqto.com
+                  hello@doqto.ai
                 </a>
               </p>
             </div>

@@ -216,6 +216,136 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  // ---- Scheduled send (long-press on the send button) ---------------------
+
+  static const _deviceZone = 'Device time';
+  // ponytail: curated zone list; the server (Python zoneinfo) accepts any
+  // IANA name, so growing this is a one-line-per-zone change.
+  static const _zones = [
+    _deviceZone,
+    'UTC',
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'Europe/London',
+    'Europe/Berlin',
+    'Asia/Dubai',
+    'Asia/Kolkata',
+    'Asia/Singapore',
+    'Asia/Tokyo',
+    'Australia/Sydney',
+  ];
+
+  Future<void> _openScheduleSheet() async {
+    final text = _input.text.trim();
+    if (text.isEmpty) return;
+    var when = DateTime.now().add(const Duration(hours: 1));
+    var date = DateTime(when.year, when.month, when.day);
+    var time = TimeOfDay.fromDateTime(when);
+    var zone = _deviceZone;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Schedule message',
+                    style: Theme.of(ctx).textTheme.titleMedium,
+                    textAlign: TextAlign.center),
+                ListTile(
+                  leading:
+                      const Icon(Icons.event, color: AppColors.medBlue),
+                  title: Text(DateFormat.yMMMEd().format(date)),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: date,
+                      firstDate: DateTime.now(),
+                      lastDate:
+                          DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) setSheet(() => date = picked);
+                  },
+                ),
+                ListTile(
+                  leading:
+                      const Icon(Icons.schedule, color: AppColors.medBlue),
+                  title: Text(time.format(ctx)),
+                  onTap: () async {
+                    final picked =
+                        await showTimePicker(context: ctx, initialTime: time);
+                    if (picked != null) setSheet(() => time = picked);
+                  },
+                ),
+                ListTile(
+                  leading:
+                      const Icon(Icons.public, color: AppColors.medBlue),
+                  title: DropdownButton<String>(
+                    value: zone,
+                    isExpanded: true,
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      for (final z in _zones)
+                        DropdownMenuItem(
+                            value: z, child: Text(z.replaceAll('_', ' '))),
+                    ],
+                    onChanged: (z) {
+                      if (z != null) setSheet(() => zone = z);
+                    },
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Schedule'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final wall =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    // Device zone: the client already knows the UTC instant — send it as UTC.
+    // Named zone: send the wall-clock time and let the server's tz database
+    // resolve the instant (DST rules live in one place).
+    final scheduledLocal = zone == _deviceZone
+        ? wall.toUtc().toIso8601String()
+        : DateFormat("yyyy-MM-dd'T'HH:mm:00").format(wall);
+    final tz = zone == _deviceZone ? 'UTC' : zone;
+    try {
+      await ref.read(chatRepositoryProvider).scheduleText(
+            widget.conversationId,
+            text,
+            scheduledLocal: scheduledLocal,
+            timezone: tz,
+          );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ErrorMessages.forApi(e))));
+      }
+      return;
+    }
+    if (!mounted) return;
+    _input.clear();
+    setState(() => _hasText = false);
+    _stopTyping();
+    final zoneLabel = zone == _deviceZone ? '' : ' (${zone.replaceAll('_', ' ')})';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+          'Scheduled for ${DateFormat.yMMMEd().format(wall)} ${time.format(context)}$zoneLabel'),
+    ));
+  }
+
   // ---- Request-tier actions (recipient) -----------------------------------
 
   Future<void> _acceptRequest() async {
@@ -465,20 +595,38 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final isLocalPending =
         m.clientId != null && m.status != MessageStatus.sent;
     if (isLocalPending && m.type != MessageType.text) {
-      final label = switch (m.type) {
-        MessageType.voiceNote =>
-          'Voice note (${(m.voiceDurationSec ?? 0) ~/ 60}:${((m.voiceDurationSec ?? 0) % 60).toString().padLeft(2, '0')})',
-        _ => m.fileName ?? 'Attachment',
-      };
-      final bubble = MessageBubble(
-        text: label,
-        isMine: isMine,
-        timestamp: m.createdAt.toLocal(),
-        read: m.read,
-        delivered: m.delivered,
-        status: m.status,
-        grouped: grouped,
-      );
+      final Widget bubble;
+      if (m.type == MessageType.image && m.localPath != null) {
+        bubble = PendingImageBubble(
+          path: m.localPath!,
+          isMine: isMine,
+          timestamp: m.createdAt.toLocal(),
+          status: m.status,
+        );
+      } else if (m.type == MessageType.file) {
+        bubble = FileBubble(
+          getFileUrl: null, // still local — nothing to open yet
+          fileName: m.fileName ?? 'Document',
+          isMine: isMine,
+          timestamp: m.createdAt.toLocal(),
+          status: m.status,
+        );
+      } else {
+        final label = switch (m.type) {
+          MessageType.voiceNote =>
+            'Voice note (${(m.voiceDurationSec ?? 0) ~/ 60}:${((m.voiceDurationSec ?? 0) % 60).toString().padLeft(2, '0')})',
+          _ => m.fileName ?? 'Attachment',
+        };
+        bubble = MessageBubble(
+          text: label,
+          isMine: isMine,
+          timestamp: m.createdAt.toLocal(),
+          read: m.read,
+          delivered: m.delivered,
+          status: m.status,
+          grouped: grouped,
+        );
+      }
       if (m.status == MessageStatus.failed) {
         return AppPressable(
           onTap: () => _onFailedTap(m.clientId!),
@@ -857,6 +1005,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         haptic: true,
                         minTarget: true,
                         onTap: _send,
+                        onLongPress: _openScheduleSheet,
                         child: Container(
                           width: 44,
                           height: 44,

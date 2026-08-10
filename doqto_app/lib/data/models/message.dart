@@ -23,6 +23,9 @@ class Message {
   final MessageStatus status;
   final String? clientId; // outbox idempotency key (echoed by the server)
   final int? seq; // per-conversation sequence (null for pending/legacy cache)
+  // Outbox media file on disk — lets pending image bubbles show a real
+  // preview instead of a filename. Never serialized; rebuilt from the outbox.
+  final String? localPath;
 
   const Message({
     required this.id,
@@ -43,6 +46,7 @@ class Message {
     this.status = MessageStatus.sent,
     this.clientId,
     this.seq,
+    this.localPath,
   });
 
   /// Optimistic local message (text, media, or voice): shown with a clock tick
@@ -58,6 +62,7 @@ class Message {
     int? voiceDurationSec,
     String? transcript,
     MessageStatus status = MessageStatus.sending,
+    String? localPath,
   }) =>
       Message(
         id: clientId,
@@ -75,6 +80,7 @@ class Message {
         createdAt: DateTime.now().toUtc(),
         status: status,
         clientId: clientId,
+        localPath: localPath,
       );
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
@@ -144,5 +150,6 @@ class Message {
         status: status ?? this.status,
         clientId: clientId,
         seq: seq,
+        localPath: localPath,
       );
 }

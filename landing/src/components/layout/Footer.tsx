@@ -15,7 +15,7 @@ const footerLinks = {
     { label: "HIPAA Compliance", href: "/hipaa" },
   ],
   contact: [
-    { label: "hello@doqto.com", href: "mailto:hello@doqto.com" },
+    { label: "hello@doqto.ai", href: "mailto:hello@doqto.ai" },
     { label: "Support", href: "#" },
   ],
 };
@@ -97,7 +97,8 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-gray-600">
-            &copy; {new Date().getFullYear()} Doqto. All rights reserved.
+            &copy; {new Date().getFullYear()} DOQTO LLC &middot; 11213 Delmar
+            St, Leawood, KS 66211. All rights reserved.
           </p>
           <div className="flex items-center gap-4 text-xs text-gray-600">
             <div className="flex items-center gap-1.5">

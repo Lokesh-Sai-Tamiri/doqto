@@ -306,19 +306,19 @@ export default function TermsPage() {
               <p>
                 Email:{" "}
                 <a
-                  href="mailto:legal@doqto.com"
+                  href="mailto:legal@doqto.ai"
                   className="text-primary hover:underline"
                 >
-                  legal@doqto.com
+                  legal@doqto.ai
                 </a>
               </p>
               <p>
                 General:{" "}
                 <a
-                  href="mailto:hello@doqto.com"
+                  href="mailto:hello@doqto.ai"
                   className="text-primary hover:underline"
                 >
-                  hello@doqto.com
+                  hello@doqto.ai
                 </a>
               </p>
             </div>

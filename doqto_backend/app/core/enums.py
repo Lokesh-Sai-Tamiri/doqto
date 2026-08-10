@@ -155,6 +155,12 @@ class TranscriptStatus(StrEnum):
     FAILED = "failed"
 
 
+class ScheduledMessageStatus(StrEnum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+
+
 class PresenceStatus(StrEnum):
     ONLINE = "online"
     AWAY = "away"

@@ -241,6 +241,7 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
           fileName: e.fileName,
           voiceDurationSec: e.durationSec,
           transcript: e.transcript,
+          localPath: e.filePath,
         ),
     ];
   }
@@ -486,6 +487,7 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
           ? MessageType.image
           : MessageType.file,
       fileName: filename,
+      localPath: path,
     ));
     unawaited(_deliver(entry));
   }

@@ -23,8 +23,8 @@ from app.api.v1 import (
     users,
 )
 from app.core.config import settings
-from app.core.constants import DISAPPEAR_PURGE_INTERVAL_SEC
-from app.core.redis_keys import purge_lock_key
+from app.core.constants import DISAPPEAR_PURGE_INTERVAL_SEC, SCHEDULED_SEND_INTERVAL_SEC
+from app.core.redis_keys import purge_lock_key, scheduled_send_lock_key
 from app.core.routes import ApiPrefix
 from app.db.postgres import SessionLocal
 from app.db.redis import close_redis, get_redis
@@ -70,6 +70,77 @@ async def _purge_expired_loop() -> None:
         await asyncio.sleep(DISAPPEAR_PURGE_INTERVAL_SEC)
 
 
+async def _scheduled_send_loop() -> None:
+    """Deliver due scheduled messages, forever.
+
+    Each due row goes through the same MessageService.send_text pipeline as a
+    live send (encryption, seq, audit, request guards), then the standard
+    NEW_MESSAGE fanout + push. Failures mark the row failed — never retried,
+    so a permanently-blocked conversation can't wedge the loop."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from app.core.enums import ScheduledMessageStatus, WsEventServer
+    from app.core.security import decrypt_message
+    from app.models import ScheduledMessage
+    from app.services.message_service import MessageError
+    from app.services.push_service import PushService
+
+    while True:
+        try:
+            redis = await get_redis()
+            got_lock = await redis.set(
+                scheduled_send_lock_key(), "1", nx=True, ex=SCHEDULED_SEND_INTERVAL_SEC - 2
+            )
+            if got_lock:
+                async with SessionLocal() as db:
+                    due = (
+                        await db.scalars(
+                            select(ScheduledMessage)
+                            .where(
+                                ScheduledMessage.status == ScheduledMessageStatus.PENDING,
+                                ScheduledMessage.scheduled_at <= datetime.now(tz=timezone.utc),
+                            )
+                            .order_by(ScheduledMessage.scheduled_at)
+                            .limit(100)
+                        )
+                    ).all()
+                    for row in due:
+                        try:
+                            msg = await MessageService.send_text(
+                                conversation_id=row.conversation_id,
+                                sender_id=row.sender_id,
+                                content=decrypt_message(row.content_encrypted),
+                                db=db,
+                            )
+                            row.status = ScheduledMessageStatus.SENT
+                            out = MessageService.to_out(msg)
+                            recipients = await MessageService.member_ids(
+                                conversation_id=row.conversation_id, db=db
+                            )
+                            await db.commit()
+                            await ws_manager.publish_to_users(
+                                recipients,
+                                WsEventServer.NEW_MESSAGE,
+                                out.model_dump(mode="json"),
+                            )
+                            PushService.notify_new_message(
+                                conversation_id=row.conversation_id,
+                                recipient_ids=recipients,
+                                sender_id=row.sender_id,
+                            )
+                        except MessageError as e:
+                            await db.rollback()
+                            row.status = ScheduledMessageStatus.FAILED
+                            row.error = str(e)[:100]
+                            await db.commit()
+                            logger.warning("scheduled send %s failed: %s", row.id, e)
+        except Exception:
+            logger.exception("scheduled_send failed")
+        await asyncio.sleep(SCHEDULED_SEND_INTERVAL_SEC)
+
+
 def verify_boot_secrets(s=settings) -> None:
     """Refuse to boot outside local with placeholder or malformed secrets.
 
@@ -94,10 +165,12 @@ def verify_boot_secrets(s=settings) -> None:
 async def lifespan(_: FastAPI):
     verify_boot_secrets()
     purge_task = asyncio.create_task(_purge_expired_loop())
+    scheduled_task = asyncio.create_task(_scheduled_send_loop())
     # Pumps Redis pub/sub → this instance's sockets (multi-worker fanout).
     subscriber_task = asyncio.create_task(ws_manager.run_subscriber())
     yield
     purge_task.cancel()
+    scheduled_task.cancel()
     subscriber_task.cancel()
     await close_redis()
 

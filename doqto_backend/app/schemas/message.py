@@ -16,6 +16,23 @@ class MessageSendIn(BaseModel):
     client_id: str | None = Field(default=None, max_length=64)
 
 
+class MessageScheduleIn(BaseModel):
+    content: str = Field(min_length=1, max_length=5000)
+    # Wall-clock time in the picked zone, naive ISO ("2026-08-09T14:30:00").
+    scheduled_local: str = Field(max_length=32)
+    # IANA zone name ("Asia/Kolkata"); the server resolves the UTC instant so
+    # DST rules live in one place (Python zoneinfo), not in every client.
+    timezone: str = Field(max_length=64)
+
+
+class ScheduledMessageOut(BaseModel):
+    id: uuid.UUID
+    conversation_id: uuid.UUID
+    scheduled_at: datetime  # resolved UTC instant
+    timezone: str
+    status: str
+
+
 class MessageOut(BaseModel):
     id: uuid.UUID
     conversation_id: uuid.UUID

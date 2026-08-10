@@ -79,6 +79,24 @@ class ChatRepository {
     return Message.fromJson(j);
   }
 
+  /// Queue [content] for future delivery. [scheduledLocal] is the wall-clock
+  /// time in [timezone] (IANA name); the server resolves the UTC instant.
+  Future<void> scheduleText(
+    String conversationId,
+    String content, {
+    required String scheduledLocal,
+    required String timezone,
+  }) async {
+    await _api.post(
+      ApiRoutes.conversationScheduleMessage(conversationId),
+      body: {
+        'content': content,
+        'scheduled_local': scheduledLocal,
+        'timezone': timezone,
+      },
+    );
+  }
+
   Future<Message> uploadFile({
     required String conversationId,
     required List<int> bytes,

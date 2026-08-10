@@ -66,6 +66,7 @@ class ApiRoutes:
     CONVERSATIONS_LIST = ""
     CONVERSATIONS_CREATE = ""
     CONVERSATIONS_MESSAGES = "/{conversation_id}/messages"
+    CONVERSATIONS_MESSAGES_SCHEDULE = "/{conversation_id}/messages/schedule"
     CONVERSATIONS_READ = "/{conversation_id}/read"
     CONVERSATIONS_DELIVERED = "/{conversation_id}/delivered"
     CONVERSATIONS_UPLOAD = "/{conversation_id}/messages/upload"

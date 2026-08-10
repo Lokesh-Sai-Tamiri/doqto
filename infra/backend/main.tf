@@ -412,6 +412,55 @@ resource "aws_ecs_service" "api" {
   }
 }
 
+# ---------- CI deploy user (GitHub Actions) ----------
+# ponytail: access keys in repo secrets; switch to OIDC if keys become a concern.
+
+resource "aws_iam_user" "ci" {
+  name = "${local.name}-ci"
+}
+
+resource "aws_iam_user_policy" "ci" {
+  name = "deploy"
+  user = aws_iam_user.ci.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage",
+          "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"
+        ]
+        Resource = aws_ecr_repository.api.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ecs:UpdateService", "ecs:DescribeServices"]
+        Resource = aws_ecs_service.api.id
+      }
+    ]
+  })
+}
+
+resource "aws_iam_access_key" "ci" {
+  user = aws_iam_user.ci.name
+}
+
+output "ci_access_key_id" {
+  value = aws_iam_access_key.ci.id
+}
+
+output "ci_secret_access_key" {
+  value     = aws_iam_access_key.ci.secret
+  sensitive = true
+}
+
 output "alb_dns" {
   value = aws_lb.api.dns_name
 }

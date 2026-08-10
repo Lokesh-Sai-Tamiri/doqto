@@ -1,38 +1,44 @@
 import type { Metadata } from "next";
-import { Outfit } from "next/font/google";
+import { Fraunces, Instrument_Sans } from "next/font/google";
 import SmoothScrollProvider from "@/providers/SmoothScrollProvider";
 import "./globals.css";
 
-const outfit = Outfit({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  variable: "--font-outfit",
+  variable: "--font-fraunces",
+  display: "swap",
+  axes: ["SOFT", "WONK", "opsz"],
+  style: ["normal", "italic"],
+});
+
+const instrument = Instrument_Sans({
+  subsets: ["latin"],
+  variable: "--font-instrument",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Dox2Dox — Secure Healthcare Messaging with AI Clinical Assistant",
+  title: "Doqto — Secure Healthcare Messaging",
   description:
-    "HIPAA-compliant messaging platform with E2E encryption, AI clinical assistant Inara, voice messaging, and organization management. Built for healthcare teams.",
+    "HIPAA-compliant messaging platform with E2E encryption, voice messaging, and organization management. Built for healthcare teams.",
   keywords: [
     "HIPAA compliant messaging",
     "healthcare communication",
     "encrypted messaging",
-    "clinical assistant AI",
     "medical messaging app",
     "secure healthcare chat",
   ],
   openGraph: {
-    title: "Dox2Dox — Secure Healthcare Messaging",
+    title: "Doqto — Secure Healthcare Messaging",
     description:
-      "HIPAA-compliant messaging with E2E encryption and AI clinical assistant. Built for healthcare teams.",
+      "HIPAA-compliant messaging with E2E encryption. Built for healthcare teams.",
     type: "website",
-    siteName: "Dox2Dox",
+    siteName: "Doqto",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Dox2Dox — Secure Healthcare Messaging",
-    description:
-      "HIPAA-compliant messaging with E2E encryption and AI clinical assistant.",
+    title: "Doqto — Secure Healthcare Messaging",
+    description: "HIPAA-compliant messaging with E2E encryption.",
   },
   robots: {
     index: true,
@@ -46,8 +52,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={outfit.variable}>
-      <body className="bg-white text-gray-900 antialiased">
+    <html lang="en" className={`${fraunces.variable} ${instrument.variable}`}>
+      <body className="bg-cream text-ink antialiased">
         <SmoothScrollProvider>{children}</SmoothScrollProvider>
       </body>
     </html>

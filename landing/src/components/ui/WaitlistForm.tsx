@@ -23,10 +23,22 @@ export default function WaitlistForm({
 
     setStatus("loading");
     try {
+      const body = JSON.stringify({ email });
+      // CloudFront's Lambda OAC requires the payload hash on POST requests.
+      const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(body)
+      );
+      const hash = Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
       const res = await fetch("/api/waitlist", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-amz-content-sha256": hash,
+        },
+        body,
       });
       const data = await res.json();
       if (data.success) {
@@ -75,11 +87,11 @@ export default function WaitlistForm({
           placeholder="Enter your work email"
           required
           className={cn(
-            "w-full rounded-full border bg-white/90 backdrop-blur-sm text-gray-900 placeholder:text-gray-400 transition-all duration-300",
-            "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary",
+            "w-full rounded-full border bg-card/95 backdrop-blur-sm text-ink placeholder:text-ink-soft/70 transition-all duration-300",
+            "focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary",
             large
-              ? "px-7 py-4.5 text-lg border-gray-200"
-              : "px-5 py-3.5 text-base border-gray-200",
+              ? "px-7 py-4.5 text-lg border-line"
+              : "px-5 py-3.5 text-base border-line",
             status === "error" && "border-red-300 focus:ring-red-200"
           )}
         />
@@ -88,8 +100,8 @@ export default function WaitlistForm({
         type="submit"
         disabled={status === "loading"}
         className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all duration-300 cursor-pointer",
-          "bg-primary text-black hover:bg-primary-dark shadow-lg shadow-primary/20",
+          "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-300 cursor-pointer",
+          "bg-primary text-cream hover:bg-primary-dark shadow-lg shadow-primary/20",
           "hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5",
           "disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0",
           "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2",

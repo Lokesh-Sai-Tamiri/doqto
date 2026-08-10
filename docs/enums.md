@@ -1,0 +1,360 @@
+# Doqto — Cross-Stack Enum Contract
+
+> Single source of truth for every enum shared between Flutter and FastAPI.
+> Wire values (right column) are the JSON representation — these MUST match exactly on both sides.
+> A CI gate (`scripts/check_enum_parity.py`) compares this file to `app/core/enums.py` (Python) and `lib/core/enums/*.dart` (Dart) on every build.
+
+## Rules
+
+1. **Wire values are `snake_case` lowercase strings.** No camelCase on the wire.
+2. **Dart enum names are `camelCase`** (Dart idiom), mapped to wire via `@JsonValue('...')`.
+3. **Python enum values ARE the wire strings** (use `StrEnum`). Member names can be UPPER_SNAKE.
+4. **Adding a value:** update this file → update `enums.py` → update `enums/*.dart` → parity check passes.
+5. **Removing a value:** add a migration — never silently drop. Mark deprecated here first.
+6. **Reordering:** fine for humans, irrelevant for wire.
+
+---
+
+## UserRole
+
+| Wire value | Meaning |
+|---|---|
+| `doctor` | Standard doctor account |
+| `super_admin` | Platform operator who verifies orgs |
+
+## OrgStatus
+
+| Wire value | Meaning |
+|---|---|
+| `pending` | Awaiting super-admin verification |
+| `active` | Verified and operational |
+| `suspended` | Disabled by super-admin |
+
+## OrgRole
+
+| Wire value | Meaning |
+|---|---|
+| `admin` | Org admin (creator by default) |
+| `doctor` | Regular member |
+
+## PracticeType
+
+| Wire value | Meaning |
+|---|---|
+| `independent` | Independent practice |
+| `specialty_group` | Multi-doctor specialty group |
+| `community_hospital` | Community hospital |
+
+## ConversationType
+
+| Wire value | Meaning |
+|---|---|
+| `direct` | 1:1 between two doctors |
+| `group` | 3+ members, has name |
+
+## ConversationAccess
+
+Networking tier of a conversation (M0 substrate; wired to clients from M3/M4).
+
+| Wire value | Meaning |
+|---|---|
+| `open` | Normal conversation — both sides message freely |
+| `pending_request` | Message request awaiting recipient accept |
+| `declined` | Recipient declined the request |
+
+## ExternalDmPolicy (backend-only)
+
+Org admin policy — never sent to the Flutter client, so it is deliberately NOT
+in the parity-check SHARED set and has no Dart mirror.
+
+| Wire value | Meaning |
+|---|---|
+| `disabled` | Members cannot DM outside the org |
+| `connections_only` | External DMs only between connected users |
+| `connections_and_requests` | Connections DM freely; others via message request |
+
+## DirectoryVisibility (backend-only)
+
+Org admin policy — never sent to the Flutter client, so it is deliberately NOT
+in the parity-check SHARED set and has no Dart mirror.
+
+| Wire value | Meaning |
+|---|---|
+| `org_only` | Members discoverable inside their org only |
+| `network` | Members discoverable by the professional network |
+| `public` | Members discoverable platform-wide |
+
+## InvitationStatus
+
+Connection-invitation lifecycle (networking graph, M1). Client-facing (invitation lists).
+
+| Wire value | Meaning |
+|---|---|
+| `pending` | Awaiting recipient response |
+| `accepted` | Recipient accepted → connection formed |
+| `ignored` | Recipient ignored (silent to sender) |
+| `withdrawn` | Sender withdrew before response |
+| `expired` | Aged out (lazy computation; no cron) |
+
+## InvitePolicy
+
+Who may send me a connection invitation (`user_privacy_settings`, M1). Client edits it.
+
+| Wire value | Meaning |
+|---|---|
+| `everyone` | Anyone may invite me |
+| `second_degree` | Only people in my extended network |
+| `shared_group_or_org` | Only shared-org / shared-group members |
+| `nobody` | No one may invite me |
+
+## DmPolicy
+
+Who may open a direct conversation with me (`user_privacy_settings`, M1). Client edits it.
+
+| Wire value | Meaning |
+|---|---|
+| `everyone` | Anyone may DM me directly |
+| `connections_and_requests` | Connections DM freely; others via message request |
+| `connections_only` | Only my connections may DM me |
+| `nobody` | No one may DM me |
+
+## Discoverability
+
+Who may find me / view my profile (`user_privacy_settings`, M1). Client edits it.
+
+| Wire value | Meaning |
+|---|---|
+| `everyone` | Discoverable by the whole network |
+| `connections` | Only my connections |
+| `nobody` | Not discoverable |
+
+## ReportStatus (backend-only)
+
+Moderation report lifecycle — never sent to the Flutter client (queue UI is M7),
+so deliberately NOT in the parity-check SHARED set and no Dart mirror.
+
+| Wire value | Meaning |
+|---|---|
+| `open` | Newly filed, unreviewed |
+| `reviewing` | Under moderator review |
+| `actioned` | Resolved with action taken |
+| `dismissed` | Resolved, no action |
+
+## GroupRole
+
+Group capability ladder (§9.3, M5). SHARED — client renders role pills.
+
+| Wire value | Meaning |
+|---|---|
+| `owner` | Sole owner; transfers ownership, manages admins, cannot leave without transfer |
+| `admin` | Manages members/roles (except admins), removes/bans, edits group |
+| `moderator` | Elevated member; moderates the group conversation |
+| `member` | Regular member |
+
+## GroupPostPolicy (backend-only)
+
+Who may post in the group conversation (M5). Backend-only — NOT in the parity SHARED set.
+
+| Wire value | Meaning |
+|---|---|
+| `all_members` | Any active member may post |
+| `admins_only` | Only owner/admin may post |
+
+## GroupMemberDmPolicy (backend-only)
+
+Whether a member may DM a co-member from group context (M5). Backend-only.
+
+| Wire value | Meaning |
+|---|---|
+| `open` | Co-member DM opens directly |
+| `request` | Co-member DM goes through the message-request tier |
+| `disabled` | No member-to-member DM from group context |
+
+## GroupMemberState (backend-only)
+
+Group membership lifecycle (M5). Backend-only (client may render active/left).
+
+| Wire value | Meaning |
+|---|---|
+| `active` | Current member |
+| `banned` | Removed and barred from rejoining |
+| `left` | Voluntarily left |
+| `removed` | Removed by an admin |
+
+## GroupInviteState (backend-only)
+
+Invite lifecycle — direct + link (M5). Backend-only.
+
+| Wire value | Meaning |
+|---|---|
+| `pending` | Live invite |
+| `accepted` | Accepted → membership formed |
+| `declined` | Invitee declined |
+| `revoked` | Admin revoked |
+| `expired` | Past its expiry |
+
+## MessageType
+
+| Wire value | Meaning |
+|---|---|
+| `text` | Plain text (encrypted at rest) |
+| `voice_note` | Audio + auto-transcript |
+| `image` | Image attachment |
+| `file` | Generic file attachment |
+| `system` | System event (joined/left/removed) |
+
+## TranscriptStatus
+
+| Wire value | Meaning |
+|---|---|
+| `none` | Not a voice note |
+| `pending` | Transcribe job running |
+| `completed` | Transcript available |
+| `failed` | Transcribe job errored |
+
+## PresenceStatus
+
+| Wire value | Meaning |
+|---|---|
+| `online` | Active in last 5 min |
+| `away` | Inactive 5–30 min |
+| `offline` | Inactive 30+ min |
+
+## DisappearAfter
+
+Stored as raw integer seconds in DB (`conversations.disappear_after_sec`), but Flutter selects via enum:
+
+| Wire value (int seconds) | Enum member | Meaning |
+|---|---|---|
+| `null` | `off` | Disappearing disabled |
+| `86400` | `day` | 24 hours |
+| `604800` | `week` | 7 days |
+| `2592000` | `month` | 30 days |
+| `7776000` | `quarter` | 90 days |
+
+## WsEventServer (server → client)
+
+| Wire value | Payload fields |
+|---|---|
+| `new_message` | `message_id, conversation_id, sender_id, type, content, created_at` |
+| `transcript_ready` | `message_id, transcript` |
+| `message_delivered` | `conversation_id, user_id` (conversation-level ack) |
+| `message_read` | `message_id, user_id, read_at` |
+| `presence_update` | `user_id, status` |
+| `member_added` | `conversation_id, user_id, user_name` |
+| `member_removed` | `conversation_id, user_id` |
+| `system_message` | `conversation_id, text` |
+| `typing_start` | `conversation_id, user_id` |
+| `typing_stop` | `conversation_id, user_id` |
+| `heartbeat_ack` | `{}` — direct reply to a client heartbeat (liveness signal) |
+| `invitation_received` | `invitation_id, sender_id, sender_name` (M1, no PHI) |
+| `invitation_accepted` | `invitation_id, user_id, user_name` (M1, no PHI) |
+| `connection_removed` | `user_id` — the party who removed you (M1) |
+| `notification_created` | `notification_id, type, unread_count` (M1, PHI-free) |
+| `conversation_request_received` | `conversation_id, sender_id` (M4, no PHI) — a message request became visible |
+| `conversation_request_accepted` | `conversation_id, user_id` (M4) — recipient accepted; sent to the initiator |
+| `conversation_request_declined` | `conversation_id` (M4) — silent, sent ONLY to the decliner's own devices |
+| `group_invite_received` | `group_id, invite_id, inviter_id, inviter_name, group_name` (M5, no PHI) |
+| `group_member_joined` | `group_id, user_id, user_name` (M5) — a member joined |
+
+## WsEventClient (client → server)
+
+| Wire value | Payload |
+|---|---|
+| `heartbeat` | `{}` — sent every 60s |
+| `typing_start` | `conversation_id` |
+| `typing_stop` | `conversation_id` |
+
+## DevicePlatform
+
+| Wire value | Meaning |
+|---|---|
+| `ios` | Apple device (APNs via FCM) |
+| `android` | Android device (FCM) |
+
+## JwtTokenType
+
+| Wire value | Meaning |
+|---|---|
+| `access` | Short-lived (1h) |
+| `refresh` | Long-lived (7d) |
+
+## AuditAction
+
+| Wire value | Meaning |
+|---|---|
+| `login` | User authenticated successfully |
+| `logout` | Session invalidated |
+| `register` | New user completed profile |
+| `otp_requested` | OTP SMS requested |
+| `otp_verified` | OTP successfully verified |
+| `org_created` | Organization created |
+| `org_joined` | User joined an organization |
+| `org_verified` | Super-admin verified an org |
+| `org_policy_changed` | Org admin changed networking policy (kill switch / DM policy / directory visibility) |
+| `member_removed` | Admin removed a doctor |
+| `conversation_created` | Direct/group created |
+| `group_member_added` | Doctor added to group |
+| `group_member_left` | Doctor left group |
+| `group_member_removed` | Doctor removed by creator |
+| `message_sent` | Message persisted |
+| `message_read` | Message marked read |
+| `file_uploaded` | File/voice attachment uploaded |
+| `file_accessed` | Presigned URL issued |
+| `invitation_sent` | Connection invitation created |
+| `invitation_accepted` | Connection invitation accepted → connection formed |
+| `invitation_ignored` | Recipient ignored an invitation |
+| `invitation_withdrawn` | Sender withdrew an invitation |
+| `connection_removed` | Either party removed a connection |
+| `user_blocked` | User blocked another user |
+| `user_unblocked` | User unblocked another user |
+| `report_filed` | Abuse/spam report filed |
+| `networking_policy_denied` | External networking path denied by kill switch / policy |
+| `message_request_sent` | Message-request conversation created (M4) |
+| `message_request_accepted` | Recipient accepted a message request → conversation opened (M4) |
+| `message_request_declined` | Recipient declined a message request (M4, silent) |
+| `group_created` | A group (+ its network conversation) was created (M5) |
+| `group_joined` | A user joined a group directly (open policy) (M5) |
+| `group_join_approved` | An admin approved a join request (M5) |
+| `group_join_rejected` | An admin rejected a join request (M5, silent) |
+| `group_role_changed` | A member's group role changed (M5) |
+| `group_ownership_transferred` | Group ownership transferred to a new owner (M5) |
+| `group_invite_sent` | A direct or link group invite was created (M5) |
+| `group_invite_accepted` | A group invite was accepted → membership formed (M5) |
+
+## TranscribeSpecialty (AWS Transcribe Medical)
+
+These map to AWS API values — do NOT lowercase for wire, AWS requires UPPERCASE.
+
+| Wire value | Meaning |
+|---|---|
+| `PRIMARYCARE` | Default |
+| `CARDIOLOGY` | Cardiology specialty |
+| `RADIOLOGY` | Radiology specialty |
+| `NEUROLOGY` | Neurology specialty |
+| `UROLOGY` | Urology specialty |
+
+## AvatarColor (Flutter-only — no wire)
+
+Index-keyed color cycle from `design.md §2`. Not serialized over the wire; derived deterministically from user index.
+
+| Index | Name | Hex |
+|---|---|---|
+| 0 | blue | `#1A56DB` |
+| 1 | teal | `#0ABFAD` |
+| 2 | purple | `#7C3AED` |
+| 3 | darkBlue | `#0F3499` |
+| 4 | amber | `#F59E0B` |
+
+## PersonCard degree (M2 — deliberately NOT an enum)
+
+`PersonCardOut.degree` and `PublicProfileOut.degree` are serialized as a plain
+wire STRING — one of `1st` | `2nd` | `3rd` | `out` — not a shared enum. This is
+a purely client-facing display badge derived from `RelationshipService`
+(`degree_of`: first-degree → `1st`, second-degree → `2nd`, otherwise → `3rd`,
+self/blocked → `out`). Keeping it a bare string avoids a three-file enum-parity
+dance for a value that never participates in server-side branching. No entry in
+the parity SHARED set; no Dart enum mirror required (client parses the string
+directly). Likewise `connection_state` (`none` | `pending_outgoing` |
+`pending_incoming` | `connected`) and `can_message` (`open` | `request` |
+`denied`) are plain profile strings, not gated enums.

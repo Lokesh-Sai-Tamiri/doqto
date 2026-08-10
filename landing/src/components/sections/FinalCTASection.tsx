@@ -5,7 +5,6 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SECTION_IDS } from "@/lib/constants";
 import WaitlistForm from "@/components/ui/WaitlistForm";
-import { CreditCard, Rocket, Shield } from "lucide-react";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -25,10 +24,7 @@ export default function FinalCTASection() {
           opacity: 1,
           duration: 0.8,
           ease: "power3.out",
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top 75%",
-          },
+          scrollTrigger: { trigger: sectionRef.current, start: "top 75%" },
         }
       );
     }, sectionRef);
@@ -37,52 +33,31 @@ export default function FinalCTASection() {
   }, []);
 
   return (
-    <section
-      ref={sectionRef}
-      id={SECTION_IDS.cta}
-      className="relative py-24 sm:py-32 bg-dark overflow-hidden"
-    >
-      {/* Background pattern */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(45deg, #FFFC00 0, #FFFC00 1px, transparent 0, transparent 50%)",
-            backgroundSize: "40px 40px",
-          }}
-        />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/5 rounded-full blur-[150px]" />
-      </div>
+    <section ref={sectionRef} id={SECTION_IDS.cta} className="px-3 pb-3">
+      {/* Dark ink card — mirrors the hero's rounded full-bleed frame */}
+      <div className="relative overflow-hidden rounded-[2rem] bg-ink py-28 sm:py-36">
+        <div className="halftone absolute inset-x-0 bottom-0 h-72 opacity-[0.15] pointer-events-none [mask-image:linear-gradient(to_top,black,transparent)]" />
 
-      <div className="cta-content relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight mb-6">
-          Ready to Secure Your{" "}
-          <span className="gradient-text">Healthcare Communication</span>?
-        </h2>
+        <div className="cta-content relative max-w-3xl mx-auto px-6 sm:px-8 text-center">
+          <p className="text-sm uppercase tracking-[0.2em] text-cream/60 mb-6">
+            Early access
+          </p>
+          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl text-cream leading-[1.08] mb-6">
+            Care deserves a <em className="text-cream/85">calmer</em> conversation.
+          </h2>
 
-        <p className="text-lg text-gray-400 leading-relaxed mb-10 max-w-2xl mx-auto">
-          Join thousands of healthcare professionals who are transforming
-          how they communicate. Get early access to Dox2Dox.
-        </p>
+          <p className="text-lg text-cream/70 leading-relaxed mb-12 max-w-xl mx-auto">
+            Join the physicians and care teams already on the Doqto waitlist.
+            HIPAA-compliant from message one.
+          </p>
 
-        <div className="max-w-lg mx-auto mb-10">
-          <WaitlistForm large />
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-8 text-sm text-gray-500">
-          <div className="flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-gray-600" />
-            <span>No credit card required</span>
+          <div className="max-w-lg mx-auto mb-10">
+            <WaitlistForm large />
           </div>
-          <div className="flex items-center gap-2">
-            <Rocket className="w-4 h-4 text-gray-600" />
-            <span>14-day free trial on launch</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-primary-dark" />
-            <span>HIPAA compliant from day one</span>
-          </div>
+
+          <p className="text-sm text-cream/50 tracking-wide">
+            No credit card &middot; 14-day free trial on launch &middot; HIPAA compliant from day one
+          </p>
         </div>
       </div>
     </section>

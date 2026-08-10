@@ -4,8 +4,7 @@ import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SECTION_IDS, SECURITY_FEATURES } from "@/lib/constants";
-import SectionHeading from "@/components/ui/SectionHeading";
-import FeatureCard from "@/components/ui/FeatureCard";
+import { Check } from "lucide-react";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -18,62 +17,15 @@ export default function SecuritySection() {
 
     const ctx = gsap.context(() => {
       gsap.fromTo(
-        ".security-shield",
-        { scale: 0.5, opacity: 0, rotation: -20 },
-        {
-          scale: 1,
-          opacity: 1,
-          rotation: 0,
-          duration: 0.8,
-          ease: "back.out(1.7)",
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top 75%",
-          },
-        }
-      );
-      gsap.fromTo(
-        ".security-heading",
-        { y: 40, opacity: 0 },
+        ".security-reveal",
+        { y: 50, opacity: 0 },
         {
           y: 0,
           opacity: 1,
-          duration: 0.8,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top 75%",
-          },
-        }
-      );
-      gsap.fromTo(
-        ".security-card",
-        { y: 80, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.8,
-          stagger: 0.12,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: ".security-grid",
-            start: "top 85%",
-          },
-        }
-      );
-      gsap.fromTo(
-        ".compliance-badge",
-        { y: 20, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.6,
+          duration: 0.9,
           stagger: 0.1,
           ease: "power3.out",
-          scrollTrigger: {
-            trigger: ".compliance-badges",
-            start: "top 90%",
-          },
+          scrollTrigger: { trigger: sectionRef.current, start: "top 75%" },
         }
       );
     }, sectionRef);
@@ -82,64 +34,44 @@ export default function SecuritySection() {
   }, []);
 
   return (
-    <section
-      ref={sectionRef}
-      id={SECTION_IDS.security}
-      className="py-24 sm:py-32"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Shield icon */}
-        <div className="flex justify-center mb-6">
-          <div className="security-shield w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center">
-            <svg className="w-10 h-10 text-primary-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <path d="m9 12 2 2 4-4" />
-            </svg>
-          </div>
+    <section ref={sectionRef} id={SECTION_IDS.security} className="relative py-28 sm:py-36 bg-cream overflow-hidden">
+      {/* Halftone texture — Neko pattern */}
+      <div className="halftone absolute inset-x-0 top-0 h-64 opacity-40 pointer-events-none [mask-image:linear-gradient(to_bottom,black,transparent)]" />
+
+      <div className="relative max-w-6xl mx-auto px-6 sm:px-8">
+        <div className="security-reveal max-w-2xl mx-auto text-center mb-16">
+          <p className="text-sm uppercase tracking-[0.2em] text-ink-soft mb-6">Security</p>
+          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl text-ink leading-[1.08]">
+            Compliance isn&rsquo;t a feature. <em>It&rsquo;s the foundation.</em>
+          </h2>
+          <p className="mt-6 text-lg text-ink-soft leading-relaxed">
+            Every layer of Doqto is designed around HIPAA and PHI protection —
+            quietly, so your team never has to think about it.
+          </p>
         </div>
 
-        <div className="security-heading">
-          <SectionHeading
-            badge="Security"
-            title="Enterprise-Grade Security, Built In"
-            subtitle="Every layer of Dox2Dox is designed with HIPAA compliance and data protection as the foundation — not an afterthought."
-          />
+        {/* Checklist card — Neko pattern */}
+        <div className="security-reveal mx-auto max-w-3xl rounded-[1.75rem] bg-card border border-line p-8 sm:p-12">
+          <ul className="grid sm:grid-cols-2 gap-x-10 gap-y-7">
+            {SECURITY_FEATURES.map((item) => (
+              <li key={item.title} className="flex items-start gap-4">
+                <span className="mt-0.5 shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Check className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
+                </span>
+                <div>
+                  <h3 className="font-medium text-ink">{item.title}</h3>
+                  <p className="mt-1 text-sm text-ink-soft leading-relaxed">
+                    {item.description}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="security-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mb-16">
-          {SECURITY_FEATURES.map((feature, i) => (
-            <div key={i} className="security-card">
-              <FeatureCard
-                title={feature.title}
-                description={feature.description}
-                icon={feature.icon}
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Compliance badges */}
-        <div className="compliance-badges flex flex-wrap justify-center gap-6">
-          {[
-            { label: "HIPAA Compliant", icon: "shield" },
-            { label: "SOC 2 Roadmap", icon: "check" },
-            { label: "BAA Ready", icon: "file" },
-          ].map((badge, i) => (
-            <div
-              key={i}
-              className="compliance-badge flex items-center gap-3 px-6 py-3 rounded-full bg-gray-50 border border-gray-100"
-            >
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <svg className="w-4 h-4 text-primary-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  {badge.icon === "shield" && <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />}
-                  {badge.icon === "check" && <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" /><path d="m9 12 2 2 4-4" /></>}
-                  {badge.icon === "file" && <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><path d="m9 15 2 2 4-4" /></>}
-                </svg>
-              </div>
-              <span className="font-medium text-gray-700">{badge.label}</span>
-            </div>
-          ))}
-        </div>
+        <p className="security-reveal mt-10 text-center text-sm text-ink-soft tracking-wide">
+          HIPAA compliant &middot; AES-256-GCM encrypted &middot; BAA available &middot; SOC 2 roadmap
+        </p>
       </div>
     </section>
   );

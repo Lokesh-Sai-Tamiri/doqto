@@ -1,15 +1,25 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #FFFC00;
-  --color-primary-dark: #FFD700;
-  --color-surface: #18181F;
-  --color-surface-light: #2A2A35;
-  --color-dark: #0A0A0A;
-  --color-light-bg: #F8F9FA;
-  --color-text-secondary: #6B7280;
+  /* Soft-luxury warm palette — Neko/Function inspired */
+  --color-cream: #f7f3ec;
+  --color-cream-deep: #efe7da;
+  --color-card: #fdfbf7;
+  --color-ink: #211f1a;
+  --color-ink-soft: #6b6559;
+  --color-line: #e3dccd;
+  --color-primary: #2e6e74;
+  --color-primary-dark: #24565b;
 
-  --font-outfit: "Outfit", sans-serif;
+  /* legacy aliases still referenced by admin/legal pages */
+  --color-surface: #211f1a;
+  --color-surface-light: #35322b;
+  --color-dark: #211f1a;
+  --color-light-bg: #f7f3ec;
+  --color-text-secondary: #6b6559;
+
+  --font-sans: var(--font-instrument), sans-serif;
+  --font-serif: var(--font-fraunces), serif;
 }
 
 html {
@@ -17,9 +27,35 @@ html {
 }
 
 body {
-  font-family: var(--font-outfit);
+  font-family: var(--font-sans);
+  background: var(--color-cream);
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Serif display headings */
+.font-display {
+  font-family: var(--font-serif);
+  font-weight: 480;
+  letter-spacing: -0.02em;
+  font-variation-settings: "SOFT" 60, "WONK" 0;
+}
+
+.font-display em,
+.accent-italic {
+  font-style: italic;
+  font-weight: 430;
+  color: var(--color-primary);
+}
+
+/* Halftone dot texture (Neko section backgrounds) */
+.halftone {
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--color-ink) 10%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 14px 14px;
 }
 
 /* Smooth scroll override for lenis */
@@ -46,54 +82,70 @@ html.lenis body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333;
+  background: #c9c0ad;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-/* Gradient text utility */
-.gradient-text {
-  background: linear-gradient(135deg, #FFFC00, #FFD700);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  background: #a89e88;
 }
 
 /* Glass morphism navbar */
 .navbar-glass {
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
 }
 
-/* Float animation for phone mockup */
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-12px); }
+/* Specialty marquee (Function-style) */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
+.animate-marquee {
+  animation: marquee 42s linear infinite;
 }
 
-/* Typing indicator dots */
+.animate-marquee-reverse {
+  animation: marquee 54s linear infinite reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-marquee-reverse {
+    animation: none;
+  }
+}
+
+/* Typing indicator dots (kept for mockups) */
 @keyframes typingDot {
-  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
-  30% { opacity: 1; transform: translateY(-4px); }
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
 }
 
-.typing-dot:nth-child(1) { animation: typingDot 1.4s ease-in-out infinite; }
-.typing-dot:nth-child(2) { animation: typingDot 1.4s ease-in-out 0.2s infinite; }
-.typing-dot:nth-child(3) { animation: typingDot 1.4s ease-in-out 0.4s infinite; }
-
-/* Pulse ring for CTA */
-@keyframes pulseRing {
-  0% { transform: scale(1); opacity: 0.4; }
-  100% { transform: scale(1.5); opacity: 0; }
+.typing-dot:nth-child(1) {
+  animation: typingDot 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) {
+  animation: typingDot 1.4s ease-in-out 0.2s infinite;
+}
+.typing-dot:nth-child(3) {
+  animation: typingDot 1.4s ease-in-out 0.4s infinite;
 }
 
-.pulse-ring {
-  animation: pulseRing 2s ease-out infinite;
+/* legacy gradient text — remapped to accent italic for old pages */
+.gradient-text {
+  color: var(--color-primary);
 }

@@ -36,7 +36,7 @@ export default function TestimonialCard({
         &ldquo;{quote}&rdquo;
       </p>
       <div className="flex items-center gap-4">
-        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-primary/80 to-primary-dark text-black font-bold text-sm">
+        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-primary/80 to-primary-dark text-white font-bold text-sm">
           {initials}
         </div>
         <div>

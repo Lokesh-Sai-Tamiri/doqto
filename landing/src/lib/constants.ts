@@ -137,6 +137,25 @@ export const AUDIENCES = [
   { title: "Specialty Practices", size: "All sizes", icon: "Microscope" },
 ] as const;
 
+export const SPECIALTIES = [
+  "Internal Medicine",
+  "Family Practice",
+  "Cardiology",
+  "Pediatrics",
+  "Oncology",
+  "Emergency Medicine",
+  "Psychiatry",
+  "Dermatology",
+  "Radiology",
+  "Orthopedics",
+  "Neurology",
+  "OB-GYN",
+  "Urgent Care",
+  "Nursing Teams",
+  "Behavioral Health",
+  "Home Health",
+] as const;
+
 export const TESTIMONIALS = [
   {
     name: "Dr. Sarah Chen",

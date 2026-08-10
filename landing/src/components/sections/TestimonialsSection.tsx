@@ -4,8 +4,6 @@ import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SECTION_IDS, TESTIMONIALS } from "@/lib/constants";
-import SectionHeading from "@/components/ui/SectionHeading";
-import TestimonialCard from "@/components/ui/TestimonialCard";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -18,32 +16,15 @@ export default function TestimonialsSection() {
 
     const ctx = gsap.context(() => {
       gsap.fromTo(
-        ".testimonials-heading",
-        { y: 60, opacity: 0 },
+        ".testimonial-reveal",
+        { y: 50, opacity: 0 },
         {
           y: 0,
           opacity: 1,
-          duration: 0.8,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top 80%",
-          },
-        }
-      );
-      gsap.fromTo(
-        ".testimonial-card",
-        { y: 60, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.8,
+          duration: 0.9,
           stagger: 0.15,
           ease: "power3.out",
-          scrollTrigger: {
-            trigger: ".testimonial-grid",
-            start: "top 85%",
-          },
+          scrollTrigger: { trigger: sectionRef.current, start: "top 75%" },
         }
       );
     }, sectionRef);
@@ -52,25 +33,33 @@ export default function TestimonialsSection() {
   }, []);
 
   return (
-    <section
-      ref={sectionRef}
-      id={SECTION_IDS.testimonials}
-      className="py-24 sm:py-32 bg-light-bg"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="testimonials-heading">
-          <SectionHeading
-            badge="Testimonials"
-            title="Trusted by Healthcare Professionals"
-            subtitle="See what early access users are saying about Doqto."
-          />
-        </div>
+    <section ref={sectionRef} id={SECTION_IDS.testimonials} className="py-28 sm:py-36 bg-cream">
+      <div className="max-w-6xl mx-auto px-6 sm:px-8">
+        <p className="testimonial-reveal text-sm uppercase tracking-[0.2em] text-ink-soft text-center mb-16">
+          From early-access teams
+        </p>
 
-        <div className="testimonial-grid grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
-          {TESTIMONIALS.map((testimonial, i) => (
-            <div key={i} className="testimonial-card">
-              <TestimonialCard {...testimonial} />
-            </div>
+        {/* Editorial columned quotes — Function pattern */}
+        <div className="grid md:grid-cols-3">
+          {TESTIMONIALS.map((t, i) => (
+            <figure
+              key={t.name}
+              className={
+                i === 0
+                  ? "testimonial-reveal py-8 md:py-0 md:pr-10"
+                  : "testimonial-reveal py-8 md:py-0 md:pl-10 border-t md:border-t-0 md:border-l border-line"
+              }
+            >
+              <blockquote className="font-display text-xl leading-relaxed text-ink">
+                &ldquo;{t.quote}&rdquo;
+              </blockquote>
+              <figcaption className="mt-6">
+                <div className="font-medium text-ink">{t.name}</div>
+                <div className="mt-0.5 text-sm text-ink-soft">
+                  {t.role}, {t.org}
+                </div>
+              </figcaption>
+            </figure>
           ))}
         </div>
       </div>

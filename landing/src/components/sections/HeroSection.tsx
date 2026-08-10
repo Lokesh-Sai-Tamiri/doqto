@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Image from "next/image";
 import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SECTION_IDS } from "@/lib/constants";
-import WaitlistForm from "@/components/ui/WaitlistForm";
-import TrustBadge from "@/components/ui/TrustBadge";
-import PhoneMockup from "@/components/mockups/PhoneMockup";
-import ChatMockupScreen from "@/components/mockups/ChatMockupScreen";
+import { ArrowRight, Check } from "lucide-react";
+
+gsap.registerPlugin(ScrollTrigger);
+
+const HERO_STATS = [
+  { value: "AES-256", label: "End-to-end encrypted" },
+  { value: "HIPAA", label: "Compliant from day one" },
+  { value: "BAA", label: "Ready for your org" },
+] as const;
 
 export default function HeroSection() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -16,80 +23,96 @@ export default function HeroSection() {
     if (prefersReduced || !sectionRef.current) return;
 
     const ctx = gsap.context(() => {
-      const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
-      tl.fromTo(".hero-badge", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 })
-        .fromTo(".hero-title", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8 }, "-=0.3")
-        .fromTo(".hero-subtitle", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7 }, "-=0.4")
-        .fromTo(".hero-form", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7 }, "-=0.3")
-        .fromTo(".hero-badges", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 }, "-=0.3")
-        .fromTo(
-          ".hero-phone",
-          { x: 80, opacity: 0, rotation: 5 },
-          { x: 0, opacity: 1, rotation: 0, duration: 1 },
-          "-=0.8"
-        );
+      gsap.fromTo(
+        ".hero-reveal",
+        { y: 40, opacity: 0 },
+        { y: 0, opacity: 1, duration: 1, ease: "power3.out", stagger: 0.12, delay: 0.2 }
+      );
+
+      // Parallax: photo drifts slower than the page as the hero scrolls away
+      gsap.fromTo(
+        ".hero-img",
+        { yPercent: 0, scale: 1.06 },
+        {
+          yPercent: 12,
+          scale: 1.06,
+          ease: "none",
+          scrollTrigger: {
+            trigger: sectionRef.current,
+            start: "top top",
+            end: "bottom top",
+            scrub: true,
+          },
+        }
+      );
     }, sectionRef);
 
     return () => ctx.revert();
   }, []);
 
-  return (
-    <section
-      ref={sectionRef}
-      id={SECTION_IDS.hero}
-      className="relative min-h-screen flex items-center pt-20 overflow-hidden"
-    >
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white via-gray-50/50 to-primary/5 pointer-events-none" />
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+  const scrollToWaitlist = () => {
+    const lenis = (window as unknown as { lenis?: { scrollTo: (target: string, options?: Record<string, unknown>) => void } }).lenis;
+    if (lenis) lenis.scrollTo(`#${SECTION_IDS.cta}`, { offset: -40, duration: 1.4 });
+    else document.getElementById(SECTION_IDS.cta)?.scrollIntoView({ behavior: "smooth" });
+  };
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          {/* Text column */}
-          <div className="max-w-xl">
-            <div className="hero-badge inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-8">
-              <svg className="w-4 h-4 text-primary-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
-              <span className="text-sm font-medium text-gray-700">
-                HIPAA Compliant Healthcare Messaging
-              </span>
+  return (
+    <section ref={sectionRef} id={SECTION_IDS.hero} className="relative px-3 pt-3">
+      {/* Full-bleed rounded photo hero — Neko/Function pattern */}
+      <div className="relative min-h-[92vh] overflow-hidden rounded-[2rem] flex items-end">
+        <Image
+          src="/images/hero.jpg"
+          alt="Two physicians in a warm modern clinic reviewing a secure conversation"
+          fill
+          priority
+          quality={90}
+          className="hero-img object-cover will-change-transform"
+          sizes="100vw"
+        />
+        {/* Warm legibility wash */}
+        <div className="absolute inset-0 bg-gradient-to-r from-ink/55 via-ink/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-ink/50 via-transparent to-transparent" />
+
+        <div className="relative w-full max-w-7xl mx-auto px-6 sm:px-10 pb-14 pt-40">
+          <div className="max-w-2xl">
+            <div className="hero-reveal inline-flex items-center gap-2 rounded-full bg-cream/90 px-4 py-1.5 text-sm text-ink mb-7">
+              <Check className="w-3.5 h-3.5 text-primary" />
+              HIPAA-compliant &middot; Built for clinicians
             </div>
 
-            <h1 className="hero-title text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900 leading-[1.1] mb-6">
-              Secure Messaging{" "}
-              <span className="relative">
-                Built for
-                <svg className="absolute -bottom-2 left-0 w-full h-3 text-primary" viewBox="0 0 200 12" preserveAspectRatio="none">
-                  <path d="M2 8 Q50 2 100 6 T198 4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-                </svg>
-              </span>{" "}
-              Healthcare Teams
+            <h1 className="hero-reveal font-display text-cream text-5xl sm:text-6xl lg:text-7xl leading-[1.04]">
+              Medicine moves at the speed of a <em className="text-cream/90">message.</em>
             </h1>
 
-            <p className="hero-subtitle text-lg sm:text-xl text-gray-500 leading-relaxed mb-8">
-              End-to-end encrypted communication for healthcare teams.
-              Replace fragmented tools with one HIPAA-compliant platform.
+            <p className="hero-reveal mt-6 text-lg sm:text-xl text-cream/85 max-w-xl leading-relaxed">
+              Doqto is the encrypted messaging platform built for healthcare
+              teams — voice notes, transcription, and your whole organization,
+              without the compliance headache.
             </p>
 
-            <div className="hero-form mb-8">
-              <WaitlistForm />
-            </div>
-
-            <div className="hero-badges flex flex-wrap gap-6">
-              <TrustBadge icon="shield" label="HIPAA Compliant" />
-              <TrustBadge icon="lock" label="AES-256 Encrypted" />
-              <TrustBadge icon="check" label="SOC 2 Ready" />
+            <div className="hero-reveal mt-9 flex flex-wrap items-center gap-4">
+              <button
+                onClick={scrollToWaitlist}
+                className="group inline-flex items-center gap-2.5 rounded-full bg-cream px-7 py-4 text-base font-medium text-ink transition-all duration-300 hover:bg-white cursor-pointer"
+              >
+                Join the waitlist
+                <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+              </button>
+              <span className="text-sm text-cream/70">Free for early-access teams</span>
             </div>
           </div>
 
-          {/* Phone mockup */}
-          <div className="hero-phone hidden lg:flex justify-center">
-            <div className="animate-float">
-              <PhoneMockup>
-                <ChatMockupScreen />
-              </PhoneMockup>
-            </div>
+          {/* Stat strip — Function pattern */}
+          <div className="hero-reveal mt-14 flex flex-wrap gap-y-6 border-t border-cream/25 pt-7">
+            {HERO_STATS.map((stat, i) => (
+              <div
+                key={stat.value}
+                className={i === 0 ? "pr-8 sm:pr-12" : "pl-8 sm:pl-12 border-l border-cream/25"}
+              >
+                <div className="font-display text-2xl text-cream">{stat.value}</div>
+                <div className="mt-1 text-sm text-cream/70">{stat.label}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

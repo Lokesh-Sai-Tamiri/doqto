@@ -1,11 +1,19 @@
 import type { Metadata } from "next";
-import { Outfit } from "next/font/google";
+import { Fraunces, Instrument_Sans } from "next/font/google";
 import SmoothScrollProvider from "@/providers/SmoothScrollProvider";
 import "./globals.css";
 
-const outfit = Outfit({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  variable: "--font-outfit",
+  variable: "--font-fraunces",
+  display: "swap",
+  axes: ["SOFT", "WONK", "opsz"],
+  style: ["normal", "italic"],
+});
+
+const instrument = Instrument_Sans({
+  subsets: ["latin"],
+  variable: "--font-instrument",
   display: "swap",
 });
 
@@ -17,7 +25,6 @@ export const metadata: Metadata = {
     "HIPAA compliant messaging",
     "healthcare communication",
     "encrypted messaging",
-    
     "medical messaging app",
     "secure healthcare chat",
   ],
@@ -31,8 +38,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Doqto — Secure Healthcare Messaging",
-    description:
-      "HIPAA-compliant messaging with E2E encryption.",
+    description: "HIPAA-compliant messaging with E2E encryption.",
   },
   robots: {
     index: true,
@@ -46,8 +52,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={outfit.variable}>
-      <body className="bg-white text-gray-900 antialiased">
+    <html lang="en" className={`${fraunces.variable} ${instrument.variable}`}>
+      <body className="bg-cream text-ink antialiased">
         <SmoothScrollProvider>{children}</SmoothScrollProvider>
       </body>
     </html>

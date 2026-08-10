@@ -4,10 +4,45 @@ import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SECTION_IDS, STATS } from "@/lib/constants";
-import SectionHeading from "@/components/ui/SectionHeading";
-import StatCard from "@/components/ui/StatCard";
+import { useCountUp } from "@/hooks/useCountUp";
 
 gsap.registerPlugin(ScrollTrigger);
+
+function StatColumn({
+  value,
+  prefix,
+  suffix,
+  label,
+  first,
+}: {
+  value: number;
+  prefix: string;
+  suffix: string;
+  label: string;
+  first: boolean;
+}) {
+  const { ref, count } = useCountUp(value);
+
+  return (
+    <div
+      className={
+        first
+          ? "problem-stat py-8 lg:py-0 lg:pr-12"
+          : "problem-stat py-8 lg:py-0 lg:pl-12 border-t lg:border-t-0 lg:border-l border-line"
+      }
+    >
+      <div
+        ref={ref as React.RefObject<HTMLDivElement>}
+        className="font-display text-5xl sm:text-6xl text-ink"
+      >
+        {prefix}
+        {count}
+        {suffix}
+      </div>
+      <p className="mt-3 text-ink-soft leading-relaxed max-w-xs">{label}</p>
+    </div>
+  );
+}
 
 export default function ProblemSection() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -18,32 +53,15 @@ export default function ProblemSection() {
 
     const ctx = gsap.context(() => {
       gsap.fromTo(
-        ".problem-heading",
-        { y: 60, opacity: 0 },
+        ".problem-reveal",
+        { y: 50, opacity: 0 },
         {
           y: 0,
           opacity: 1,
-          duration: 0.8,
+          duration: 0.9,
+          stagger: 0.12,
           ease: "power3.out",
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top 80%",
-          },
-        }
-      );
-      gsap.fromTo(
-        ".stat-card",
-        { y: 80, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.8,
-          stagger: 0.15,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: ".stat-cards",
-            start: "top 85%",
-          },
+          scrollTrigger: { trigger: sectionRef.current, start: "top 75%" },
         }
       );
     }, sectionRef);
@@ -52,30 +70,31 @@ export default function ProblemSection() {
   }, []);
 
   return (
-    <section
-      ref={sectionRef}
-      id={SECTION_IDS.problem}
-      className="py-24 sm:py-32 bg-light-bg"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="problem-heading">
-          <SectionHeading
-            badge="The Problem"
-            title="Healthcare Communication is Broken"
-            subtitle="Outdated systems, security gaps, and slow response times put patients and providers at risk."
-          />
-        </div>
+    <section ref={sectionRef} id={SECTION_IDS.problem} className="py-28 sm:py-36 bg-cream">
+      <div className="max-w-5xl mx-auto px-6 sm:px-8">
+        <p className="problem-reveal text-sm uppercase tracking-[0.2em] text-ink-soft text-center mb-6">
+          The problem
+        </p>
+        <h2 className="problem-reveal font-display text-4xl sm:text-5xl lg:text-6xl text-ink text-center leading-[1.08]">
+          Healthcare runs on messages.
+          <br />
+          Most of them are <em>unprotected.</em>
+        </h2>
+        <p className="problem-reveal mt-6 text-lg text-ink-soft text-center max-w-2xl mx-auto leading-relaxed">
+          Texts, pagers, and consumer apps leak PHI, slow down care, and put
+          providers at risk — every single day.
+        </p>
 
-        <div className="stat-cards grid grid-cols-1 sm:grid-cols-3 gap-6 lg:gap-8">
+        <div className="problem-reveal mt-16 flex flex-col lg:flex-row lg:justify-center">
           {STATS.map((stat, i) => (
-            <div key={i} className="stat-card">
-              <StatCard
-                value={stat.value}
-                prefix={stat.prefix}
-                suffix={stat.suffix}
-                label={stat.label}
-              />
-            </div>
+            <StatColumn
+              key={stat.label}
+              value={stat.value}
+              prefix={stat.prefix}
+              suffix={stat.suffix}
+              label={stat.label}
+              first={i === 0}
+            />
           ))}
         </div>
       </div>

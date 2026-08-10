@@ -23,8 +23,9 @@ def _get_client():
         _client = boto3.client(
             "sns",
             region_name=settings.AWS_REGION,
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            # Blank keys → boto3 default chain (ECS task role in prod).
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID or None,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY or None,
         )
     return _client
 

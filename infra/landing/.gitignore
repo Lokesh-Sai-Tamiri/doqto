@@ -1,0 +1,7 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+waitlist.zip
+tfplan
+lambda/node_modules/

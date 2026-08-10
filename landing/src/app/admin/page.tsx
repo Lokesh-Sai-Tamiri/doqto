@@ -1,4 +1,6 @@
-import { getDb } from "@/lib/mongodb";
+"use client";
+
+import { useState } from "react";
 
 interface WaitlistEntry {
   email: string;
@@ -6,15 +8,23 @@ interface WaitlistEntry {
   source?: string;
 }
 
-export const dynamic = "force-dynamic";
+export default function AdminPage() {
+  const [token, setToken] = useState("");
+  const [entries, setEntries] = useState<WaitlistEntry[] | null>(null);
+  const [error, setError] = useState("");
 
-export default async function AdminPage() {
-  const db = await getDb();
-  const entries = (await db
-    .collection("waitlist")
-    .find()
-    .sort({ created_at: -1 })
-    .toArray()) as unknown as WaitlistEntry[];
+  async function load() {
+    setError("");
+    const res = await fetch("/api/waitlist", {
+      headers: { "x-admin-token": token },
+    });
+    if (!res.ok) {
+      setError(res.status === 401 ? "Invalid token." : "Failed to load.");
+      return;
+    }
+    const data = await res.json();
+    setEntries(data.entries);
+  }
 
   return (
     <main className="min-h-screen px-4 py-12 sm:px-6 lg:px-8">
@@ -24,9 +34,11 @@ export default async function AdminPage() {
             <h1 className="text-2xl font-bold text-white">
               Waitlist Submissions
             </h1>
-            <p className="mt-1 text-text-secondary">
-              {entries.length} total signup{entries.length !== 1 ? "s" : ""}
-            </p>
+            {entries && (
+              <p className="mt-1 text-text-secondary">
+                {entries.length} total signup{entries.length !== 1 ? "s" : ""}
+              </p>
+            )}
           </div>
           <a
             href="/"
@@ -36,7 +48,29 @@ export default async function AdminPage() {
           </a>
         </div>
 
-        {entries.length === 0 ? (
+        {entries === null ? (
+          <div className="rounded-lg border border-surface-light bg-surface p-8">
+            <label className="mb-2 block text-sm text-text-secondary">
+              Admin token
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && load()}
+                className="flex-1 rounded-lg border border-surface-light bg-transparent px-3 py-2 text-white"
+              />
+              <button
+                onClick={load}
+                className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black"
+              >
+                View
+              </button>
+            </div>
+            {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+          </div>
+        ) : entries.length === 0 ? (
           <div className="rounded-lg border border-surface-light bg-surface py-16 text-center">
             <p className="text-text-secondary">No waitlist submissions yet.</p>
           </div>

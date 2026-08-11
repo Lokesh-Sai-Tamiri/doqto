@@ -123,7 +123,13 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     return Scaffold(
       floatingActionButton: _isSelecting
           ? null
-          : _NewChatFab(onTap: () => context.push(AppRoutes.createGroup)),
+          // Lift above the shell's frosted nav bar (64 + safe inset), which
+          // overlays this inner Scaffold's FAB zone (extendBody shell).
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 72),
+              child:
+                  _NewChatFab(onTap: () => context.push(AppRoutes.createGroup)),
+            ),
       appBar: _isSelecting
           ? AppBar(
               leading: IconButton(

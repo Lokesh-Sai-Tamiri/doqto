@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
@@ -205,8 +206,20 @@ async def upload_voice_note(
     )
 
     if not client_transcript:
-        await TranscriptionService.start(message_id=str(msg.id), s3_key=key)
-        server_transcript = await TranscriptionService.fetch(message_id=str(msg.id))
+        # Transcription is best-effort: real Transcribe Medical is not wired
+        # yet (deferred HIPAA item), and a transcription failure must never
+        # fail the voice note itself — it was already stored and fanned out.
+        try:
+            await TranscriptionService.start(message_id=str(msg.id), s3_key=key)
+            server_transcript = await TranscriptionService.fetch(
+                message_id=str(msg.id)
+            )
+        except Exception:
+            logging.getLogger("doqto.transcribe").warning(
+                "transcription unavailable; voice note %s sent without transcript",
+                msg.id,
+            )
+            server_transcript = None
         if server_transcript:
             msg.transcript_encrypted = encrypt_message(server_transcript)
             msg.transcript_status = TranscriptStatus.COMPLETED

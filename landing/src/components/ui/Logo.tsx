@@ -12,7 +12,7 @@ export default function Logo({ size = "md", className }: LogoProps) {
 
   return (
     <Image
-      src="/logo.svg"
+      src="/logo-square.png"
       alt="Doqto"
       width={px}
       height={px}

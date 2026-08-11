@@ -76,10 +76,13 @@ flutter:
     - assets/splash_logo_white.png
 
 flutter_launcher_icons:
-  image_path: "logo.png"
+  # Brand icon: white mark on blue (#176EF3), WhatsApp-style.
+  image_path: "assets/icon/icon_fullbleed.png"
   android: true
   ios: true
-  remove_alpha_ios: true # iOS icons must be opaque; logo is RGBA
+  remove_alpha_ios: true # iOS icons must be opaque
+  adaptive_icon_background: "#176EF3"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
 
 # Workaround: record_linux 0.7.2 has a broken interface against
 # record_platform_interface 1.5.0. We only target iOS + Android, so pin

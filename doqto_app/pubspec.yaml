@@ -73,6 +73,7 @@ flutter:
   uses-material-design: true
   assets:
     - logo.png
+    - assets/splash_logo_white.png
 
 flutter_launcher_icons:
   image_path: "logo.png"

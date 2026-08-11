@@ -2,15 +2,17 @@
 class AppConstants {
   AppConstants._();
 
-  // API base URL — overridden per environment via --dart-define=API_BASE_URL=...
+  // API base URL — defaults to production; override for local dev with
+  // --dart-define=API_BASE_URL=http://10.0.2.2:8000 (Android emulator loopback)
+  // and --dart-define=WS_BASE_URL=ws://10.0.2.2:8000.
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000', // Android emulator loopback
+    defaultValue: 'https://api.doqto.ai',
   );
 
   static const String wsBaseUrl = String.fromEnvironment(
     'WS_BASE_URL',
-    defaultValue: 'ws://10.0.2.2:8000',
+    defaultValue: 'wss://api.doqto.ai',
   );
 
   // OTP

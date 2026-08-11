@@ -33,7 +33,7 @@ dependencies:
   # Media
   record: ^5.1.2
   just_audio: ^0.9.36
-  file_picker: ^6.1.1
+  file_picker: ^10.3.3
 
   # Local cache
   hive_flutter: ^1.1.0

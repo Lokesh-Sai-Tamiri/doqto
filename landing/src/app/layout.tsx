@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Fraunces, Instrument_Sans } from "next/font/google";
 import SmoothScrollProvider from "@/providers/SmoothScrollProvider";
 import "./globals.css";
@@ -64,6 +65,18 @@ export default function RootLayout({
     <html lang="en" className={`${fraunces.variable} ${instrument.variable}`}>
       <body className="bg-cream text-ink antialiased">
         <SmoothScrollProvider>{children}</SmoothScrollProvider>
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-QVZW44YQCK"
+          strategy="afterInteractive"
+        />
+        <Script id="gtag-init" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-QVZW44YQCK');
+          `}
+        </Script>
       </body>
     </html>
   );

@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     # ENVIRONMENT=local explicitly (.env / scripts/dev.sh / tests/conftest.py).
     ENVIRONMENT: Literal["local", "staging", "production"] = "production"
 
+    # TEMPORARY: honour DEV_MASTER_OTP outside local while SNS is stuck in the
+    # SMS sandbox (exit case pending). MUST be flipped back to false once real
+    # SMS delivery works — this is a sign-in backdoor.
+    MASTER_OTP_ENABLED: bool = False
+
     DATABASE_URL: str
     REDIS_URL: str
 

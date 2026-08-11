@@ -106,7 +106,7 @@ class AuthService:
         # Dev master OTP — bypass Redis lookup when ENVIRONMENT=local.
         # Lets simulator/emulator testing skip the Redis-code step and the
         # attempt counter. Never honoured in staging/prod.
-        if settings.is_local and code == DEV_MASTER_OTP:
+        if (settings.is_local or settings.MASTER_OTP_ENABLED) and code == DEV_MASTER_OTP:
             await redis.delete(otp_key(phone))
             await redis.delete(otp_attempts_key(phone))
         else:

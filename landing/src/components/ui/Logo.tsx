@@ -17,7 +17,7 @@ export default function Logo({ size = "md", className }: LogoProps) {
       width={px}
       height={px}
       priority
-      className={cn("shrink-0", className)}
+      className={cn("shrink-0 rounded-[22%]", className)}
     />
   );
 }

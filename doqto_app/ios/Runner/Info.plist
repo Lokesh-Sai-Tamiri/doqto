@@ -45,6 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- ponytail: HTTPS-only, no custom crypto — skips the export-compliance prompt on every TestFlight build. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Doqto needs access to your photo library so you can set a profile photo.</string>
 	<key>NSCameraUsageDescription</key>

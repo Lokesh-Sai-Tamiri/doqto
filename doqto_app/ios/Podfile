@@ -38,5 +38,10 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    # ponytail: pods ship podspec minimums as low as 9.0; Xcode 27 hard-errors below 15.0.
+    # Blanket-forcing every config to match the Podfile platform is shorter than pinning per-pod.
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    end
   end
 end

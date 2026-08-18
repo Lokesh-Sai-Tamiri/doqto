@@ -121,15 +121,6 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
       });
     }
     return Scaffold(
-      floatingActionButton: _isSelecting
-          ? null
-          // Lift above the shell's frosted nav bar (64 + safe inset), which
-          // overlays this inner Scaffold's FAB zone (extendBody shell).
-          : Padding(
-              padding: const EdgeInsets.only(bottom: 72),
-              child:
-                  _NewChatFab(onTap: () => context.push(AppRoutes.createGroup)),
-            ),
       appBar: _isSelecting
           ? AppBar(
               leading: IconButton(
@@ -638,45 +629,6 @@ class _ChatRow extends ConsumerWidget {
               ),
             ],
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Bottom-anchored new-chat action: thumb-zone reachable, scales in on
-/// first build, press feedback via AppPressable.
-class _NewChatFab extends StatelessWidget {
-  final VoidCallback onTap;
-  const _NewChatFab({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: AppMotion.maybe(context, AppMotion.enter),
-      curve: AppMotion.curveEnter,
-      builder: (context, scale, child) =>
-          Transform.scale(scale: scale, child: child),
-      child: AppPressable(
-        onTap: onTap,
-        haptic: true,
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.medBlue,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.medBlueDark.withValues(alpha: 0.3),
-                blurRadius: 14,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.edit_rounded,
-              color: AppColors.white, size: 24),
         ),
       ),
     );

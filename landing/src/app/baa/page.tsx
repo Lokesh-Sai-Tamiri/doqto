@@ -12,15 +12,15 @@ export default function BAAPage() {
   return (
     <>
       <Navbar />
-      <main className="bg-dark min-h-screen pt-24 pb-16">
+      <main className="bg-cream min-h-screen pt-24 pb-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
+          <h1 className="text-4xl sm:text-5xl font-bold text-ink mb-4">
             Business Associate Agreement
           </h1>
-          <p className="text-gray-500 mb-12">Last updated: March 2026</p>
+          <p className="text-ink-soft mb-12">Last updated: March 2026</p>
 
-          <div className="bg-surface/50 border border-white/5 rounded-xl p-6 mb-12">
-            <p className="text-gray-400 leading-relaxed text-sm">
+          <div className="bg-card border border-line rounded-xl p-6 mb-12">
+            <p className="text-ink-soft leading-relaxed text-sm">
               This Business Associate Agreement (&quot;BAA&quot;) is entered
               into by and between the healthcare organization or provider using
               the Doqto platform (&quot;Covered Entity&quot;) and Doqto,
@@ -31,28 +31,28 @@ export default function BAAPage() {
 
           {/* 1 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">1.</span>Definitions
             </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
+            <p className="text-ink-soft leading-relaxed mb-4">
               For purposes of this BAA, the following terms shall have the
               meanings set forth below. Capitalized terms not otherwise defined
               herein shall have the meanings given in HIPAA (45 CFR Parts 160
               and 164):
             </p>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
-                <span className="text-white">Covered Entity:</span> The
+                <span className="text-ink">Covered Entity:</span> The
                 healthcare organization, provider, or health plan that uses the
                 Doqto platform and is subject to HIPAA
               </li>
               <li>
-                <span className="text-white">Business Associate:</span>{" "}
+                <span className="text-ink">Business Associate:</span>{" "}
                 Doqto, Inc., which creates, receives, maintains, or transmits
                 Protected Health Information on behalf of the Covered Entity
               </li>
               <li>
-                <span className="text-white">
+                <span className="text-ink">
                   Protected Health Information (PHI):
                 </span>{" "}
                 Individually identifiable health information transmitted or
@@ -60,19 +60,19 @@ export default function BAAPage() {
                 160.103
               </li>
               <li>
-                <span className="text-white">
+                <span className="text-ink">
                   Electronic Protected Health Information (ePHI):
                 </span>{" "}
                 PHI that is transmitted or maintained in electronic media
               </li>
               <li>
-                <span className="text-white">Security Incident:</span> The
+                <span className="text-ink">Security Incident:</span> The
                 attempted or successful unauthorized access, use, disclosure,
                 modification, or destruction of information or interference with
                 system operations in an information system
               </li>
               <li>
-                <span className="text-white">Breach:</span> The acquisition,
+                <span className="text-ink">Breach:</span> The acquisition,
                 access, use, or disclosure of PHI in a manner not permitted
                 under HIPAA that compromises the security or privacy of the PHI,
                 as defined under 45 CFR § 164.402
@@ -82,14 +82,14 @@ export default function BAAPage() {
 
           {/* 2 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">2.</span>Obligations of
               Business Associate
             </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
+            <p className="text-ink-soft leading-relaxed mb-4">
               Business Associate agrees to:
             </p>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
                 Not use or disclose PHI other than as permitted or required by
                 this BAA or as required by law
@@ -128,14 +128,14 @@ export default function BAAPage() {
 
           {/* 3 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">3.</span>Permitted Uses and
               Disclosures of PHI
             </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
+            <p className="text-ink-soft leading-relaxed mb-4">
               Business Associate may use or disclose PHI only as follows:
             </p>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
                 As necessary to perform services for or on behalf of Covered
                 Entity under the Terms of Service, provided that such use or
@@ -161,18 +161,18 @@ export default function BAAPage() {
 
           {/* 4 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">4.</span>Safeguards
             </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
+            <p className="text-ink-soft leading-relaxed mb-4">
               Business Associate shall implement and maintain safeguards
               including:
             </p>
 
-            <h3 className="text-white font-medium mb-2 mt-6">
+            <h3 className="text-ink font-medium mb-2 mt-6">
               Administrative Safeguards
             </h3>
-            <ul className="list-disc list-inside text-gray-400 space-y-2 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-2 ml-4">
               <li>Designation of a Security Officer and Privacy Officer</li>
               <li>
                 Workforce training on HIPAA compliance and information security
@@ -182,10 +182,10 @@ export default function BAAPage() {
               <li>Contingency planning and disaster recovery procedures</li>
             </ul>
 
-            <h3 className="text-white font-medium mb-2 mt-6">
+            <h3 className="text-ink font-medium mb-2 mt-6">
               Physical Safeguards
             </h3>
-            <ul className="list-disc list-inside text-gray-400 space-y-2 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-2 ml-4">
               <li>
                 Facility access controls for data centers and offices
               </li>
@@ -193,10 +193,10 @@ export default function BAAPage() {
               <li>Media disposal and re-use procedures</li>
             </ul>
 
-            <h3 className="text-white font-medium mb-2 mt-6">
+            <h3 className="text-ink font-medium mb-2 mt-6">
               Technical Safeguards
             </h3>
-            <ul className="list-disc list-inside text-gray-400 space-y-2 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-2 ml-4">
               <li>
                 AES-256 end-to-end encryption for all communications and file
                 transfers
@@ -213,14 +213,14 @@ export default function BAAPage() {
 
           {/* 5 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">5.</span>Reporting of Breaches
               & Security Incidents
             </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
+            <p className="text-ink-soft leading-relaxed mb-4">
               Business Associate shall report to Covered Entity:
             </p>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
                 Any Breach of unsecured PHI without unreasonable delay and in no
                 case later than sixty (60) calendar days after discovery
@@ -249,10 +249,10 @@ export default function BAAPage() {
 
           {/* 6 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">6.</span>Subcontractors
             </h2>
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-ink-soft leading-relaxed">
               Business Associate shall ensure that any subcontractors that
               create, receive, maintain, or transmit PHI on behalf of Business
               Associate agree in writing to the same restrictions, conditions,
@@ -265,11 +265,11 @@ export default function BAAPage() {
 
           {/* 7 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">7.</span>Access to PHI /
               Amendment Rights
             </h2>
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-ink-soft leading-relaxed">
               Business Associate shall make PHI maintained in a Designated
               Record Set available to Covered Entity as necessary to satisfy
               Covered Entity&apos;s obligations under 45 CFR § 164.524
@@ -282,11 +282,11 @@ export default function BAAPage() {
 
           {/* 8 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">8.</span>Accounting of
               Disclosures
             </h2>
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-ink-soft leading-relaxed">
               Business Associate shall maintain and make available to Covered
               Entity the information required to provide an accounting of
               disclosures in accordance with 45 CFR § 164.528. Business
@@ -300,11 +300,11 @@ export default function BAAPage() {
 
           {/* 9 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">9.</span>Return or Destruction
               of PHI upon Termination
             </h2>
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-ink-soft leading-relaxed">
               Upon termination of this BAA or the underlying Terms of Service,
               Business Associate shall, if feasible, return or destroy all PHI
               received from or created on behalf of Covered Entity. If return or
@@ -319,17 +319,17 @@ export default function BAAPage() {
 
           {/* 10 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">10.</span>Term and Termination
             </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
+            <p className="text-ink-soft leading-relaxed mb-4">
               This BAA shall be effective as of the date Covered Entity first
               uses the Service and shall terminate when all PHI received from or
               created on behalf of Covered Entity has been returned or
               destroyed. Either party may terminate this BAA if it determines
               that the other party has violated a material term of this BAA.
             </p>
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-ink-soft leading-relaxed">
               Covered Entity may terminate this BAA and the underlying Terms of
               Service if Business Associate has breached a material term and has
               not cured the breach within thirty (30) days of receiving written
@@ -340,36 +340,36 @@ export default function BAAPage() {
 
           {/* 11 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">11.</span>Miscellaneous
             </h2>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
-                <span className="text-white">Survival:</span> The obligations
+                <span className="text-ink">Survival:</span> The obligations
                 of Business Associate under Sections 5, 8, and 9 shall survive
                 termination of this BAA
               </li>
               <li>
-                <span className="text-white">Interpretation:</span> Any
+                <span className="text-ink">Interpretation:</span> Any
                 ambiguity in this BAA shall be resolved in favor of a meaning
                 that permits compliance with HIPAA. In the event of a conflict
                 between this BAA and the Terms of Service, this BAA shall
                 prevail with respect to PHI
               </li>
               <li>
-                <span className="text-white">Amendment:</span> This BAA may be
+                <span className="text-ink">Amendment:</span> This BAA may be
                 amended only in writing signed by both parties. The parties
                 agree to amend this BAA as necessary to comply with changes in
                 HIPAA regulations
               </li>
               <li>
-                <span className="text-white">No third-party beneficiaries:</span>{" "}
+                <span className="text-ink">No third-party beneficiaries:</span>{" "}
                 Nothing in this BAA shall confer any rights upon any person
                 other than the parties and their respective successors and
                 assigns
               </li>
               <li>
-                <span className="text-white">Governing law:</span> This BAA
+                <span className="text-ink">Governing law:</span> This BAA
                 shall be governed by the laws of the State of Delaware,
                 consistent with applicable federal law including HIPAA
               </li>
@@ -378,15 +378,15 @@ export default function BAAPage() {
 
           {/* 12 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">12.</span>Contact Information
             </h2>
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-ink-soft leading-relaxed">
               For questions about this Business Associate Agreement or to report
               a potential breach:
             </p>
-            <div className="mt-4 text-gray-400">
-              <p className="text-white font-medium">
+            <div className="mt-4 text-ink-soft">
+              <p className="text-ink font-medium">
                 Doqto, Inc. — Privacy Officer
               </p>
               <p>

@@ -12,20 +12,20 @@ export default function HIPAAPage() {
   return (
     <>
       <Navbar />
-      <main className="bg-dark min-h-screen pt-24 pb-16">
+      <main className="bg-cream min-h-screen pt-24 pb-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
+          <h1 className="text-4xl sm:text-5xl font-bold text-ink mb-4">
             HIPAA Compliance
           </h1>
-          <p className="text-gray-500 mb-12">Last updated: March 2026</p>
+          <p className="text-ink-soft mb-12">Last updated: March 2026</p>
 
           {/* 1 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">1.</span>Our Commitment to
               HIPAA
             </h2>
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-ink-soft leading-relaxed">
               At Doqto, HIPAA compliance is not an afterthought — it is
               foundational to everything we build. As a Business Associate under
               HIPAA, we are committed to protecting the privacy and security of
@@ -40,43 +40,43 @@ export default function HIPAAPage() {
 
           {/* 2 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">2.</span>Administrative
               Safeguards
             </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
+            <p className="text-ink-soft leading-relaxed mb-4">
               We maintain comprehensive administrative safeguards including:
             </p>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
-                <span className="text-white">Security Officer:</span> A
+                <span className="text-ink">Security Officer:</span> A
                 designated Security Officer responsible for the development and
                 implementation of our security policies and procedures
               </li>
               <li>
-                <span className="text-white">Privacy Officer:</span> A
+                <span className="text-ink">Privacy Officer:</span> A
                 designated Privacy Officer responsible for the development and
                 implementation of our privacy policies and procedures
               </li>
               <li>
-                <span className="text-white">Workforce Training:</span> All
+                <span className="text-ink">Workforce Training:</span> All
                 employees and contractors undergo comprehensive HIPAA training
                 upon hiring and annually thereafter, with additional training
                 for any significant policy changes
               </li>
               <li>
-                <span className="text-white">Access Management:</span>{" "}
+                <span className="text-ink">Access Management:</span>{" "}
                 Role-based access controls ensure that workforce members only
                 have access to the minimum PHI necessary to perform their job
                 functions
               </li>
               <li>
-                <span className="text-white">Sanction Policy:</span> Clear
+                <span className="text-ink">Sanction Policy:</span> Clear
                 policies and procedures for addressing workforce members who
                 violate security or privacy policies
               </li>
               <li>
-                <span className="text-white">Risk Analysis:</span> Regular and
+                <span className="text-ink">Risk Analysis:</span> Regular and
                 comprehensive risk analyses to identify potential threats and
                 vulnerabilities to ePHI
               </li>
@@ -85,30 +85,30 @@ export default function HIPAAPage() {
 
           {/* 3 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">3.</span>Physical Safeguards
             </h2>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
-                <span className="text-white">Facility Access Controls:</span>{" "}
+                <span className="text-ink">Facility Access Controls:</span>{" "}
                 Our infrastructure is hosted in SOC 2 Type II certified data
                 centers with 24/7 physical security, biometric access controls,
                 and video surveillance
               </li>
               <li>
-                <span className="text-white">Workstation Security:</span> All
+                <span className="text-ink">Workstation Security:</span> All
                 employee workstations are encrypted, require strong
                 authentication, and are configured with automatic screen locks
                 and remote wipe capabilities
               </li>
               <li>
-                <span className="text-white">Device Controls:</span> Strict
+                <span className="text-ink">Device Controls:</span> Strict
                 policies govern the use of removable media and mobile devices.
                 All company devices are managed through a Mobile Device
                 Management (MDM) solution
               </li>
               <li>
-                <span className="text-white">Media Disposal:</span> Electronic
+                <span className="text-ink">Media Disposal:</span> Electronic
                 media containing ePHI is securely wiped or physically destroyed
                 before disposal or re-use, following NIST SP 800-88 guidelines
               </li>
@@ -117,37 +117,37 @@ export default function HIPAAPage() {
 
           {/* 4 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">4.</span>Technical Safeguards
             </h2>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
-                <span className="text-white">End-to-End Encryption:</span>{" "}
+                <span className="text-ink">End-to-End Encryption:</span>{" "}
                 AES-256 encryption ensures that only the sender and intended
                 recipients can read message content
               </li>
               <li>
-                <span className="text-white">Access Controls:</span> Unique
+                <span className="text-ink">Access Controls:</span> Unique
                 user identification, automatic logoff, role-based permissions,
                 and multi-factor authentication
               </li>
               <li>
-                <span className="text-white">Audit Controls:</span>{" "}
+                <span className="text-ink">Audit Controls:</span>{" "}
                 Comprehensive logging of all system activity, including user
                 authentication, data access, and administrative actions
               </li>
               <li>
-                <span className="text-white">Integrity Controls:</span>{" "}
+                <span className="text-ink">Integrity Controls:</span>{" "}
                 Mechanisms to verify that ePHI has not been improperly altered
                 or destroyed, including checksums and digital signatures
               </li>
               <li>
-                <span className="text-white">Transmission Security:</span> TLS
+                <span className="text-ink">Transmission Security:</span> TLS
                 1.3 for all data in transit, with certificate pinning for mobile
                 applications
               </li>
               <li>
-                <span className="text-white">Encryption at Rest:</span> All
+                <span className="text-ink">Encryption at Rest:</span> All
                 stored data is encrypted using AES-256 with regularly rotated
                 keys
               </li>
@@ -156,36 +156,36 @@ export default function HIPAAPage() {
 
           {/* 5 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">5.</span>End-to-End Encryption
               Details
             </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
+            <p className="text-ink-soft leading-relaxed mb-4">
               Our end-to-end encryption implementation ensures the highest level
               of data protection:
             </p>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
-                <span className="text-white">Algorithm:</span> AES-256-GCM for
+                <span className="text-ink">Algorithm:</span> AES-256-GCM for
                 symmetric encryption of message content and file transfers
               </li>
               <li>
-                <span className="text-white">Key Exchange:</span> Secure key
+                <span className="text-ink">Key Exchange:</span> Secure key
                 exchange using modern asymmetric cryptography protocols
               </li>
               <li>
-                <span className="text-white">Key Management:</span> Encryption
+                <span className="text-ink">Key Management:</span> Encryption
                 keys are generated on-device and never leave the user&apos;s
                 device. Keys are stored in the device&apos;s secure enclave or
                 keystore
               </li>
               <li>
-                <span className="text-white">Perfect Forward Secrecy:</span>{" "}
+                <span className="text-ink">Perfect Forward Secrecy:</span>{" "}
                 Session keys are regularly rotated so that compromise of a
                 single key does not affect past or future communications
               </li>
               <li>
-                <span className="text-white">Zero-Knowledge Architecture:</span>{" "}
+                <span className="text-ink">Zero-Knowledge Architecture:</span>{" "}
                 Doqto servers never have access to encryption keys or
                 plaintext message content. Even in the event of a server
                 compromise, data remains encrypted and unreadable
@@ -195,14 +195,14 @@ export default function HIPAAPage() {
 
           {/* 6 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">6.</span>Breach Notification
               Procedures
             </h2>
-            <p className="text-gray-400 leading-relaxed mb-4">
+            <p className="text-ink-soft leading-relaxed mb-4">
               In the event of a breach of unsecured PHI, Doqto will:
             </p>
-            <ul className="list-decimal list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-decimal list-inside text-ink-soft space-y-3 ml-4">
               <li>
                 Investigate and contain the breach immediately upon discovery
               </li>
@@ -232,11 +232,11 @@ export default function HIPAAPage() {
 
           {/* 7 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">7.</span>Business Associate
               Agreements
             </h2>
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-ink-soft leading-relaxed">
               Doqto enters into Business Associate Agreements (BAAs) with all
               Covered Entities that use our platform. We also maintain BAAs with
               our own subcontractors and service providers who may have access to
@@ -252,11 +252,11 @@ export default function HIPAAPage() {
 
           {/* 8 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">8.</span>Employee Training &
               Awareness
             </h2>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
                 All employees complete comprehensive HIPAA training within 30
                 days of hiring
@@ -280,11 +280,11 @@ export default function HIPAAPage() {
 
           {/* 9 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">9.</span>Regular Audits &
               Risk Assessments
             </h2>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
                 Annual comprehensive risk assessments in accordance with NIST
                 Cybersecurity Framework
@@ -311,11 +311,11 @@ export default function HIPAAPage() {
 
           {/* 10 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">10.</span>Data Backup &
               Disaster Recovery
             </h2>
-            <ul className="list-disc list-inside text-gray-400 space-y-3 ml-4">
+            <ul className="list-disc list-inside text-ink-soft space-y-3 ml-4">
               <li>
                 Automated, encrypted backups performed daily with geographically
                 distributed storage
@@ -339,15 +339,15 @@ export default function HIPAAPage() {
 
           {/* 11 */}
           <section className="mb-10">
-            <h2 className="text-xl font-semibold text-white mb-4">
+            <h2 className="text-xl font-semibold text-ink mb-4">
               <span className="text-primary mr-2">11.</span>Contact Information
             </h2>
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-ink-soft leading-relaxed">
               For questions about our HIPAA compliance practices or to report a
               potential security concern:
             </p>
-            <div className="mt-4 text-gray-400">
-              <p className="text-white font-medium">
+            <div className="mt-4 text-ink-soft">
+              <p className="text-ink font-medium">
                 Doqto, Inc. — Compliance Officer
               </p>
               <p>

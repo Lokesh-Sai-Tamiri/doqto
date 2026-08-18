@@ -16,43 +16,10 @@ class SettingsScreen extends ConsumerWidget {
   /// high-friction: the exact word must be typed, because this destroys the
   /// profile, all authored messages and the whole connection graph.
   Future<void> _confirmAndDelete(BuildContext context, WidgetRef ref) async {
-    final controller = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete account'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'This permanently deletes your profile, your messages and your '
-              'connections. It cannot be undone.\n\nType DELETE to confirm.',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: controller,
-              autocorrect: false,
-              decoration: const InputDecoration(hintText: 'DELETE'),
-              onChanged: (_) => (ctx as Element).markNeedsBuild(),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: controller.text.trim() == 'DELETE'
-                ? () => Navigator.of(ctx).pop(true)
-                : null,
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      builder: (_) => const _DeleteAccountDialog(),
     );
-    controller.dispose();
     if (confirmed != true) return;
 
     try {
@@ -136,6 +103,58 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DeleteAccountDialog extends StatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final armed = _controller.text.trim() == 'DELETE';
+    return AlertDialog(
+      title: const Text('Delete account'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'This permanently deletes your profile, your messages and your '
+            'connections. It cannot be undone.\n\nType DELETE to confirm.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _controller,
+            autocorrect: false,
+            decoration: const InputDecoration(hintText: 'DELETE'),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: armed ? () => Navigator.of(context).pop(true) : null,
+          child: const Text('Delete'),
+        ),
+      ],
     );
   }
 }

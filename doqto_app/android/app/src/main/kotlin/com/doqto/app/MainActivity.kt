@@ -1,4 +1,4 @@
-package com.doqto.doqto_app
+package com.doqto.app
 
 import android.os.Bundle
 import android.view.WindowManager

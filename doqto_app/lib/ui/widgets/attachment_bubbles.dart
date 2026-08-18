@@ -37,7 +37,7 @@ class _BubbleFooter extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          DateFormat.Hm().format(timestamp),
+          DateFormat.jm().format(timestamp),
           style: AppText.timestamp.copyWith(color: timeColor),
         ),
         if (isMine) ...[

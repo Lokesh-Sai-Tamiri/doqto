@@ -9,6 +9,7 @@ logs/
 .build/
 .buildlog/
 .history
+appstore/
 .svn/
 .next
 .swiftpm/

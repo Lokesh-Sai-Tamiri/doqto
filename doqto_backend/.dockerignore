@@ -1,0 +1,9 @@
+# The venv holds arm64 macOS binaries and would be copied into an x86 image.
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+.env
+.env.*
+docker-compose.yml

@@ -37,6 +37,10 @@ async def _user_from_token(
     user = await db.scalar(select(User).where(User.id == user_id))
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="user_not_found")
+    # Deleted accounts keep a tombstone row, so an unexpired token would still
+    # resolve. Refuse it here rather than at each call site.
+    if user.deleted_at is not None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="account_deleted")
     return user
 
 

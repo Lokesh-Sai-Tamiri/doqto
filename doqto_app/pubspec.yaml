@@ -1,7 +1,7 @@
 name: doqto_app
 description: "Doqto — secure doctor-to-doctor communication."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+6
 
 environment:
   sdk: ^3.10.4
@@ -76,12 +76,12 @@ flutter:
     - assets/splash_logo_white.png
 
 flutter_launcher_icons:
-  # Brand icon: white mark on blue (#176EF3), WhatsApp-style.
+  # Brand icon: white mark on brand teal (#35878F), matching AppColors.medBlue and the splash.
   image_path: "assets/icon/icon_fullbleed.png"
   android: true
   ios: true
   remove_alpha_ios: true # iOS icons must be opaque
-  adaptive_icon_background: "#176EF3"
+  adaptive_icon_background: "#35878F"
   adaptive_icon_foreground: "assets/icon/icon_foreground.png"
 
 # Workaround: record_linux 0.7.2 has a broken interface against

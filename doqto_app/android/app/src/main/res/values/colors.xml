@@ -2,5 +2,5 @@
 <resources>
     <!-- Matches AppColors.medBlue — splash gradient start, avoids white flash -->
     <color name="splash_background">#35878F</color>
-	<color name="ic_launcher_background">#176EF3</color>
+	<color name="ic_launcher_background">#35878F</color>
 </resources>

@@ -122,6 +122,7 @@ class PgTrgmPeopleSearch(PeopleSearchProvider):
             .outerjoin(UserPrivacySettings, UserPrivacySettings.user_id == User.id)
             .where(User.id != viewer_id)
             .where(User.role == UserRole.DOCTOR.value)
+            .where(User.deleted_at.is_(None))
         )
         if blocked:
             stmt = stmt.where(User.id.notin_(blocked))

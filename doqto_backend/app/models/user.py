@@ -38,6 +38,9 @@ class User(Base):
         ARRAY(String(40)), nullable=False, server_default="{}", default=list
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Set by AccountDeletionService. The row survives as a scrubbed tombstone
+    # (audit rows FK to it, HIPAA retention); this makes the account unusable.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

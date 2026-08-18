@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/di/providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/tokens/spacing.dart';
 import '../../../state/auth_state.dart';
@@ -10,6 +11,64 @@ import '../../widgets/primary_button.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
+
+  /// App Store 5.1.1(v) requires deletion be initiated in-app. Deliberately
+  /// high-friction: the exact word must be typed, because this destroys the
+  /// profile, all authored messages and the whole connection graph.
+  Future<void> _confirmAndDelete(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This permanently deletes your profile, your messages and your '
+              'connections. It cannot be undone.\n\nType DELETE to confirm.',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: controller,
+              autocorrect: false,
+              decoration: const InputDecoration(hintText: 'DELETE'),
+              onChanged: (_) => (ctx as Element).markNeedsBuild(),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: controller.text.trim() == 'DELETE'
+                ? () => Navigator.of(ctx).pop(true)
+                : null,
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(userRepositoryProvider).deleteAccount();
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't delete your account. Try again.")),
+        );
+      }
+      return;
+    }
+    // signOut also wipes the local encrypted PHI caches.
+    await ref.read(authProvider.notifier).signOut();
+    if (context.mounted) context.go(AppRoutes.phone);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -58,6 +117,20 @@ class SettingsScreen extends ConsumerWidget {
                   await ref.read(authProvider.notifier).signOut();
                   if (context.mounted) context.go(AppRoutes.phone);
                 },
+              ),
+            ),
+          ),
+          FadeSlideIn.staggered(
+            5,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg)
+                  .copyWith(bottom: AppSpacing.lg),
+              child: TextButton(
+                onPressed: () => _confirmAndDelete(context, ref),
+                child: Text(
+                  'Delete account',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
             ),
           ),

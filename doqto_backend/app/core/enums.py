@@ -213,6 +213,7 @@ class AuditAction(StrEnum):
     LOGIN = "login"
     LOGOUT = "logout"
     REGISTER = "register"
+    ACCOUNT_DELETED = "account_deleted"
     OTP_REQUESTED = "otp_requested"
     OTP_VERIFIED = "otp_verified"
     ORG_CREATED = "org_created"

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import (
@@ -22,6 +22,7 @@ from app.schemas.people import PublicProfileOut, location_label
 from app.schemas.privacy import PrivacyOut, PrivacyPatch
 from app.schemas.push import PushTokenDeleteIn, PushTokenIn
 from app.schemas.user import UserOut, UserPatch, build_user_out
+from app.services.account_deletion_service import AccountDeletionService
 from app.services.file_service import FileService
 from app.services.push_service import PushService
 from app.services.relationship_service import RelationshipService
@@ -72,6 +73,26 @@ async def update_privacy(
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> UserOut:
     return await build_user_out(user)
+
+
+@router.delete("/me", response_model=OkResponse, status_code=status.HTTP_200_OK)
+async def delete_me(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OkResponse:
+    """App Store 5.1.1(v): account deletion initiated from inside the app.
+
+    Irreversible. Scrubs identity, destroys authored content and the social
+    graph, and leaves an audit tombstone (HIPAA retention).
+    """
+    await AccountDeletionService.delete_account(
+        user=user,
+        db=db,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    return OkResponse()
 
 
 @router.patch("/me", response_model=UserOut)

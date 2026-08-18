@@ -44,6 +44,13 @@ class UserRepository {
   final ApiClient _api;
   UserRepository(this._api);
 
+  /// App Store 5.1.1(v). Irreversible: scrubs the profile, destroys authored
+  /// content and the social graph server-side. The caller must sign out —
+  /// every subsequent request 401s with `account_deleted`.
+  Future<void> deleteAccount() async {
+    await _api.delete(ApiRoutes.usersMe);
+  }
+
   Future<User> updateMe(UserPatchBody patch) async {
     final j = await _api.patch(ApiRoutes.usersMe, body: patch.toJson());
     return User.fromJson(j);

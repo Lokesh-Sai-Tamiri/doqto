@@ -115,6 +115,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               tooltip: 'Edit profile',
               onPressed: () => context.push(AppRoutes.profileEdit),
             ),
+          // The /settings route existed but nothing linked to it, which left
+          // account deletion unreachable — App Store 5.1.1(v) requires a user
+          // (and a reviewer) to find it in-app.
+          if (_isSelf)
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Settings',
+              onPressed: () => context.push(AppRoutes.settings),
+            ),
         ],
       ),
       body: RefreshIndicator(

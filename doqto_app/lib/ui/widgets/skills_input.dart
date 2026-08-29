@@ -89,6 +89,7 @@ class _SkillsInputState extends State<SkillsInput> {
                 controller: _controller,
                 focusNode: _focus,
                 enabled: !atLimit,
+                onTapOutside: (_) => _focus.unfocus(),
                 maxLength: widget.maxLength,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _add(),

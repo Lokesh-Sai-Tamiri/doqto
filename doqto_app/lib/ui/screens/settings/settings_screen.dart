@@ -140,6 +140,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
           TextField(
             controller: _controller,
             autocorrect: false,
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             decoration: const InputDecoration(hintText: 'DELETE'),
             onChanged: (_) => setState(() {}),
           ),

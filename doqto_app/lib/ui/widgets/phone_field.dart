@@ -100,6 +100,8 @@ class PhoneFieldState extends State<PhoneField> {
   void _emit() {
     widget.onChanged(e164);
     if (_hasBlurred) _runValidator();
+    // ponytail: drop the keypad the moment the number is complete
+    if (_focus.hasFocus && validationError() == null) _focus.unfocus();
   }
 
   void _onFocusChange() {
@@ -109,24 +111,28 @@ class PhoneFieldState extends State<PhoneField> {
     }
   }
 
-  bool _runValidator() {
+  /// Validation message for the current input, or null when it parses clean.
+  /// Pure — no setState, safe to call on every keystroke.
+  @visibleForTesting
+  String? validationError() {
     final digits = _controller.text.replaceAll(RegExp(r'\D'), '');
-    String? error;
-    if (digits.isEmpty) {
-      error = 'Please enter your phone number.';
-    } else {
-      try {
-        final parsed = PhoneNumber.parse(
-          digits,
-          destinationCountry: IsoCode.values.byName(_country.countryCode),
-        );
-        if (!parsed.isValid()) {
-          error = 'That doesn\'t look like a valid ${_country.countryCode} number.';
-        }
-      } catch (_) {
-        error = 'Please enter a valid phone number.';
+    if (digits.isEmpty) return 'Please enter your phone number.';
+    try {
+      final parsed = PhoneNumber.parse(
+        digits,
+        destinationCountry: IsoCode.values.byName(_country.countryCode),
+      );
+      if (!parsed.isValid()) {
+        return 'That doesn\'t look like a valid ${_country.countryCode} number.';
       }
+    } catch (_) {
+      return 'Please enter a valid phone number.';
     }
+    return null;
+  }
+
+  bool _runValidator() {
+    final error = validationError();
     if (error != _internalError) {
       setState(() => _internalError = error);
     }
@@ -193,6 +199,7 @@ class PhoneFieldState extends State<PhoneField> {
                 focusNode: _focus,
                 keyboardType: TextInputType.phone,
                 autofocus: widget.autofocus,
+                onTapOutside: (_) => _focus.unfocus(),
                 style: AppText.bodyPrimary,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9\s\-]')),

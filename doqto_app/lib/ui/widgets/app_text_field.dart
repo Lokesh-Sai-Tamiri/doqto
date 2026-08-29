@@ -39,6 +39,11 @@ class AppTextField extends StatefulWidget {
   /// Optional validator — if provided, [AppTextField] renders its error in red.
   final Validator? validator;
 
+  /// Drop the keyboard as soon as [validator] passes. For fixed-length inputs
+  /// (OTP, PIN) where "valid" means "done typing". Leave false for free text —
+  /// a name validator passes at one character.
+  final bool dismissOnValid;
+
   const AppTextField({
     super.key,
     this.controller,
@@ -54,6 +59,7 @@ class AppTextField extends StatefulWidget {
     this.style,
     this.autofocus = false,
     this.validator,
+    this.dismissOnValid = false,
   });
 
   @override
@@ -106,6 +112,11 @@ class AppTextFieldState extends State<AppTextField> {
   void _onChanged(String value) {
     widget.onChanged?.call(value);
     if (_hasBlurred) _runValidator(value);
+    if (widget.dismissOnValid &&
+        _focus.hasFocus &&
+        widget.validator?.call(value) == null) {
+      _focus.unfocus();
+    }
   }
 
   @override
@@ -150,6 +161,9 @@ class AppTextFieldState extends State<AppTextField> {
             inputFormatters: widget.inputFormatters,
             onChanged: _onChanged,
             autofocus: widget.autofocus,
+            // Tapping anywhere off the field dismisses the keyboard. Flutter's
+            // default only does this on desktop; on mobile focus would stick.
+            onTapOutside: (_) => _focus.unfocus(),
             style: widget.style ?? AppText.bodyPrimary,
             decoration: InputDecoration(
               hintText: widget.hint,

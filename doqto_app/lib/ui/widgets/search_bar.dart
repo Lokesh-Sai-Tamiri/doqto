@@ -88,6 +88,7 @@ class _AppSearchBarState extends State<AppSearchBar> {
           controller: _controller,
           focusNode: _focus,
           onChanged: _onChanged,
+          onTapOutside: (_) => _focus.unfocus(),
           style: AppText.bodyPrimary,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(

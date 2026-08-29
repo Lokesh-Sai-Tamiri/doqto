@@ -150,6 +150,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                   autofocus: true,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   validator: Validators.otp(AppConstants.otpLength),
+                  dismissOnValid: true,
                   onChanged: (_) {
                     if (_error != null) setState(() => _error = null);
                   },

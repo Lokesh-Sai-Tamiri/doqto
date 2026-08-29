@@ -1,7 +1,7 @@
 name: doqto_app
 description: "Doqto — secure doctor-to-doctor communication."
 publish_to: 'none'
-version: 1.0.0+8
+version: 1.0.0+14
 
 environment:
   sdk: ^3.10.4
@@ -89,4 +89,9 @@ flutter_launcher_icons:
 # record_linux to a working version to unblock resolver.
 dependency_overrides:
   record_linux: ^1.0.0
+  # ITMS-90111 A/B test (build 12): path_provider_foundation 2.6.0 ships the
+  # native-assets objective_c.framework (no dSYM, no Xcode toolchain stamps) —
+  # the one embedded binary present in every rejected build. 2.5.1 predates
+  # native assets and drops that framework entirely.
+  path_provider_foundation: 2.5.1
 

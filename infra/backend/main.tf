@@ -378,7 +378,7 @@ resource "aws_ecs_task_definition" "api" {
       { name = "PUSH_PROVIDER", value = "log" },
       # TEMPORARY sign-in backdoor (777777) while SNS SMS sandbox exit is
       # pending — remove this line once real SMS delivery is approved.
-      { name = "MASTER_OTP_ENABLED", value = "true" },
+      { name = "MASTER_OTP_ENABLED", value = "false" },
     ]
     secrets = [for k, p in aws_ssm_parameter.secret : { name = k, valueFrom = p.arn }]
     logConfiguration = {

@@ -374,7 +374,7 @@ resource "aws_ecs_task_definition" "api" {
       { name = "AWS_REGION", value = "us-east-1" },
       { name = "AWS_S3_BUCKET_NAME", value = aws_s3_bucket.media.bucket },
       { name = "ALLOWED_ORIGINS", value = "https://doqto.ai,https://www.doqto.ai" },
-      { name = "NETWORK_DM_ENABLED", value = "false" },
+      { name = "NETWORK_DM_ENABLED", value = "true" },
       { name = "PUSH_PROVIDER", value = "log" },
       # TEMPORARY sign-in backdoor (777777) while SNS SMS sandbox exit is
       # pending — remove this line once real SMS delivery is approved.

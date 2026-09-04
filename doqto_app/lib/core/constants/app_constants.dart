@@ -35,9 +35,6 @@ class AppConstants {
   static const int messagesPageSize = 50;
 
   // Sessions / privacy
-  /// H5a (§164.312(a)(2)(iii)): resuming after this long in the background
-  /// forces sign-out, which also wipes cached PHI (H2).
-  static const Duration sessionIdleTimeout = Duration(minutes: 15);
 
   /// H3: whether banner bodies show message content. True is acceptable only
   /// while banners are foreground-only (device unlocked, app open). MUST

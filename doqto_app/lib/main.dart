@@ -13,7 +13,6 @@ import 'data/services/chat_cache.dart';
 import 'data/services/groups_cache.dart';
 import 'data/services/network_cache.dart';
 import 'data/services/outbox.dart';
-import 'state/auth_state.dart';
 import 'state/chat_state.dart';
 import 'state/notification_state.dart';
 
@@ -59,9 +58,6 @@ class DoqtoApp extends ConsumerStatefulWidget {
 
 class _DoqtoAppState extends ConsumerState<DoqtoApp>
     with WidgetsBindingObserver {
-  /// H5a: when the app left the foreground (earliest of inactive/paused/hidden).
-  DateTime? _backgroundedAt;
-
   @override
   void initState() {
     super.initState();
@@ -76,24 +72,7 @@ class _DoqtoAppState extends ConsumerState<DoqtoApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden) {
-      _backgroundedAt ??= DateTime.now(); // keep the earliest timestamp
-      return;
-    }
     if (state != AppLifecycleState.resumed) return;
-    final away = _backgroundedAt == null
-        ? Duration.zero
-        : DateTime.now().difference(_backgroundedAt!);
-    _backgroundedAt = null;
-    // H5a: automatic logoff — away too long forces sign-out, which also
-    // wipes cached PHI (H2). Router redirect lands on the login screen.
-    if (away > AppConstants.sessionIdleTimeout &&
-        ref.read(authProvider).stage == AuthStage.signedIn) {
-      ref.read(authProvider.notifier).signOut();
-      return;
-    }
     // Resume = instant reconnect (skipping any pending backoff). The
     // WsConnState.connected stream then drives conversation refresh, message
     // catch-up, and outbox drain. Nothing on pause — the server's idle

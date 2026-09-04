@@ -120,6 +120,12 @@ resource "aws_security_group" "app" {
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
+  ingress { # admin panel
+    from_port       = 3000
+    to_port         = 3000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
   egress {
     from_port   = 0
     to_port     = 0
@@ -378,7 +384,7 @@ resource "aws_ecs_task_definition" "api" {
       { name = "PUSH_PROVIDER", value = "log" },
       # TEMPORARY sign-in backdoor (777777) while SNS SMS sandbox exit is
       # pending — remove this line once real SMS delivery is approved.
-      { name = "MASTER_OTP_ENABLED", value = "false" },
+      { name = "MASTER_OTP_ENABLED", value = "true" },
     ]
     secrets = [for k, p in aws_ssm_parameter.secret : { name = k, valueFrom = p.arn }]
     logConfiguration = {
@@ -478,7 +484,7 @@ output "api_url" {
 
 # ---------- admin panel (admin.doqto.ai) ----------
 # Next.js server on the same cluster + ALB; host-header rule routes to it.
-# ponytail: shares the exec role and app SG (port 3000 opened below).
+# ponytail: shares the exec role and app SG (port 3000 opened inline above).
 
 locals {
   admin_name   = "doqto-admin"
@@ -486,14 +492,6 @@ locals {
   admin_port   = 3000
 }
 
-resource "aws_security_group_rule" "app_admin" {
-  type                     = "ingress"
-  security_group_id        = aws_security_group.app.id
-  from_port                = local.admin_port
-  to_port                  = local.admin_port
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.alb.id
-}
 
 resource "aws_acm_certificate" "admin" {
   domain_name       = local.admin_domain

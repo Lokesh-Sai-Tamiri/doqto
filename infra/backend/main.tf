@@ -1,4 +1,4 @@
-# Doqto backend: ECS Fargate (FastAPI+WS) behind ALB on api.doqto.ai,
+# Doqto backend: ECS Fargate (FastAPI+WS) behind ALB on api.doqto.ai (+ admin.doqto.ai),
 # RDS Postgres 15, ElastiCache Redis 7 (TLS), media S3 bucket.
 # Usage: ./deploy.sh (builds image, pushes to ECR, applies, bounces service).
 # Runs in the default VPC's public subnets with SG isolation — no NAT cost.
@@ -153,22 +153,22 @@ resource "aws_security_group" "redis" {
 # ---------- data stores ----------
 
 resource "aws_db_instance" "db" {
-  identifier              = local.name
-  engine                  = "postgres"
-  engine_version          = "15"
-  instance_class          = "db.t4g.micro"
-  allocated_storage       = 20
-  storage_type            = "gp3"
-  db_name                 = "doqto"
-  username                = "doqto"
-  password                = random_password.db.result
-  vpc_security_group_ids  = [aws_security_group.db.id]
-  storage_encrypted       = true
-  backup_retention_period = 7
-  deletion_protection     = true
-  skip_final_snapshot     = false
+  identifier                = local.name
+  engine                    = "postgres"
+  engine_version            = "15"
+  instance_class            = "db.t4g.micro"
+  allocated_storage         = 20
+  storage_type              = "gp3"
+  db_name                   = "doqto"
+  username                  = "doqto"
+  password                  = random_password.db.result
+  vpc_security_group_ids    = [aws_security_group.db.id]
+  storage_encrypted         = true
+  backup_retention_period   = 7
+  deletion_protection       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name}-final"
-  apply_immediately       = true
+  apply_immediately         = true
 }
 
 resource "aws_elasticache_replication_group" "redis" {
@@ -321,7 +321,7 @@ resource "aws_iam_role_policy" "exec_ssm" {
 }
 
 resource "aws_iam_role" "task" {
-  name = "${local.name}-task"
+  name               = "${local.name}-task"
   assume_role_policy = aws_iam_role.exec.assume_role_policy
 }
 
@@ -364,10 +364,10 @@ resource "aws_ecs_task_definition" "api" {
   task_role_arn            = aws_iam_role.task.arn
 
   container_definitions = jsonencode([{
-    name      = "api"
-    image     = "${aws_ecr_repository.api.repository_url}:latest"
-    essential = true
-    command   = ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port ${local.port} --workers 2"]
+    name         = "api"
+    image        = "${aws_ecr_repository.api.repository_url}:latest"
+    essential    = true
+    command      = ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port ${local.port} --workers 2"]
     portMappings = [{ containerPort = local.port, protocol = "tcp" }]
     environment = [
       { name = "ENVIRONMENT", value = "production" },
@@ -474,4 +474,135 @@ output "ecr_repo" {
 
 output "api_url" {
   value = "https://${local.domain}"
+}
+
+# ---------- admin panel (admin.doqto.ai) ----------
+# Next.js server on the same cluster + ALB; host-header rule routes to it.
+# ponytail: shares the exec role and app SG (port 3000 opened below).
+
+locals {
+  admin_name   = "doqto-admin"
+  admin_domain = "admin.doqto.ai"
+  admin_port   = 3000
+}
+
+resource "aws_security_group_rule" "app_admin" {
+  type                     = "ingress"
+  security_group_id        = aws_security_group.app.id
+  from_port                = local.admin_port
+  to_port                  = local.admin_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+}
+
+resource "aws_acm_certificate" "admin" {
+  domain_name       = local.admin_domain
+  validation_method = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_acm_certificate_validation" "admin" {
+  certificate_arn = aws_acm_certificate.admin.arn
+}
+
+output "admin_acm_validation_records" {
+  value = aws_acm_certificate.admin.domain_validation_options
+}
+
+resource "aws_lb_listener_certificate" "admin" {
+  listener_arn    = aws_lb_listener.https.arn
+  certificate_arn = aws_acm_certificate_validation.admin.certificate_arn
+}
+
+resource "aws_lb_target_group" "admin" {
+  name        = local.admin_name
+  port        = local.admin_port
+  protocol    = "HTTP"
+  vpc_id      = data.aws_vpc.default.id
+  target_type = "ip"
+  health_check {
+    path                = "/login"
+    interval            = 30
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_lb_listener_rule" "admin" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 10
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.admin.arn
+  }
+  condition {
+    host_header {
+      values = [local.admin_domain]
+    }
+  }
+}
+
+resource "aws_ecr_repository" "admin" {
+  name                 = local.admin_name
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+}
+
+resource "aws_cloudwatch_log_group" "admin" {
+  name              = "/ecs/${local.admin_name}"
+  retention_in_days = 90
+}
+
+resource "aws_ecs_task_definition" "admin" {
+  family                   = local.admin_name
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 256
+  memory                   = 512
+  execution_role_arn       = aws_iam_role.exec.arn
+
+  container_definitions = jsonencode([{
+    name         = "admin"
+    image        = "${aws_ecr_repository.admin.repository_url}:latest"
+    essential    = true
+    portMappings = [{ containerPort = local.admin_port, protocol = "tcp" }]
+    environment = [
+      { name = "API_BASE_URL", value = "https://${local.domain}" },
+    ]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.admin.name
+        awslogs-region        = "us-east-1"
+        awslogs-stream-prefix = "admin"
+      }
+    }
+  }])
+}
+
+resource "aws_ecs_service" "admin" {
+  depends_on      = [aws_lb_listener_rule.admin]
+  name            = local.admin_name
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.admin.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = data.aws_subnets.default.ids
+    security_groups  = [aws_security_group.app.id]
+    assign_public_ip = true
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.admin.arn
+    container_name   = "admin"
+    container_port   = local.admin_port
+  }
+}
+
+output "admin_url" {
+  value = "https://${local.admin_domain}"
 }

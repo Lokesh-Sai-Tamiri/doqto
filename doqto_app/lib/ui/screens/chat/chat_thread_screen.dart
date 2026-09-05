@@ -1197,6 +1197,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         minLines: 1,
                         maxLines: 5,
                         keyboardType: TextInputType.multiline,
+                        textCapitalization: TextCapitalization.sentences,
                         textInputAction: TextInputAction.send,
                         onTapOutside: (_) => FocusScope.of(context).unfocus(),
                         decoration: InputDecoration(

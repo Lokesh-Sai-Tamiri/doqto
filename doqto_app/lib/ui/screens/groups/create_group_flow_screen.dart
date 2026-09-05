@@ -154,6 +154,7 @@ class _CreateGroupFlowScreenState extends ConsumerState<CreateGroupFlowScreen> {
         AppTextField(
           controller: _description,
           label: Strings.groupsDescriptionLabel,
+          textCapitalization: TextCapitalization.sentences,
           hint: Strings.groupsDescriptionHint,
         ),
       ],

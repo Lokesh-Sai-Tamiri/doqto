@@ -44,6 +44,9 @@ class AppTextField extends StatefulWidget {
   /// a name validator passes at one character.
   final bool dismissOnValid;
 
+  /// Defaults to Words (names, places); pass sentences for free prose.
+  final TextCapitalization? textCapitalization;
+
   const AppTextField({
     super.key,
     this.controller,
@@ -60,6 +63,7 @@ class AppTextField extends StatefulWidget {
     this.autofocus = false,
     this.validator,
     this.dismissOnValid = false,
+    this.textCapitalization,
   });
 
   @override
@@ -156,6 +160,10 @@ class AppTextFieldState extends State<AppTextField> {
             controller: widget.controller,
             focusNode: _focus,
             keyboardType: widget.keyboardType,
+            textCapitalization: widget.textCapitalization ??
+                (widget.keyboardType == TextInputType.emailAddress
+                    ? TextCapitalization.none
+                    : TextCapitalization.words),
             obscureText: widget.obscure,
             maxLength: widget.maxLength,
             inputFormatters: widget.inputFormatters,

@@ -336,6 +336,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                     AppTextField(
                       controller: _bio,
                       label: 'Bio',
+                      textCapitalization: TextCapitalization.sentences,
                       hint: 'Short description of your practice.',
                       maxLength: 500,
                     ),

@@ -47,7 +47,33 @@ class Message(Base):
         DateTime(timezone=True), nullable=True, index=True
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Sender edited the body (history in message_edits). Distinct from
+    # deleted_at: a user-deleted message stays listed as a tombstone, while
+    # is_deleted (expiry/purge) hides the row entirely.
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class MessageEdit(Base):
+    """A superseded version of a text message — PHI, encrypted like bodies.
+    Every conversation member may read the history (transparent edits)."""
+
+    __tablename__ = Tables.MESSAGE_EDITS
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(f"{Tables.MESSAGES}.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    content_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    replaced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 

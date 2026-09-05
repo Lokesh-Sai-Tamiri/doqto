@@ -11,6 +11,7 @@ class Tables:
     MESSAGES = "messages"
     SCHEDULED_MESSAGES = "scheduled_messages"
     MESSAGE_RECEIPTS = "message_receipts"
+    MESSAGE_EDITS = "message_edits"
     AUDIT_LOGS = "audit_logs"
     DEVICE_TOKENS = "device_tokens"
     # Networking graph (M1)

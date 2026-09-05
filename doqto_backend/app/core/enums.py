@@ -172,6 +172,8 @@ class WsEventServer(StrEnum):
     TRANSCRIPT_READY = "transcript_ready"
     MESSAGE_DELIVERED = "message_delivered"
     MESSAGE_READ = "message_read"
+    MESSAGE_EDITED = "message_edited"
+    MESSAGE_DELETED = "message_deleted"
     PRESENCE_UPDATE = "presence_update"
     MEMBER_ADDED = "member_added"
     MEMBER_REMOVED = "member_removed"
@@ -228,6 +230,8 @@ class AuditAction(StrEnum):
     GROUP_MEMBER_REMOVED = "group_member_removed"
     MESSAGE_SENT = "message_sent"
     MESSAGE_READ = "message_read"
+    MESSAGE_EDITED = "message_edited"
+    MESSAGE_DELETED = "message_deleted"
     FILE_UPLOADED = "file_uploaded"
     FILE_ACCESSED = "file_accessed"
     # Networking graph (M1)

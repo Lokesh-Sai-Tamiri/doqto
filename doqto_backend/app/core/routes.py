@@ -80,6 +80,8 @@ class ApiRoutes:
 
     # Messages
     MESSAGES_READ = "/{message_id}/read"
+    MESSAGES_DETAIL = "/{message_id}"  # PATCH edit / DELETE
+    MESSAGES_EDITS = "/{message_id}/edits"
     MESSAGES_FILE_URL = "/{message_id}/file-url"
 
     # Groups (M5) — router mounted at /api/v1 (see ApiPrefix.GROUPS).

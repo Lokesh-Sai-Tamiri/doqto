@@ -16,6 +16,15 @@ class MessageSendIn(BaseModel):
     client_id: str | None = Field(default=None, max_length=64)
 
 
+class MessageEditIn(BaseModel):
+    content: str = Field(min_length=1, max_length=5000)
+
+
+class MessageEditOut(BaseModel):
+    content: str
+    replaced_at: datetime
+
+
 class MessageScheduleIn(BaseModel):
     content: str = Field(min_length=1, max_length=5000)
     # Wall-clock time in the picked zone, naive ISO ("2026-08-09T14:30:00").
@@ -51,6 +60,8 @@ class MessageOut(BaseModel):
     read: bool = False  # read by a recipient (blue double-check)
     delivered: bool = False  # delivered to a recipient (gray double-check)
     client_id: str | None = None  # echoes the sender's idempotency key
+    edited_at: datetime | None = None
+    deleted_at: datetime | None = None  # tombstone: content/media gone, row kept
 
 
 class FileUrlOut(BaseModel):

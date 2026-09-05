@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.ws_manager import ws_manager
 from app.core.constants import (
+    MESSAGE_DELETED_PREVIEW,
     CHAT_LIST_PREVIEW_MAX_LEN,
     DISAPPEAR_OPTIONS_SEC,
     MESSAGE_REQUEST_QUOTA_PER_DAY,
@@ -115,6 +116,8 @@ async def _is_org_admin(org_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession)
 
 
 def _preview_for(msg: Message | None) -> str | None:
+    if msg is not None and msg.deleted_at is not None:
+        return MESSAGE_DELETED_PREVIEW
     if msg is None or msg.content_encrypted is None or msg.type not in (
         MessageType.TEXT,
         MessageType.SYSTEM,

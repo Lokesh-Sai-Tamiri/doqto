@@ -3,11 +3,13 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import (
+    MESSAGE_DELETE_WINDOW_SEC,
+    MESSAGE_EDIT_WINDOW_SEC,
     MESSAGES_PAGE_SIZE,
     PURGE_CONTENT_GRACE_SEC,
     REQUEST_MESSAGE_MAX_LEN,
@@ -25,6 +27,7 @@ from app.models import (
     ConversationMember,
     DirectConversationKey,
     Message,
+    MessageEdit,
     MessageReceipt,
     User,
 )
@@ -495,7 +498,97 @@ class MessageService:
             read=read,
             delivered=delivered or read,  # read implies delivered
             client_id=msg.client_id,
+            edited_at=msg.edited_at,
+            deleted_at=msg.deleted_at,
         )
+
+    # --- Edit / delete (sender-only, time-boxed) ---------------------------- #
+
+    @staticmethod
+    async def _own_live_message(
+        *, message_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
+    ) -> Message:
+        msg = await db.scalar(select(Message).where(Message.id == message_id))
+        if msg is None or msg.is_deleted:
+            raise MessageError("message_not_found")
+        if msg.sender_id != user_id:
+            raise MessageError("not_message_sender")
+        if msg.deleted_at is not None:
+            raise MessageError("message_deleted")
+        return msg
+
+    @staticmethod
+    def _age_sec(msg: Message) -> float:
+        return (datetime.now(tz=timezone.utc) - msg.created_at).total_seconds()
+
+    @staticmethod
+    async def edit_message(
+        *, message_id: uuid.UUID, user_id: uuid.UUID, content: str, db: AsyncSession
+    ) -> Message:
+        """Replace a text body within MESSAGE_EDIT_WINDOW_SEC; the previous
+        version goes to message_edits so every member can see the history.
+        Identical content is a no-op (no history row, no edited_at)."""
+        msg = await MessageService._own_live_message(
+            message_id=message_id, user_id=user_id, db=db
+        )
+        if msg.type != MessageType.TEXT or msg.content_encrypted is None:
+            raise MessageError("message_not_editable")
+        if MessageService._age_sec(msg) > MESSAGE_EDIT_WINDOW_SEC:
+            raise MessageError("edit_window_closed")
+        if decrypt_message(msg.content_encrypted) == content:
+            return msg
+        db.add(MessageEdit(message_id=msg.id, content_encrypted=msg.content_encrypted))
+        msg.content_encrypted = encrypt_message(content)
+        msg.edited_at = datetime.now(tz=timezone.utc)
+        await AuditService.log(
+            db,
+            user_id=user_id,
+            action=AuditAction.MESSAGE_EDITED,
+            resource_type="message",
+            resource_id=msg.id,
+        )
+        await db.flush()
+        return msg
+
+    @staticmethod
+    async def delete_message(
+        *, message_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
+    ) -> tuple[Message, str | None]:
+        """Tombstone within MESSAGE_DELETE_WINDOW_SEC: crypto-shred body,
+        transcript, media key and edit history; keep the row (seq ordering).
+        Returns the S3 key the caller must delete after commit, if any."""
+        msg = await MessageService._own_live_message(
+            message_id=message_id, user_id=user_id, db=db
+        )
+        if msg.type == MessageType.SYSTEM:
+            raise MessageError("message_not_deletable")
+        if MessageService._age_sec(msg) > MESSAGE_DELETE_WINDOW_SEC:
+            raise MessageError("delete_window_closed")
+        s3_key = msg.s3_key
+        msg.content_encrypted = None
+        msg.transcript_encrypted = None
+        msg.s3_key = None
+        msg.deleted_at = datetime.now(tz=timezone.utc)
+        await db.execute(delete(MessageEdit).where(MessageEdit.message_id == msg.id))
+        await AuditService.log(
+            db,
+            user_id=user_id,
+            action=AuditAction.MESSAGE_DELETED,
+            resource_type="message",
+            resource_id=msg.id,
+        )
+        await db.flush()
+        return msg, s3_key
+
+    @staticmethod
+    async def list_edits(*, message_id: uuid.UUID, db: AsyncSession) -> list[MessageEdit]:
+        """Superseded versions, oldest first. Empty after a delete (shredded)."""
+        rows = await db.execute(
+            select(MessageEdit)
+            .where(MessageEdit.message_id == message_id)
+            .order_by(MessageEdit.replaced_at.asc())
+        )
+        return list(rows.scalars().all())
 
     @staticmethod
     async def mark_conversation_delivered(

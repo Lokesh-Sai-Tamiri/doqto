@@ -26,6 +26,10 @@ PRESIGNED_URL_TTL_SECONDS = 60 * 5  # 5 minutes
 
 # Pagination
 MESSAGES_PAGE_SIZE = 50
+# Sender may edit a text message / delete any message this long after sending.
+MESSAGE_EDIT_WINDOW_SEC = 5 * 60
+MESSAGE_DELETE_WINDOW_SEC = 3 * 60
+MESSAGE_DELETED_PREVIEW = "This message was deleted"
 MEMBERS_PAGE_SIZE = 100
 
 # Voice notes

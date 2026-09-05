@@ -24,14 +24,14 @@ from app.core.enums import (
 )
 from app.core.routes import ApiRoutes
 from app.core.rate_limit import enforce_rate_limit
-from app.core.security import encrypt_message
+from app.core.security import decrypt_message, encrypt_message
 from app.db.postgres import get_db
 from app.models import Conversation, ConversationMember, Message, User
 from app.schemas.common import OkResponse
-from app.schemas.message import FileUrlOut, MessageOut
+from app.schemas.message import FileUrlOut, MessageEditIn, MessageEditOut, MessageOut
 from app.services.audit_service import AuditService
 from app.services.file_service import FileService
-from app.services.message_service import MessageService
+from app.services.message_service import MessageError, MessageService
 from app.services.push_service import PushService
 from app.services.transcription_service import TranscriptionService
 
@@ -280,3 +280,85 @@ async def get_file_url(
         resource_id=message_id,
     )
     return FileUrlOut(url=url, expires_in=PRESIGNED_URL_TTL_SECONDS)
+
+
+# MessageError → HTTP status for the edit/delete paths.
+_EDIT_DELETE_STATUS = {
+    "message_not_found": status.HTTP_404_NOT_FOUND,
+    "not_message_sender": status.HTTP_403_FORBIDDEN,
+}
+
+
+def _raise_edit_delete(e: MessageError) -> None:
+    raise HTTPException(
+        _EDIT_DELETE_STATUS.get(str(e), status.HTTP_409_CONFLICT), detail=str(e)
+    ) from e
+
+
+async def _broadcast(msg: Message, event: WsEventServer, db: AsyncSession) -> MessageOut:
+    recipients = await MessageService.member_ids(conversation_id=msg.conversation_id, db=db)
+    out = MessageService.to_out(msg)
+    await db.commit()
+    await ws_manager.publish_to_users(recipients, event, out.model_dump(mode="json"))
+    return out
+
+
+@router.patch(ApiRoutes.MESSAGES_DETAIL, response_model=MessageOut)
+async def edit_message(
+    message_id: uuid.UUID,
+    body: MessageEditIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MessageOut:
+    """Sender edits a text message within the edit window; history is kept."""
+    await enforce_rate_limit(user.id, "edit_message")
+    try:
+        msg = await MessageService.edit_message(
+            message_id=message_id, user_id=user.id, content=body.content, db=db
+        )
+    except MessageError as e:
+        _raise_edit_delete(e)
+    return await _broadcast(msg, WsEventServer.MESSAGE_EDITED, db)
+
+
+@router.delete(ApiRoutes.MESSAGES_DETAIL, response_model=MessageOut)
+async def delete_message(
+    message_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MessageOut:
+    """Sender deletes within the delete window → tombstone for every member."""
+    await enforce_rate_limit(user.id, "delete_message")
+    try:
+        msg, s3_key = await MessageService.delete_message(
+            message_id=message_id, user_id=user.id, db=db
+        )
+    except MessageError as e:
+        _raise_edit_delete(e)
+    out = await _broadcast(msg, WsEventServer.MESSAGE_DELETED, db)
+    if s3_key:
+        # Best-effort: the row is already shredded; a stray object is caught by
+        # the purge job's key sweep if this fails.
+        try:
+            await FileService.delete_object(key=s3_key)
+        except Exception:
+            logging.getLogger("doqto.messages").warning("s3 delete failed for %s", s3_key)
+    return out
+
+
+@router.get(ApiRoutes.MESSAGES_EDITS, response_model=list[MessageEditOut])
+async def list_message_edits(
+    message_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[MessageEditOut]:
+    """Every previous version, oldest first — visible to all members."""
+    await enforce_rate_limit(user.id, "list_message_edits", RATE_LIMIT_READS_PER_MINUTE)
+    msg = await db.scalar(select(Message).where(Message.id == message_id))
+    if msg is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="message_not_found")
+    await _assert_conv_member(msg.conversation_id, user.id, db)
+    return [
+        MessageEditOut(content=decrypt_message(e.content_encrypted), replaced_at=e.replaced_at)
+        for e in await MessageService.list_edits(message_id=message_id, db=db)
+    ]

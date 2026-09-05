@@ -124,9 +124,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   @override
   void dispose() {
-    if (ref.read(activeConversationProvider) == widget.conversationId) {
-      ref.read(activeConversationProvider.notifier).state = null;
-    }
+    // ponytail: ref is gone when the whole tree is torn down (app exit /
+    // test teardown); clearing the active chat is moot then.
+    try {
+      if (ref.read(activeConversationProvider) == widget.conversationId) {
+        ref.read(activeConversationProvider.notifier).state = null;
+      }
+    } catch (_) {}
     _stopTyping();
     _input.dispose();
     _scroll.dispose();

@@ -25,6 +25,14 @@ variable "super_admin" {
   sensitive = true
 }
 
+# google-auth credential JSON for FCM HTTP v1 (service-account key or
+# workload-identity external_account). Empty keeps PUSH_PROVIDER=log.
+variable "fcm_service_account_json" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
 data "aws_caller_identity" "me" {}
 data "aws_vpc" "default" {
   default = true
@@ -67,15 +75,16 @@ locals {
   database_url = "postgresql+asyncpg://doqto:${random_password.db.result}@${aws_db_instance.db.address}:5432/doqto"
   redis_url    = "rediss://:${random_password.redis.result}@${aws_elasticache_replication_group.redis.primary_endpoint_address}:6379/0"
   secrets = {
-    DATABASE_URL           = local.database_url
-    REDIS_URL              = local.redis_url
-    JWT_SECRET             = random_password.jwt.result
-    MESSAGE_ENCRYPTION_KEY = random_bytes.message_key.base64
-    SUPER_ADMIN_PHONE      = var.super_admin["PHONE"]
-    SUPER_ADMIN_NAME       = var.super_admin["NAME"]
-    SUPER_ADMIN_NPI        = var.super_admin["NPI"]
-    SUPER_ADMIN_EMAIL      = var.super_admin["EMAIL"]
-    SUPER_ADMIN_PASSWORD   = var.super_admin["PASSWORD"]
+    DATABASE_URL             = local.database_url
+    REDIS_URL                = local.redis_url
+    JWT_SECRET               = random_password.jwt.result
+    MESSAGE_ENCRYPTION_KEY   = random_bytes.message_key.base64
+    SUPER_ADMIN_PHONE        = var.super_admin["PHONE"]
+    SUPER_ADMIN_NAME         = var.super_admin["NAME"]
+    SUPER_ADMIN_NPI          = var.super_admin["NPI"]
+    SUPER_ADMIN_EMAIL        = var.super_admin["EMAIL"]
+    SUPER_ADMIN_PASSWORD     = var.super_admin["PASSWORD"]
+    FCM_SERVICE_ACCOUNT_JSON = var.fcm_service_account_json
   }
 }
 
@@ -381,7 +390,8 @@ resource "aws_ecs_task_definition" "api" {
       { name = "AWS_S3_BUCKET_NAME", value = aws_s3_bucket.media.bucket },
       { name = "ALLOWED_ORIGINS", value = "https://doqto.ai,https://www.doqto.ai" },
       { name = "NETWORK_DM_ENABLED", value = "true" },
-      { name = "PUSH_PROVIDER", value = "log" },
+      { name = "PUSH_PROVIDER", value = var.fcm_service_account_json == "" ? "log" : "fcm" },
+      { name = "FCM_PROJECT_ID", value = "doqto-90684" },
       # TEMPORARY sign-in backdoor (777777) while SNS SMS sandbox exit is
       # pending — remove this line once real SMS delivery is approved.
       { name = "MASTER_OTP_ENABLED", value = "true" },

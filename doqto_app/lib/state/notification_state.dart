@@ -1,4 +1,6 @@
 import 'package:flutter/widgets.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/constants/app_constants.dart';
@@ -39,6 +41,17 @@ String routePathForPayload(String payload) {
   }
   // Legacy local-notification payload: a bare conversation id.
   return AppRoutes.chat(payload);
+}
+
+/// FCM data payload → route. The backend sends only ids (PHI-free):
+/// `conversation_id` for messages/requests, `type` for invitations.
+String? routePathForPushData(Map<String, dynamic> data) {
+  final conv = data['conversation_id'] as String?;
+  if (conv != null && conv.isNotEmpty) return AppRoutes.chat(conv);
+  return switch (data['type']) {
+    'invitation_received' || 'invitation_accepted' => AppRoutes.network,
+    _ => null,
+  };
 }
 
 /// "Dr X sent you a connection request" — banner + a tap that lands on the
@@ -112,6 +125,21 @@ final notificationListenerProvider = Provider<void>((ref) {
   service.init(onTap: (payload) {
     ref.read(routerProvider).push(routePathForPayload(payload));
   });
+  // Remote push taps (app backgrounded or killed). Foreground pushes are
+  // ignored: the WS listener below already shows a richer local banner.
+  void openPush(RemoteMessage m) {
+    final path = routePathForPushData(m.data);
+    if (path != null) ref.read(routerProvider).push(path);
+  }
+
+  // Firebase is absent in widget tests (no initializeApp) — skip quietly.
+  if (Firebase.apps.isNotEmpty) {
+    FirebaseMessaging.instance.getInitialMessage().then((m) {
+      if (m != null) openPush(m);
+    });
+    final pushSub = FirebaseMessaging.onMessageOpenedApp.listen(openPush);
+    ref.onDispose(pushSub.cancel);
+  }
 
   final sub = ref.watch(websocketClientProvider).events.listen((event) async {
     if (event.type == WsEventServer.invitationReceived) {

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "877848716365",
+    "project_id": "doqto-90684",
+    "storage_bucket": "doqto-90684.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:877848716365:android:1d8ca2e1899c9a647c2804",
+        "android_client_info": {
+          "package_name": "com.doqto.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVQDjXZIIuXaYJzTPV8I_QjaxbbBz01wQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

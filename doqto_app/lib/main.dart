@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -26,6 +28,9 @@ Future<void> main() async {
       'Release builds require https:// API_BASE_URL and wss:// WS_BASE_URL.',
     );
   }
+  // Remote push: config comes from GoogleService-Info.plist / google-services.json.
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(_onBackgroundPush);
   await Hive.initFlutter();
   // H1: boxes hold PHI (message text, transcripts, cached history) — AES-256
   // encrypted with a key kept in the platform keychain/keystore.
@@ -36,6 +41,11 @@ Future<void> main() async {
   await _openEncryptedBox(GroupsCache.boxName, cipher); // offline my-groups
   runApp(const ProviderScope(child: DoqtoApp()));
 }
+
+/// Pushes carry a `notification` block, so the OS renders them while the app
+/// is backgrounded/killed — nothing to do here. Must be a top-level function.
+@pragma('vm:entry-point')
+Future<void> _onBackgroundPush(RemoteMessage message) async {}
 
 /// Opens [name] encrypted; a pre-encryption plaintext box (or a corrupt one)
 /// fails to open, so delete it and start fresh — the cache refetches and a

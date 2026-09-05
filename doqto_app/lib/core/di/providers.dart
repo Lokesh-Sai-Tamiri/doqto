@@ -61,9 +61,8 @@ final outboxProvider = Provider<Outbox>((ref) => Outbox());
 final outboxMediaStoreProvider =
     Provider<OutboxMediaStore>((ref) => OutboxMediaStore());
 
-/// Stub until real FCM/APNs wiring lands — swap the implementation here.
 final pushTokenProviderProvider =
-    Provider<PushTokenProvider>((ref) => StubPushTokenProvider());
+    Provider<PushTokenProvider>((ref) => FirebasePushTokenProvider());
 
 final chatCacheProvider = Provider<ChatCache>((ref) => ChatCache());
 

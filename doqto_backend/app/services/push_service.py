@@ -12,10 +12,12 @@ deep-linking; collapse key dedupes per conversation.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import uuid
 from typing import Protocol
 
+import httpx
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,28 +58,54 @@ class DevLogPushSender:
 
 
 class FcmPushSender:
-    """FCM HTTP v1 sender — skeleton only; wire up when credentials land."""
+    """FCM HTTP v1. FCM_SERVICE_ACCOUNT_JSON is any google-auth credential
+    JSON (service-account key or workload-identity external_account)."""
+
+    _SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 
     def __init__(self) -> None:
         if not settings.FCM_PROJECT_ID or not settings.FCM_SERVICE_ACCOUNT_JSON:
             raise RuntimeError(
                 "PUSH_PROVIDER=fcm requires FCM_PROJECT_ID and FCM_SERVICE_ACCOUNT_JSON"
             )
+        from google.auth import load_credentials_from_dict
+
+        self._creds, _ = load_credentials_from_dict(
+            json.loads(settings.FCM_SERVICE_ACCOUNT_JSON), scopes=[self._SCOPE]
+        )
+        self._url = f"https://fcm.googleapis.com/v1/projects/{settings.FCM_PROJECT_ID}/messages:send"
+
+    def _bearer(self) -> str:
+        from google.auth.transport.requests import Request
+
+        if not self._creds.valid:
+            self._creds.refresh(Request())  # ponytail: sync refresh, ~1/hour
+        return self._creds.token
 
     async def send(
         self, *, token: str, title: str, body: str, data: dict[str, str], collapse_key: str
     ) -> bool:
-        # TODO(FCM): implement via HTTP v1 —
-        #   POST https://fcm.googleapis.com/v1/projects/{FCM_PROJECT_ID}/messages:send
-        #   Authorization: Bearer <OAuth2 token minted from FCM_SERVICE_ACCOUNT_JSON>
-        #   {"message": {"token": token,
-        #                "notification": {"title": title, "body": body},
-        #                "data": data,
-        #                "android": {"collapse_key": collapse_key},
-        #                "apns": {"headers": {"apns-collapse-id": collapse_key}}}}
-        # Return False on 404 / UNREGISTERED (permanently-invalid token),
-        # True otherwise.
-        raise NotImplementedError("FcmPushSender.send is not wired yet")
+        message = {
+            "token": token,
+            "notification": {"title": title, "body": body},
+            "data": data,
+            "android": {"collapse_key": collapse_key, "priority": "high"},
+            "apns": {
+                "headers": {"apns-collapse-id": collapse_key, "apns-priority": "10"},
+                "payload": {"aps": {"sound": "default"}},
+            },
+        }
+        bearer = await asyncio.to_thread(self._bearer)
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                self._url, json={"message": message}, headers={"Authorization": f"Bearer {bearer}"}
+            )
+        if resp.status_code == 200:
+            return True
+        # UNREGISTERED / NOT_FOUND: token is dead, prune it. Anything else: keep.
+        dead = resp.status_code == 404 or "UNREGISTERED" in resp.text
+        log.warning("fcm send failed %s %s", resp.status_code, resp.text[:200])
+        return not dead
 
 
 def _default_sender() -> PushSender:

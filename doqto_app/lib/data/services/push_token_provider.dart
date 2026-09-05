@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
+
 /// Abstraction over the platform push-token source (FCM/APNs). The real
 /// firebase_messaging-backed implementation slots in later via env/config;
 /// until then [StubPushTokenProvider] keeps the registration plumbing wired
@@ -21,4 +23,20 @@ class StubPushTokenProvider implements PushTokenProvider {
 
   @override
   Stream<String> get onTokenRefresh => const Stream<String>.empty();
+}
+
+/// Real FCM-backed provider. On iOS firebase_messaging bridges the APNs token
+/// to an FCM token, so the backend only ever deals with FCM tokens.
+class FirebasePushTokenProvider implements PushTokenProvider {
+  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+
+  @override
+  Future<String?> getToken() async {
+    final perm = await _fcm.requestPermission(alert: true, badge: true, sound: true);
+    if (perm.authorizationStatus == AuthorizationStatus.denied) return null;
+    return _fcm.getToken();
+  }
+
+  @override
+  Stream<String> get onTokenRefresh => _fcm.onTokenRefresh;
 }

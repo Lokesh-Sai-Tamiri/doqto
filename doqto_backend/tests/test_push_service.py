@@ -96,6 +96,8 @@ async def test_absent_presence_is_pushed(db, chat, fake_sender):
     token = await _register(db, chat.bob.id)  # no presence key at all
     await _dispatch(chat)
     assert [c["token"] for c in fake_sender.calls] == [token]
+    # Sender's name (directory data) in the body; never the message content.
+    assert fake_sender.calls[0]["body"] == f"{chat.alice.full_name} sent you a message"
 
 
 async def test_sender_is_excluded(db, chat, fake_sender):
@@ -116,14 +118,14 @@ async def test_invalid_token_row_is_pruned(db, chat, fake_sender):
 
 
 async def test_payload_is_phi_free(db, chat, fake_sender):
-    """The payload must be EXACTLY the constants + conversation UUID —
-    never message content, sender name, or any other user data."""
+    """The payload is the fixed title, the sender's NAME (directory data, not
+    PHI) and the conversation UUID — never message content or anything else."""
     await _register(db, chat.bob.id)
     await _dispatch(chat)
     assert len(fake_sender.calls) == 1
     call = fake_sender.calls[0]
     assert call["title"] == PUSH_TITLE
-    assert call["body"] == PUSH_BODY_NEW_MESSAGE
+    assert call["body"] == f"{chat.alice.full_name} sent you a message"
     assert set(call["data"].keys()) == {"type", "conversation_id"}
     assert call["data"]["type"] == "new_message"
     assert call["data"]["conversation_id"] == str(chat.conv.id)

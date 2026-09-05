@@ -4,7 +4,8 @@ Dev default (PUSH_PROVIDER=log) is a logging stub mirroring FakeSNSClient;
 real FCM slots in later via PUSH_PROVIDER=fcm + credentials in config.
 
 Payload policy: title/body are the fixed constants PUSH_TITLE /
-PUSH_BODY_NEW_MESSAGE — never interpolate user data (HIPAA: pushes transit
+PUSH_BODY_NEW_MESSAGE (or "<sender name> sent you a message" — directory data,
+not PHI). Never message content (HIPAA: pushes transit
 Apple/Google unencrypted-to-us). Data carries only the conversation UUID for
 deep-linking; collapse key dedupes per conversation.
 """
@@ -30,7 +31,7 @@ from app.core.constants import (
     PUSH_TITLE,
 )
 from app.db.postgres import SessionLocal
-from app.models import DeviceToken
+from app.models import DeviceToken, User
 
 log = logging.getLogger("doqto.push")
 
@@ -259,6 +260,10 @@ class PushService:
             data = {"type": "new_message", "conversation_id": str(conversation_id)}
             # Own session — the request session is closed by the time this runs.
             async with SessionLocal() as db:
+                # The sender's name is directory data, not PHI — the body may
+                # carry it. Message content never goes in a push.
+                name = await db.scalar(select(User.full_name).where(User.id == sender_id))
+                body = f"{name} sent you a message" if name else PUSH_BODY_NEW_MESSAGE
                 for uid in recipient_ids:
                     if uid == sender_id:
                         continue
@@ -274,7 +279,7 @@ class PushService:
                         ok = await sender.send(
                             token=row.token,
                             title=PUSH_TITLE,
-                            body=PUSH_BODY_NEW_MESSAGE,
+                            body=body,
                             data=data,
                             collapse_key=str(conversation_id),
                         )

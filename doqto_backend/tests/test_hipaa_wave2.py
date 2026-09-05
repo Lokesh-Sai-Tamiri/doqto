@@ -246,21 +246,16 @@ async def test_add_cross_org_member_rejected(group, client):
     assert r.json()["detail"] == "member_not_in_org"
 
 
-async def test_create_conversation_with_cross_org_member_opens_request(group, client):
-    # M4: direct-conversation creation runs through the permission module. A
-    # cross-org stranger (no shared org, not connected) whose privacy allows
-    # requests now resolves to the message-request tier → a pending_request
-    # conversation is created (was 403 not_reachable in M3, 400 member_not_in_org
-    # under the old org-membership gate).
+async def test_create_conversation_with_cross_org_stranger_is_denied(group, client):
+    """A cross-org stranger (no shared org, not connected) can't be messaged:
+    403 not_connected. Connect first, then chat — no request tier."""
     r = await client.post(
         "/api/v1/conversations",
         json={"type": "direct", "member_ids": [str(group.outsider.id)]},
         headers=group.alice_headers,
     )
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["access"] == "pending_request"
-    assert body["initiator_id"] == str(group.alice.id)
+    assert r.status_code == 403, r.text
+    assert r.json()["detail"] == "not_connected"
 
 
 async def test_same_org_member_add_still_works(group, client):

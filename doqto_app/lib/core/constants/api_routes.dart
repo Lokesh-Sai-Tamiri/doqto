@@ -22,33 +22,37 @@ class ApiRoutes {
   static const String orgsMine = '$apiV1/orgs/mine';
   static String orgDetail(String id) => '$apiV1/orgs/$id';
   static String orgMembers(String id) => '$apiV1/orgs/$id/members';
-  static String orgMember(String orgId, String userId) => '$apiV1/orgs/$orgId/members/$userId';
+  static String orgMember(String orgId, String userId) =>
+      '$apiV1/orgs/$orgId/members/$userId';
   static String orgInviteCode(String id) => '$apiV1/orgs/$id/invite-code';
 
   // Conversations
   static const String conversations = '$apiV1/conversations';
-  static String conversationMessages(String id) => '$apiV1/conversations/$id/messages';
+  static String conversationMessages(String id) =>
+      '$apiV1/conversations/$id/messages';
   static String conversationScheduleMessage(String id) =>
       '$apiV1/conversations/$id/messages/schedule';
   static String conversationRead(String id) => '$apiV1/conversations/$id/read';
-  static String conversationDelivered(String id) => '$apiV1/conversations/$id/delivered';
-  static String conversationMembers(String id) => '$apiV1/conversations/$id/members';
+  static String conversationDelivered(String id) =>
+      '$apiV1/conversations/$id/delivered';
+  static String conversationMembers(String id) =>
+      '$apiV1/conversations/$id/members';
   static String conversationMember(String convId, String userId) =>
       '$apiV1/conversations/$convId/members/$userId';
-  static String conversationSettings(String id) => '$apiV1/conversations/$id/settings';
-  // Message-request tier (M4) — recipient-only accept/decline.
-  static String conversationRequestAccept(String id) =>
-      '$apiV1/conversations/$id/request/accept';
-  static String conversationRequestDecline(String id) =>
-      '$apiV1/conversations/$id/request/decline';
+  static String conversationSettings(String id) =>
+      '$apiV1/conversations/$id/settings';
 
   // Messages
-  static String messageUpload(String convId) => '$apiV1/messages/upload/$convId';
-  static String messageVoiceNote(String convId) => '$apiV1/messages/voice-notes/$convId';
+  static String messageUpload(String convId) =>
+      '$apiV1/messages/upload/$convId';
+  static String messageVoiceNote(String convId) =>
+      '$apiV1/messages/voice-notes/$convId';
   static String messageRead(String id) => '$apiV1/messages/$id/read';
-  static String message(String id) => '$apiV1/messages/$id'; // PATCH edit / DELETE
+  static String message(String id) =>
+      '$apiV1/messages/$id'; // PATCH edit / DELETE
   static String messageEdits(String id) => '$apiV1/messages/$id/edits';
-  static const String messagesHide = '$apiV1/messages/hide'; // POST delete-for-me
+  static const String messagesHide =
+      '$apiV1/messages/hide'; // POST delete-for-me
   static String messageFileUrl(String id) => '$apiV1/messages/$id/file-url';
 
   // People / profiles (networking M1/M2)
@@ -57,12 +61,16 @@ class ApiRoutes {
 
   // Network graph (M1)
   static const String invitations = '$apiV1/network/invitations';
-  static String invitationAccept(String id) => '$apiV1/network/invitations/$id/accept';
-  static String invitationIgnore(String id) => '$apiV1/network/invitations/$id/ignore';
+  static String invitationAccept(String id) =>
+      '$apiV1/network/invitations/$id/accept';
+  static String invitationIgnore(String id) =>
+      '$apiV1/network/invitations/$id/ignore';
   static String invitation(String id) => '$apiV1/network/invitations/$id';
   static const String connections = '$apiV1/network/connections';
-  static String connection(String userId) => '$apiV1/network/connections/$userId';
-  static String mutualConnections(String userId) => '$apiV1/network/connections/mutual/$userId';
+  static String connection(String userId) =>
+      '$apiV1/network/connections/$userId';
+  static String mutualConnections(String userId) =>
+      '$apiV1/network/connections/mutual/$userId';
   static String block(String userId) => '$apiV1/network/blocks/$userId';
   static const String blocks = '$apiV1/network/blocks';
   static const String reports = '$apiV1/network/reports';
@@ -73,7 +81,8 @@ class ApiRoutes {
   // Notifications (M1)
   static const String notifications = '$apiV1/notifications';
   static const String notificationsRead = '$apiV1/notifications/read';
-  static const String notificationsUnreadCount = '$apiV1/notifications/unread-count';
+  static const String notificationsUnreadCount =
+      '$apiV1/notifications/unread-count';
 
   // Groups (M5) — router mounted at /api/v1.
   static const String groups = '$apiV1/groups';

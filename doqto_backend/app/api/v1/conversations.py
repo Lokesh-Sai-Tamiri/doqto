@@ -13,7 +13,6 @@ from app.core.constants import (
     MESSAGE_DELETED_PREVIEW,
     CHAT_LIST_PREVIEW_MAX_LEN,
     DISAPPEAR_OPTIONS_SEC,
-    MESSAGE_REQUEST_QUOTA_PER_DAY,
     MESSAGES_PAGE_SIZE,
     RATE_LIMIT_READS_PER_MINUTE,
 )
@@ -41,7 +40,6 @@ from app.models import (
     User,
 )
 from app.schemas.common import OkResponse
-from app.services import spam_heuristics
 from app.services.relationship_service import RelationshipService
 from app.schemas.conversation import (
     ConversationAddMembersIn,
@@ -58,19 +56,7 @@ from app.schemas.message import (
 from app.services.audit_service import AuditService, request_meta
 from app.services.group_service import GroupService
 from app.services.message_service import MessageError, MessageService
-from app.services.notification_service import NotificationService
 from app.services.push_service import PushService
-
-# MessageError reasons from the request-tier send guard that map to 403, not 400.
-_REQUEST_GUARD_403 = {
-    "request_message_invalid",
-    "request_one_message_only",
-    "request_declined",
-}
-
-# Notification `type` values for the message-request tier (client renders by type).
-_NOTIF_REQUEST_RECEIVED = "message_request_received"
-_NOTIF_REQUEST_ACCEPTED = "message_request_accepted"
 
 router = APIRouter()
 
@@ -148,64 +134,17 @@ def _to_out(
     return out
 
 
-def _account_age_days(created_at: datetime | None) -> int:
-    if created_at is None:
-        return 0
-    return max(0, (datetime.now(tz=timezone.utc) - created_at).days)
-
-
-async def _request_is_hidden(
-    *, conv: Conversation, viewer_id: uuid.UUID, last_msg: Message | None, db: AsyncSession
-) -> bool:
-    """Compute-on-read spam gate for a RECEIVED request (M4, no migration).
-
-    Scores the initiator's opening message + sender account age + shared
-    context between viewer and the initiator."""
-    initiator_id = conv.initiator_id
-    if initiator_id is None:
-        return False
-    ctx = await RelationshipService.load_context(viewer_id, initiator_id, db)
-    mutuals = await RelationshipService.mutual_connections(viewer_id, initiator_id, db)
-    has_shared_context = bool(ctx.shared_org_ids) or bool(mutuals)
-    content = None
-    if last_msg is not None and last_msg.content_encrypted and last_msg.type == MessageType.TEXT:
-        try:
-            content = decrypt_message(last_msg.content_encrypted)
-        except Exception:
-            content = None
-    return spam_heuristics.is_hidden_request(
-        content=content,
-        # load_context sets target_account_age_days for the target == initiator.
-        sender_account_age_days=ctx.target_account_age_days,
-        has_shared_context=has_shared_context,
-    )
-
-
-async def _first_request_is_hidden(
-    *, sender: User, recipient_id: uuid.UUID, content: str, db: AsyncSession
-) -> bool:
-    """Spam gate at the moment the initiator's opening message makes the request
-    visible. Uses the SENDER's own account age (not the target's)."""
-    ctx = await RelationshipService.load_context(sender.id, recipient_id, db)
-    mutuals = await RelationshipService.mutual_connections(sender.id, recipient_id, db)
-    has_shared_context = bool(ctx.shared_org_ids) or bool(mutuals)
-    return spam_heuristics.is_hidden_request(
-        content=content,
-        sender_account_age_days=_account_age_days(sender.created_at),
-        has_shared_context=has_shared_context,
-    )
-
-
 @router.get(ApiRoutes.CONVERSATIONS_LIST, response_model=list[ConversationOut])
 async def list_conversations(
-    filter: str | None = Query(default=None, pattern="^(requests)$"),
+    filter: str | None = Query(default=None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ConversationOut]:
-    requests_only = filter == "requests"
-    convs = await MessageService.list_for_user(
-        user_id=user.id, db=db, requests_only=requests_only
-    )
+    if filter == "requests":
+        # Legacy clients (≤ build 17) still poll the Requests tab; the tier is
+        # gone, so that tab is always empty rather than mirroring the inbox.
+        return []
+    convs = await MessageService.list_for_user(user_id=user.id, db=db)
     conv_ids = [c.id for c in convs]
     # Batched: 4 queries total regardless of conversation count (was ~2×N).
     latest = await MessageService.latest_per_conversation(
@@ -236,14 +175,6 @@ async def list_conversations(
                 None,
             )
         o.unread_count = unread.get(c.id, 0)
-        # No-leak: a declined request must keep reading as pending to its
-        # INITIATOR (silence rule) — the decline is invisible to them.
-        if c.access == ConversationAccess.DECLINED and c.initiator_id == user.id:
-            o.access = ConversationAccess.PENDING_REQUEST
-        if requests_only:
-            o.is_hidden = await _request_is_hidden(
-                conv=c, viewer_id=user.id, last_msg=latest.get(c.id), db=db
-            )
         out.append(o)
     return out
 
@@ -273,24 +204,13 @@ async def create_conversation(
             # Blocks are never observable (HIPAA silence rule) — surface generic.
             reason = "user_unavailable" if decision.reason == "blocked" else decision.reason
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail=reason)
-        # mode is 'open' or 'request'. Both are cross-org (a stranger/request is
-        # never same-org — colleagues short-circuit to 'open'); staged behind the
-        # network flag when there is no shared org.
+        # Connected cross-org pairs are staged behind the network flag.
         if not ctx.shared_org_ids and not settings.NETWORK_DM_ENABLED:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, detail="network_dm_disabled"
             )
-        if decision.mode == "request":
-            # M4: create the conversation in the request tier (was 403 in M3).
-            # Quota: cap how many new requests one sender opens per day.
-            await enforce_rate_limit(
-                user.id, "message_request_day", MESSAGE_REQUEST_QUOTA_PER_DAY, 86400
-            )
-            create_access = ConversationAccess.PENDING_REQUEST
-            create_initiator = user.id
-        else:
-            create_access = ConversationAccess.OPEN
-            create_initiator = None
+        create_access = ConversationAccess.OPEN
+        create_initiator = None
         # Direct conversations are always network-scoped (org_id=NULL, forced by
         # the service); org_id passed here is ignored for direct.
         conv_org = None
@@ -401,14 +321,9 @@ async def send_message(
             conversation_id=conversation_id, user_id=user.id, db=db
         ):
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="post_restricted")
-    # Pre-state captured BEFORE send_text (which may flip access on auto-accept).
-    pre_access = conv.access
-    initiator_id = conv.initiator_id
-    other_id: uuid.UUID | None = None
-    # Network (cross-org) direct conversations are permission-gated on every
-    # send so a block mid-conversation freezes it both ways. Same-org (org_id
-    # set) conversations keep the legacy send path untouched.
-    if conv.org_id is None and conv.type == ConversationType.DIRECT:
+    # Direct conversations are permission-gated on every send so a block or a
+    # removed connection freezes the thread both ways.
+    if conv.type == ConversationType.DIRECT:
         other_id = await db.scalar(
             select(ConversationMember.user_id).where(
                 ConversationMember.conversation_id == conversation_id,
@@ -419,14 +334,7 @@ async def send_message(
             ctx = await RelationshipService.load_context(user.id, other_id, db)
             decision = permissions.can_message(ctx)
             if decision.mode == "denied":
-                # Declined requests are silent (initiator keeps seeing pending);
-                # blocks/policy surface a generic reason. The request send-guard
-                # in send_text enforces the finer opening-message rules.
-                detail = (
-                    "request_declined"
-                    if decision.reason == "request_declined"
-                    else "not_reachable"
-                )
+                detail = "not_connected" if decision.reason == "not_connected" else "not_reachable"
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail=detail)
     ip, user_agent = request_meta(request)
     try:
@@ -440,64 +348,10 @@ async def send_message(
             user_agent=user_agent,
         )
     except MessageError as e:
-        code = (
-            status.HTTP_403_FORBIDDEN
-            if str(e) in _REQUEST_GUARD_403
-            else status.HTTP_400_BAD_REQUEST
-        )
-        raise HTTPException(code, detail=str(e)) from e
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     out = MessageService.to_out(msg)
     recipients = await MessageService.member_ids(conversation_id=conversation_id, db=db)
-
-    # Message-request tier fanout (M4). Decide inside the same transaction, fire
-    # after commit. `pre_access` is the state BEFORE the send.
-    request_received_for: uuid.UUID | None = None
-    request_accepted_for: uuid.UUID | None = None
-    accept_unread = 0
-    if pre_access == ConversationAccess.PENDING_REQUEST and other_id is not None:
-        if user.id == initiator_id:
-            # Initiator's one opening message → the request is now visible.
-            hidden = await _first_request_is_hidden(
-                sender=user, recipient_id=other_id, content=body.content, db=db
-            )
-            if not hidden:
-                await AuditService.log(
-                    db,
-                    user_id=user.id,
-                    action=AuditAction.MESSAGE_REQUEST_SENT,
-                    resource_type="conversation",
-                    resource_id=conversation_id,
-                )
-                await NotificationService.create(
-                    db=db,
-                    user_id=other_id,
-                    type=_NOTIF_REQUEST_RECEIVED,
-                    actor_id=user.id,
-                    subject_type="conversation",
-                    subject_id=conversation_id,
-                    payload={"actor_name": user.full_name},
-                )
-                request_received_for = other_id
-        else:
-            # Recipient's reply auto-accepted (send_text flipped access→open).
-            await AuditService.log(
-                db,
-                user_id=user.id,
-                action=AuditAction.MESSAGE_REQUEST_ACCEPTED,
-                resource_type="conversation",
-                resource_id=conversation_id,
-            )
-            await NotificationService.create(
-                db=db,
-                user_id=initiator_id,
-                type=_NOTIF_REQUEST_ACCEPTED,
-                actor_id=user.id,
-                subject_type="conversation",
-                subject_id=conversation_id,
-                payload={"actor_name": user.full_name},
-            )
-            request_accepted_for = initiator_id
 
     await db.commit()  # flush before broadcasting so receivers can query
     await ws_manager.publish_to_users(
@@ -505,53 +359,9 @@ async def send_message(
         WsEventServer.NEW_MESSAGE,
         out.model_dump(mode="json"),
     )
-    if request_received_for is not None:
-        await ws_manager.publish_to_users(
-            [request_received_for],
-            WsEventServer.CONVERSATION_REQUEST_RECEIVED,
-            {
-                "conversation_id": str(conversation_id),
-                "sender_id": str(user.id),
-                # A name, never the message — the banner must not leak content.
-                "sender_name": user.full_name,
-            },
-        )
-        PushService.notify_message_request(
-            recipient_id=request_received_for, conversation_id=conversation_id
-        )
-        # Hidden requests are handled above (no notification row created) so
-        # the badge stays clean; visible ones broadcast the badge count.
-        accept_unread = await NotificationService.unread_count(
-            db=db, user_id=request_received_for
-        )
-        await ws_manager.publish_to_users(
-            [request_received_for],
-            WsEventServer.NOTIFICATION_CREATED,
-            {"type": _NOTIF_REQUEST_RECEIVED, "unread_count": accept_unread},
-        )
-    elif request_accepted_for is not None:
-        await ws_manager.publish_to_users(
-            [request_accepted_for],
-            WsEventServer.CONVERSATION_REQUEST_ACCEPTED,
-            {
-                "conversation_id": str(conversation_id),
-                "user_id": str(user.id),
-                "user_name": user.full_name,
-            },
-        )
-        accept_unread = await NotificationService.unread_count(
-            db=db, user_id=request_accepted_for
-        )
-        await ws_manager.publish_to_users(
-            [request_accepted_for],
-            WsEventServer.NOTIFICATION_CREATED,
-            {"type": _NOTIF_REQUEST_ACCEPTED, "unread_count": accept_unread},
-        )
-    else:
-        # Normal path: presence-gated push for members without a live WS.
-        PushService.notify_new_message(
-            conversation_id=conversation_id, recipient_ids=recipients, sender_id=user.id
-        )
+    PushService.notify_new_message(
+        conversation_id=conversation_id, recipient_ids=recipients, sender_id=user.id
+    )
     return out
 
 
@@ -789,94 +599,3 @@ async def update_settings(
     return OkResponse()
 
 
-async def _assert_pending_recipient(
-    conversation_id: uuid.UUID, user: User, db: AsyncSession
-) -> Conversation:
-    """The conversation must be a pending request AND the caller must be the
-    recipient (the non-initiator participant). Only the recipient may act."""
-    conv = await _assert_member(conversation_id, user.id, db)
-    if conv.access != ConversationAccess.PENDING_REQUEST:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="not_a_pending_request")
-    if conv.initiator_id == user.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="not_the_recipient")
-    return conv
-
-
-@router.post(ApiRoutes.CONVERSATIONS_REQUEST_ACCEPT, response_model=ConversationOut)
-async def accept_request(
-    conversation_id: uuid.UUID,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> ConversationOut:
-    """Recipient explicitly accepts a message request → flip to open, notify the
-    initiator (WS + notification)."""
-    conv = await _assert_pending_recipient(conversation_id, user, db)
-    conv.access = ConversationAccess.OPEN
-    await AuditService.log(
-        db,
-        user_id=user.id,
-        action=AuditAction.MESSAGE_REQUEST_ACCEPTED,
-        resource_type="conversation",
-        resource_id=conversation_id,
-    )
-    await NotificationService.create(
-        db=db,
-        user_id=conv.initiator_id,
-        type=_NOTIF_REQUEST_ACCEPTED,
-        actor_id=user.id,
-        subject_type="conversation",
-        subject_id=conversation_id,
-        payload={"actor_name": user.full_name},
-    )
-    initiator_id = conv.initiator_id
-    members = await MessageService.conversation_members(conversation_id=conv.id, db=db)
-    unread = await NotificationService.unread_count(db=db, user_id=initiator_id)
-    # Mutating access triggers the server-side onupdate for updated_at, which
-    # expires that attribute; refresh so the sync pydantic validator below does
-    # not attempt a lazy load (MissingGreenlet).
-    await db.refresh(conv)
-    out = _to_out(conv, [m.user_id for m in members])
-    await db.commit()
-    await ws_manager.publish_to_users(
-        [initiator_id],
-        WsEventServer.CONVERSATION_REQUEST_ACCEPTED,
-        {
-            "conversation_id": str(conversation_id),
-            "user_id": str(user.id),
-            "user_name": user.full_name,
-        },
-    )
-    await ws_manager.publish_to_users(
-        [initiator_id],
-        WsEventServer.NOTIFICATION_CREATED,
-        {"type": _NOTIF_REQUEST_ACCEPTED, "unread_count": unread},
-    )
-    return out
-
-
-@router.post(ApiRoutes.CONVERSATIONS_REQUEST_DECLINE, response_model=OkResponse)
-async def decline_request(
-    conversation_id: uuid.UUID,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> OkResponse:
-    """Recipient declines a message request → access='declined'. SILENT: the
-    initiator is NEVER notified and their UI keeps showing pending. Only the
-    decliner's own other devices get a WS signal (to sync the Requests tab)."""
-    conv = await _assert_pending_recipient(conversation_id, user, db)
-    conv.access = ConversationAccess.DECLINED
-    await AuditService.log(
-        db,
-        user_id=user.id,
-        action=AuditAction.MESSAGE_REQUEST_DECLINED,
-        resource_type="conversation",
-        resource_id=conversation_id,
-    )
-    await db.commit()
-    # Silent — WS only to the decliner's own devices, never to the initiator.
-    await ws_manager.publish_to_users(
-        [user.id],
-        WsEventServer.CONVERSATION_REQUEST_DECLINED,
-        {"conversation_id": str(conversation_id)},
-    )
-    return OkResponse()

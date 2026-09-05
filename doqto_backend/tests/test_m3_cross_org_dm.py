@@ -236,18 +236,16 @@ async def test_idempotent_client_message_id_one_row_same_seq(cross_org, client, 
 # --------------------------------------------- disconnected + denied paths
 
 
-async def test_disconnected_cross_org_pair_opens_message_request(cross_org, client):
-    """No shared org, not connected, target allows requests → M4 request tier:
-    a pending_request conversation is created (was 403 not_reachable pre-M4)."""
+async def test_disconnected_cross_org_pair_is_denied(cross_org, client):
+    """No shared org, not connected → 403 not_connected. There is no
+    message-request tier: connect first, then chat."""
     r = await client.post(
         "/api/v1/conversations",
         json={"type": "direct", "member_ids": [str(cross_org.bob.id)]},
         headers=cross_org.alice_headers,
     )
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["access"] == "pending_request"
-    assert body["initiator_id"] == str(cross_org.alice.id)
+    assert r.status_code == 403, r.text
+    assert r.json()["detail"] == "not_connected"
 
 
 async def test_block_freezes_sends_both_ways(cross_org, client, db):
@@ -429,3 +427,12 @@ async def test_direct_conversation_still_uses_receipts(cross_org, client, db):
         .where(Message.conversation_id == conv_id)
     )
     assert receipts >= 1  # direct still writes receipts
+
+
+async def test_legacy_requests_filter_is_empty(same_org, client):
+    """Old clients ask for ?filter=requests; with no request tier that must be
+    an empty list, never the whole inbox."""
+    r = await client.get("/api/v1/conversations", params={"filter": "requests"}, headers=same_org.alice_headers)
+    assert r.status_code == 200 and r.json() == []
+    r = await client.get("/api/v1/conversations", headers=same_org.alice_headers)
+    assert r.status_code == 200

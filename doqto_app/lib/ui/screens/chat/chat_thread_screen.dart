@@ -25,7 +25,6 @@ import '../../../data/models/message_edit.dart';
 import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
-import '../../../state/network_state.dart';
 import '../../../state/notification_state.dart';
 import '../../../state/org_state.dart';
 import '../../widgets/app_pressable.dart';
@@ -33,7 +32,6 @@ import '../../widgets/attachment_bubbles.dart';
 import '../../widgets/connectivity_banner.dart';
 import '../../widgets/doctor_avatar.dart';
 import '../../widgets/message_bubble.dart';
-import '../../widgets/request_composer_bar.dart';
 import '../../widgets/typing_indicator.dart';
 import '../../widgets/voice_note_bubble.dart';
 import '_conversation_display.dart';
@@ -84,16 +82,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   static const double _jumpThresholdPx = 400;
   bool _showJump = false;
   int _unseenCount = 0;
-
-  // --- Request-tier composer state (M4). Tier is read from the conversations/
-  // requests LIST providers (never a detail fetch — detail returns access=null).
-  ConversationAccess? _accessOverride; // set after accept / recipient reply
-  bool _sentInRequest = false; // initiator sent their one message this session
-  bool _notConnectedDismissed = false;
-  bool _requestBusy = false;
-  // Snapshot of the current tier, recomputed each build and read by _send.
-  bool _curRecipientPending = false;
-  bool _curInitiatorBeforeFirst = false;
 
   @override
   void initState() {
@@ -416,17 +404,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     await ref
         .read(messagesProvider(widget.conversationId).notifier)
         .sendText(text);
-    // Request-tier reflection (server enforces the actual rules):
-    if (_curRecipientPending) {
-      // A recipient reply auto-accepts server-side → flip to open locally and
-      // move the thread out of Requests into Focused.
-      if (mounted) setState(() => _accessOverride = ConversationAccess.open);
-      ref.read(requestsProvider.notifier).removeLocally(widget.conversationId);
-      ref.read(conversationsProvider.notifier).refresh();
-    } else if (_curInitiatorBeforeFirst) {
-      // The one allowed message is now sent → lock the composer.
-      if (mounted) setState(() => _sentInRequest = true);
-    }
   }
 
   // ---- Scheduled send (long-press on the send button) ---------------------
@@ -575,53 +552,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   // ---- Request-tier actions (recipient) -----------------------------------
-
-  Future<void> _acceptRequest() async {
-    if (_requestBusy) return;
-    setState(() => _requestBusy = true);
-    try {
-      await ref.read(requestsProvider.notifier).accept(widget.conversationId);
-      if (!mounted) return;
-      setState(() => _accessOverride = ConversationAccess.open);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(Strings.netRequestAcceptedToast)),
-      );
-    } catch (e) {
-      if (mounted) _showError(ErrorMessages.forApi(e));
-    } finally {
-      if (mounted) setState(() => _requestBusy = false);
-    }
-  }
-
-  Future<void> _declineRequest() async {
-    if (_requestBusy) return;
-    setState(() => _requestBusy = true);
-    try {
-      await ref.read(requestsProvider.notifier).decline(widget.conversationId);
-      if (mounted) context.pop(); // silent — leave the thread
-    } catch (e) {
-      if (mounted) {
-        setState(() => _requestBusy = false);
-        _showError(ErrorMessages.forApi(e));
-      }
-    }
-  }
-
-  Future<void> _blockFromThread(String otherId) async {
-    if (_requestBusy) return;
-    setState(() => _requestBusy = true);
-    ref.read(requestsProvider.notifier).removeLocally(widget.conversationId);
-    try {
-      await ref.read(networkRepositoryProvider).block(otherId);
-      if (mounted) context.pop();
-    } catch (e) {
-      await ref.read(requestsProvider.notifier).refresh();
-      if (mounted) {
-        setState(() => _requestBusy = false);
-        _showError(ErrorMessages.forApi(e));
-      }
-    }
-  }
 
   // ---- Attachments ---------------------------------------------------------
 
@@ -997,13 +927,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             .markConversationRead(widget.conversationId);
       }
     });
-    // Tier source: the LIST providers. Focused holds open + initiator-pending
-    // conversations; requests holds received pending ones. Detail endpoint
-    // returns access=null, so it is never consulted for the tier.
     final focused = ref.watch(conversationsProvider).asData?.value ?? const [];
-    final requests = ref.watch(requestsProvider).valueOrNull ?? const [];
     Conversation? conv;
-    for (final c in [...focused, ...requests]) {
+    for (final c in focused) {
       if (c.id == widget.conversationId) {
         conv = c;
         break;
@@ -1022,55 +948,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             meId: me?.id,
             fallbackColorIndex: 0,
           );
-
-    // ---- Request-tier / not-connected computation (M4) --------------------
-    final meId = me?.id;
-    final access = _accessOverride ?? conv?.access ?? ConversationAccess.open;
-    final initiatorId = conv?.initiatorId;
-    final isPending = access == ConversationAccess.pendingRequest;
-    final isRecipientPending =
-        isPending && initiatorId != null && initiatorId != meId;
-    final isInitiatorPending =
-        isPending && initiatorId != null && initiatorId == meId;
-    final initiatorFirstSent =
-        isInitiatorPending &&
-        ((conv?.lastMessageType != null) || _sentInRequest);
-    final isInitiatorBeforeFirst = isInitiatorPending && !initiatorFirstSent;
-    final isDeclined = access == ConversationAccess.declined;
-    // The other participant (direct threads only) — drives block + Connect.
-    String? otherId;
-    if (conv != null) {
-      for (final id in conv.memberIds) {
-        if (id != meId) {
-          otherId = id;
-          break;
-        }
-      }
-    }
-    // Cache the tier for _send.
-    _curRecipientPending = isRecipientPending;
-    _curInitiatorBeforeFirst = isInitiatorBeforeFirst;
-
-    // Composer visibility: locked when the request is one-directional/terminal.
-    final composerLocked = isDeclined || initiatorFirstSent;
-    final composerTextOnly = isInitiatorBeforeFirst;
-
-    // Non-connected direct network chat (open) → dismissible Connect banner.
-    // Colleagues are excluded: every direct conversation is network-scoped
-    // since M0, so isNetwork alone would nag people who share an org and
-    // never needed a connection in the first place.
-    final otherRel = otherId == null
-        ? null
-        : ref.watch(relationshipProvider(otherId)).valueOrNull?.relationship;
-    final showNotConnected =
-        access == ConversationAccess.open &&
-        conv != null &&
-        conv.isNetwork &&
-        (display?.isDirect ?? false) &&
-        otherId != null &&
-        !_notConnectedDismissed &&
-        !(otherRel?.isColleague ?? false) &&
-        otherRel?.connectionState != RelationshipState.connected;
 
     return PopScope(
       canPop: !_selecting,
@@ -1221,30 +1098,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               ),
             ),
             if (otherTyping) const TypingIndicator(),
-            // Request-tier region: banners + (composer | locked bar). Tier comes
-            // from the LIST providers above — never a thread-detail fetch.
-            RequestComposerBar(
-              isRecipientPending: isRecipientPending,
-              isInitiatorBeforeFirst: isInitiatorBeforeFirst,
-              composerLocked: composerLocked,
-              isDeclined: isDeclined,
-              showNotConnected: showNotConnected,
-              otherId: otherId,
-              otherName: display?.title ?? '',
-              busy: _requestBusy,
-              onAccept: _acceptRequest,
-              onDelete: _declineRequest,
-              onBlock: _blockFromThread,
-              onDismissNotConnected: () =>
-                  setState(() => _notConnectedDismissed = true),
-              composer: _showRecorder
-                  ? VoiceRecorderPanel(
-                      conversationId: widget.conversationId,
-                      onSent: () => setState(() => _showRecorder = false),
-                      onCancel: () => setState(() => _showRecorder = false),
-                    )
-                  : _composer(hideAttachments: composerTextOnly),
-            ),
+            // Anyone who can open this thread can send: the server allows
+            // direct chats only between colleagues or connections.
+            _showRecorder
+                ? VoiceRecorderPanel(
+                    conversationId: widget.conversationId,
+                    onSent: () => setState(() => _showRecorder = false),
+                    onCancel: () => setState(() => _showRecorder = false),
+                  )
+                : _composer(),
           ],
         ),
       ),

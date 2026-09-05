@@ -13,8 +13,9 @@ import '../data/services/notification_service.dart';
 import 'auth_state.dart';
 import 'chat_state.dart';
 
-final notificationServiceProvider =
-    Provider<NotificationService>((ref) => NotificationService());
+final notificationServiceProvider = Provider<NotificationService>(
+  (ref) => NotificationService(),
+);
 
 /// Conversation currently open in ChatThreadScreen (null = none).
 /// Set/cleared by the thread screen so we don't notify for the visible chat.
@@ -61,7 +62,9 @@ Future<void> _notifyInvitation(Ref ref, Map<String, dynamic> data) async {
   final senderId = data['sender_id'] as String?;
   if (senderId == null) return;
   final name = (data['sender_name'] as String?)?.trim();
-  await ref.read(notificationServiceProvider).showNetworkEvent(
+  await ref
+      .read(notificationServiceProvider)
+      .showNetworkEvent(
         // One banner per sender: a re-sent request replaces, never stacks.
         tag: 'invitation:$senderId',
         title: Strings.netInvitationNotificationTitle,
@@ -72,29 +75,17 @@ Future<void> _notifyInvitation(Ref ref, Map<String, dynamic> data) async {
       );
 }
 
-/// "Dr X sent you a message request" — banner + a tap that opens the request
-/// thread. The event carries a name only; the message itself stays out of the
-/// banner, since a stranger's opening line is the one thing we can't vouch for.
-Future<void> _notifyMessageRequest(Ref ref, Map<String, dynamic> data) async {
-  final conversationId = data['conversation_id'] as String?;
-  if (conversationId == null) return;
-  final name = (data['sender_name'] as String?)?.trim();
-  await ref.read(notificationServiceProvider).showNetworkEvent(
-        tag: 'request:$conversationId',
-        title: Strings.netRequestNotificationTitle,
-        body: (name == null || name.isEmpty)
-            ? Strings.netRequestNotificationBodyGeneric
-            : Strings.netRequestNotificationBody(name),
-        route: 'doqto:///chat/$conversationId',
-      );
-}
-
 /// "Dr X accepted your connection request" — told to the original sender.
-Future<void> _notifyInvitationAccepted(Ref ref, Map<String, dynamic> data) async {
+Future<void> _notifyInvitationAccepted(
+  Ref ref,
+  Map<String, dynamic> data,
+) async {
   final userId = data['user_id'] as String?;
   if (userId == null) return;
   final name = (data['user_name'] as String?)?.trim();
-  await ref.read(notificationServiceProvider).showNetworkEvent(
+  await ref
+      .read(notificationServiceProvider)
+      .showNetworkEvent(
         tag: 'connected:$userId',
         title: Strings.netConnectedNotificationTitle,
         body: (name == null || name.isEmpty)
@@ -104,27 +95,13 @@ Future<void> _notifyInvitationAccepted(Ref ref, Map<String, dynamic> data) async
       );
 }
 
-/// "Dr X accepted your message request" — told to the initiator, and opens the
-/// now-unlocked thread so they can carry on.
-Future<void> _notifyRequestAccepted(Ref ref, Map<String, dynamic> data) async {
-  final conversationId = data['conversation_id'] as String?;
-  if (conversationId == null) return;
-  final name = (data['user_name'] as String?)?.trim();
-  await ref.read(notificationServiceProvider).showNetworkEvent(
-        tag: 'request-accepted:$conversationId',
-        title: Strings.netRequestAcceptedNotificationTitle,
-        body: (name == null || name.isEmpty)
-            ? Strings.netRequestAcceptedNotificationBodyGeneric
-            : Strings.netRequestAcceptedNotificationBody(name),
-        route: 'doqto:///chat/$conversationId',
-      );
-}
-
 final notificationListenerProvider = Provider<void>((ref) {
   final service = ref.watch(notificationServiceProvider);
-  service.init(onTap: (payload) {
-    ref.read(routerProvider).push(routePathForPayload(payload));
-  });
+  service.init(
+    onTap: (payload) {
+      ref.read(routerProvider).push(routePathForPayload(payload));
+    },
+  );
   // Remote push taps (app backgrounded or killed). Foreground pushes are
   // ignored: the WS listener below already shows a richer local banner.
   void openPush(RemoteMessage m) {
@@ -146,16 +123,8 @@ final notificationListenerProvider = Provider<void>((ref) {
       await _notifyInvitation(ref, event.data);
       return;
     }
-    if (event.type == WsEventServer.conversationRequestReceived) {
-      await _notifyMessageRequest(ref, event.data);
-      return;
-    }
     if (event.type == WsEventServer.invitationAccepted) {
       await _notifyInvitationAccepted(ref, event.data);
-      return;
-    }
-    if (event.type == WsEventServer.conversationRequestAccepted) {
-      await _notifyRequestAccepted(ref, event.data);
       return;
     }
     if (event.type != WsEventServer.newMessage) return;
@@ -177,21 +146,21 @@ final notificationListenerProvider = Provider<void>((ref) {
     if (wireType == MessageType.system.wire) return; // settings banners etc.
     final msgType =
         MessageType.values.where((t) => t.wire == wireType).firstOrNull ??
-            MessageType.text;
+        MessageType.text;
 
     // Don't notify for the chat the user is looking at right now.
     final appActive =
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
-    if (appActive &&
-        ref.read(activeConversationProvider) == conversationId) {
+    if (appActive && ref.read(activeConversationProvider) == conversationId) {
       return;
     }
 
     // WS events are org-wide — only notify if I'm actually a member of this
     // conversation (my conversation list only contains my own).
     var convs = ref.read(conversationsProvider).asData?.value;
-    Conversation? conv =
-        convs?.where((c) => c.id == conversationId).firstOrNull;
+    Conversation? conv = convs
+        ?.where((c) => c.id == conversationId)
+        .firstOrNull;
     if (conv == null) {
       // Possibly a brand-new conversation — refetch once.
       try {
@@ -217,11 +186,9 @@ final notificationListenerProvider = Provider<void>((ref) {
             MessageType.file => '📎 File',
             _ => (event.data['content'] as String?) ?? 'New message',
           };
-    await ref.read(notificationServiceProvider).showMessage(
-          conversationId: conversationId,
-          title: title,
-          body: body,
-        );
+    await ref
+        .read(notificationServiceProvider)
+        .showMessage(conversationId: conversationId, title: title, body: body);
   });
   ref.onDispose(sub.cancel);
 });

@@ -12,7 +12,6 @@ from app.core.constants import (
     MESSAGE_EDIT_WINDOW_SEC,
     MESSAGES_PAGE_SIZE,
     PURGE_CONTENT_GRACE_SEC,
-    REQUEST_MESSAGE_MAX_LEN,
 )
 from app.core.enums import (
     AuditAction,
@@ -34,7 +33,6 @@ from app.models import (
 )
 from app.schemas.message import MessageOut
 from app.services.audit_service import AuditService
-from app.services.spam_heuristics import contains_contact_info
 
 
 class MessageError(Exception):
@@ -136,25 +134,13 @@ class MessageService:
         )
 
     @staticmethod
-    async def list_for_user(
-        *, user_id: uuid.UUID, db: AsyncSession, requests_only: bool = False
-    ) -> list[Conversation]:
-        """Conversations the user is a member of (M4 tiering):
-
-        - requests_only=True  → ONLY message requests I RECEIVED
-          (access='pending_request' AND initiator_id != me) — the Requests tab.
-        - requests_only=False → the default list EXCLUDES received requests but
-          KEEPS requests I initiated (client renders a Pending chip)."""
-        received_request = and_(
-            Conversation.access == ConversationAccess.PENDING_REQUEST,
-            Conversation.initiator_id != user_id,
-        )
+    async def list_for_user(*, user_id: uuid.UUID, db: AsyncSession) -> list[Conversation]:
+        """Every conversation the user is a member of."""
         stmt = (
             select(Conversation)
             .join(ConversationMember, ConversationMember.conversation_id == Conversation.id)
             .where(ConversationMember.user_id == user_id)
         )
-        stmt = stmt.where(received_request) if requests_only else stmt.where(~received_request)
         rows = await db.execute(stmt.order_by(Conversation.updated_at.desc()))
         return list(rows.scalars().all())
 
@@ -384,27 +370,6 @@ class MessageService:
             )
             if existing is not None:
                 return existing
-
-        # --- Message-request tier send guard (M4) ------------------------- #
-        # The security boundary for the request flow. For a pending_request
-        # conversation the initiator may send exactly ONE opening text message
-        # (clean, ≤500 chars); the recipient's first reply AUTO-ACCEPTS by
-        # flipping access→open in THIS transaction (accept-then-send), so the
-        # message is persisted into an already-open channel.
-        if conv.access == ConversationAccess.PENDING_REQUEST:
-            if sender_id == conv.initiator_id:
-                if conv.last_seq != 0:
-                    raise MessageError("request_one_message_only")
-                if len(content) > REQUEST_MESSAGE_MAX_LEN:
-                    raise MessageError("request_message_invalid")
-                if contains_contact_info(content):
-                    raise MessageError("request_message_invalid")
-            else:
-                # Recipient replied → accept the request atomically.
-                conv.access = ConversationAccess.OPEN
-        elif conv.access == ConversationAccess.DECLINED:
-            # Silent to the recipient; the initiator just sees a plain 403.
-            raise MessageError("request_declined")
 
         msg = Message(
             conversation_id=conversation_id,

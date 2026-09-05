@@ -26,7 +26,6 @@ from sqlalchemy.sql import func
 
 from app.core.config import settings
 from app.core.constants import (
-    PUSH_BODY_MESSAGE_REQUEST,
     PUSH_BODY_NEW_MESSAGE,
     PUSH_TITLE,
 )
@@ -190,26 +189,6 @@ class PushService:
                 body=f"{actor_name} accepted your connection request",
                 data={"type": "invitation_accepted"},
                 collapse_key=f"accept:{recipient_id}",
-            )
-        )
-
-    @staticmethod
-    def notify_message_request(
-        *, recipient_id: uuid.UUID, conversation_id: uuid.UUID
-    ) -> None:
-        """Generic, PHI-free message-request push. NO body/preview — the request
-        has no content we may leak; the conversation UUID deep-links to the
-        Requests tab. Fire-and-forget."""
-        asyncio.create_task(
-            PushService._dispatch_simple(
-                recipient_id=recipient_id,
-                title=PUSH_TITLE,
-                body=PUSH_BODY_MESSAGE_REQUEST,
-                data={
-                    "type": "message_request",
-                    "conversation_id": str(conversation_id),
-                },
-                collapse_key=f"request:{conversation_id}",
             )
         )
 

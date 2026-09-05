@@ -18,15 +18,12 @@ import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
 import '../../../state/org_state.dart';
-import '../../../data/models/network_profile.dart';
 import '../../widgets/app_pressable.dart';
-import '../../widgets/app_segmented.dart';
 import '../../widgets/app_skeleton.dart';
 import '../../widgets/connectivity_banner.dart';
 import '../../widgets/doctor_avatar.dart';
 import '../../widgets/fade_slide_in.dart';
 import '../../widgets/primary_button.dart';
-import '../../widgets/request_card.dart';
 import '../../widgets/search_bar.dart';
 import '../../widgets/typing_indicator.dart';
 import '_conversation_display.dart';
@@ -40,8 +37,6 @@ class ChatListScreen extends ConsumerStatefulWidget {
 
 class _ChatListScreenState extends ConsumerState<ChatListScreen> {
   String _query = '';
-  // 0 = Focused (default conversations), 1 = Requests (received pending).
-  int _tab = 0;
   final Set<String> _selectedIds = {};
   bool _deleting = false;
   // Rows stagger-animate only on the very first data paint; refreshes and
@@ -96,10 +91,12 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     }
     ref.invalidate(conversationsProvider);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('Removed $count chat${count == 1 ? '' : 's'}.'),
-      backgroundColor: AppColors.medBlue,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Removed $count chat${count == 1 ? '' : 's'}.'),
+        backgroundColor: AppColors.medBlue,
+      ),
+    );
     setState(() {
       _selectedIds.clear();
       _deleting = false;
@@ -167,26 +164,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
       body: Column(
         children: [
           const ConnectivityBanner(),
-          // Focused | Requests segmented header — hidden during multi-select.
           if (!_isSelecting)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenHorizontal,
-                AppSpacing.sm,
-                AppSpacing.screenHorizontal,
-                AppSpacing.xs,
-              ),
-              child: AppSegmented(
-                tabs: const [
-                  Strings.netFilterFocused,
-                  Strings.netFilterRequests,
-                ],
-                index: _tab,
-                badges: [null, ref.watch(requestsCountProvider)],
-                onChanged: (i) => setState(() => _tab = i),
-              ),
-            ),
-          if (_tab == 0 && !_isSelecting)
             AppSearchBar(
               hint: 'Search chats or people…',
               onChanged: (q) => setState(() => _query = q),
@@ -196,26 +174,24 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               duration: AppMotion.maybe(context, AppMotion.enter),
               switchInCurve: AppMotion.curveEnter,
               switchOutCurve: AppMotion.curveExit,
-              child: _tab == 1 && !_isSelecting
-                  ? const _RequestsTab(key: ValueKey('requests'))
-                  : _query.isNotEmpty && !_isSelecting
-                      ? _SearchResults(
-                          key: const ValueKey('search'),
-                          query: _query,
-                          conversations: convs.asData?.value ?? const [],
-                          orgMembers: orgMembers,
-                          meId: user?.id,
-                        )
-                      : _ConversationList(
-                          key: const ValueKey('list'),
-                          convs: convs,
-                          orgMembers: orgMembers,
-                          meId: user?.id,
-                          selectedIds: _selectedIds,
-                          isSelecting: _isSelecting,
-                          onSelect: _toggleSelect,
-                          staggerEntrance: !_entranceDone,
-                        ),
+              child: _query.isNotEmpty && !_isSelecting
+                  ? _SearchResults(
+                      key: const ValueKey('search'),
+                      query: _query,
+                      conversations: convs.asData?.value ?? const [],
+                      orgMembers: orgMembers,
+                      meId: user?.id,
+                    )
+                  : _ConversationList(
+                      key: const ValueKey('list'),
+                      convs: convs,
+                      orgMembers: orgMembers,
+                      meId: user?.id,
+                      selectedIds: _selectedIds,
+                      isSelecting: _isSelecting,
+                      onSelect: _toggleSelect,
+                      staggerEntrance: !_entranceDone,
+                    ),
             ),
           ),
         ],
@@ -260,7 +236,8 @@ class _ConversationList extends ConsumerWidget {
         onAction: () => ref.invalidate(conversationsProvider),
       ),
       data: (rawList) {
-        final list = [...rawList]..sort((a, b) {
+        final list = [...rawList]
+          ..sort((a, b) {
             final ta = a.lastMessageAt ?? a.updatedAt;
             final tb = b.lastMessageAt ?? b.updatedAt;
             return tb.compareTo(ta);
@@ -287,10 +264,14 @@ class _ConversationList extends ConsumerWidget {
                   // extendBody: keep last row clear of the floating nav bar.
                   padding: EdgeInsets.only(
                     top: AppSpacing.sm,
-                    bottom: MediaQuery.paddingOf(context).bottom + AppSpacing.sm,
+                    bottom:
+                        MediaQuery.paddingOf(context).bottom + AppSpacing.sm,
                   ),
                   itemCount: list.length,
-                  separatorBuilder: (ctx, i) => const Divider(indent: AppSpacing.xxl + AppSpacing.lg, height: 0),
+                  separatorBuilder: (ctx, i) => const Divider(
+                    indent: AppSpacing.xxl + AppSpacing.lg,
+                    height: 0,
+                  ),
                   itemBuilder: (ctx, i) {
                     final c = list[i];
                     final display = conversationDisplay(
@@ -350,23 +331,24 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
       fallbackColorIndex: 0,
     );
     if (display.title.toLowerCase().contains(q)) return true;
-    if (c.lastMessagePreview != null && c.lastMessagePreview!.toLowerCase().contains(q)) return true;
-    return false;
+    return c.lastMessagePreview != null &&
+        c.lastMessagePreview!.toLowerCase().contains(q);
   }
 
   bool _matchMember(OrgMember m) {
     if (m.id == widget.meId) return false;
     final q = widget.query.toLowerCase();
     if (m.fullName.toLowerCase().contains(q)) return true;
-    if (m.specialty != null && m.specialty!.toLowerCase().contains(q)) return true;
-    return false;
+    return m.specialty != null && m.specialty!.toLowerCase().contains(q);
   }
 
   Future<void> _startChat(OrgMember m) async {
     if (_startingChat.contains(m.id)) return;
     setState(() => _startingChat.add(m.id));
     try {
-      final conv = await ref.read(chatRepositoryProvider).createConversation(
+      final conv = await ref
+          .read(chatRepositoryProvider)
+          .createConversation(
             type: ConversationType.direct,
             name: null,
             memberIds: [m.id],
@@ -375,10 +357,12 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
       context.push(AppRoutes.chat(conv.id));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ErrorMessages.forApi(e)),
-        backgroundColor: AppColors.red,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ErrorMessages.forApi(e)),
+          backgroundColor: AppColors.red,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _startingChat.remove(m.id));
     }
@@ -386,7 +370,9 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
 
   @override
   Widget build(BuildContext context) {
-    final matchingConvs = widget.conversations.where(_matchConversation).toList();
+    final matchingConvs = widget.conversations
+        .where(_matchConversation)
+        .toList();
     final matchingMembers = widget.orgMembers.where(_matchMember).toList();
 
     if (matchingConvs.isEmpty && matchingMembers.isEmpty) {
@@ -394,8 +380,11 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.search_off_rounded,
-                size: 40, color: AppColors.gray400),
+            const Icon(
+              Icons.search_off_rounded,
+              size: 40,
+              color: AppColors.gray400,
+            ),
             const SizedBox(height: AppSpacing.md),
             Text(
               'No results for "${widget.query}"',
@@ -461,8 +450,17 @@ class _SearchResultsState extends ConsumerState<_SearchResults> {
                   colorIndex: widget.orgMembers.indexOf(m),
                   imageUrl: m.avatarPresignedUrl,
                 ),
-                title: Text(m.fullName, style: AppText.heading, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text(m.specialty ?? '', style: AppText.caption, maxLines: 1),
+                title: Text(
+                  m.fullName,
+                  style: AppText.heading,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  m.specialty ?? '',
+                  style: AppText.caption,
+                  maxLines: 1,
+                ),
                 trailing: SizedBox(
                   width: 40,
                   height: 40,
@@ -561,20 +559,33 @@ class _ChatRow extends ConsumerWidget {
         ? AppText.heading.copyWith(fontWeight: FontWeight.w700)
         : AppText.heading;
     final previewStyle = isUnread
-        ? AppText.caption.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)
+        ? AppText.caption.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          )
         : hasMsg
-            ? AppText.caption.copyWith(color: AppColors.textSecondary)
-            : AppText.caption.copyWith(fontStyle: FontStyle.italic);
+        ? AppText.caption.copyWith(color: AppColors.textSecondary)
+        : AppText.caption.copyWith(fontStyle: FontStyle.italic);
     final subtitle = isTyping
         ? Row(
             children: [
-              Text('typing', style: AppText.caption.copyWith(
-                color: AppColors.medBlue, fontWeight: FontWeight.w600)),
+              Text(
+                'typing',
+                style: AppText.caption.copyWith(
+                  color: AppColors.medBlue,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(width: 5),
               const TypingDots(color: AppColors.medBlue, size: 6),
             ],
           )
-        : Text(_previewText(), style: previewStyle, maxLines: 1, overflow: TextOverflow.ellipsis);
+        : Text(
+            _previewText(),
+            style: previewStyle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          );
     return AppPressable(
       onTap: () {
         if (isSelecting) {
@@ -592,7 +603,12 @@ class _ChatRow extends ConsumerWidget {
           imageUrl: display.otherUser?.avatarPresignedUrl,
           isSelected: isSelected,
         ),
-        title: Text(display.title, style: titleStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text(
+          display.title,
+          style: titleStyle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         subtitle: subtitle,
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -601,7 +617,10 @@ class _ChatRow extends ConsumerWidget {
             Text(
               formatChatListTime(c.lastMessageAt ?? c.updatedAt),
               style: c.unreadCount > 0
-                  ? AppText.timestamp.copyWith(color: AppColors.medBlue, fontWeight: FontWeight.w600)
+                  ? AppText.timestamp.copyWith(
+                      color: AppColors.medBlue,
+                      fontWeight: FontWeight.w600,
+                    )
                   : AppText.timestamp,
             ),
             if (c.unreadCount > 0) ...[
@@ -614,7 +633,10 @@ class _ChatRow extends ConsumerWidget {
                 builder: (context, scale, child) =>
                     Transform.scale(scale: scale, child: child),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.medBlue,
                     borderRadius: AppRadii.rFull,
@@ -631,178 +653,6 @@ class _ChatRow extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Requests tab: received pending message requests as [RequestCard]s. Visible
-/// (non-hidden) requests list first; hidden ones fold under an expandable
-/// "Hidden requests" footer (no badge). Optimistic accept/delete/block via
-/// [requestsProvider]; tapping a card opens the thread.
-class _RequestsTab extends ConsumerStatefulWidget {
-  const _RequestsTab({super.key});
-
-  @override
-  ConsumerState<_RequestsTab> createState() => _RequestsTabState();
-}
-
-class _RequestsTabState extends ConsumerState<_RequestsTab> {
-  bool _showHidden = false;
-
-  Future<void> _accept(Conversation c) async {
-    try {
-      await ref.read(requestsProvider.notifier).accept(c.id);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(Strings.netRequestAcceptedToast)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ErrorMessages.forApi(e)),
-        backgroundColor: AppColors.red,
-      ));
-    }
-  }
-
-  Future<void> _delete(Conversation c) async {
-    // Silent decline — no toast, per plan.
-    try {
-      await ref.read(requestsProvider.notifier).decline(c.id);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ErrorMessages.forApi(e)),
-        backgroundColor: AppColors.red,
-      ));
-    }
-  }
-
-  Future<void> _block(Conversation c) async {
-    final otherId = c.initiatorId;
-    ref.read(requestsProvider.notifier).removeLocally(c.id);
-    try {
-      if (otherId != null) {
-        await ref.read(networkRepositoryProvider).block(otherId);
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(Strings.netBlockedToast)),
-      );
-    } catch (e) {
-      await ref.read(requestsProvider.notifier).refresh();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ErrorMessages.forApi(e)),
-        backgroundColor: AppColors.red,
-      ));
-    }
-  }
-
-  RequestCard _card(Conversation c) {
-    final name = (c.displayName?.trim().isNotEmpty ?? false)
-        ? c.displayName!.trim()
-        : 'Doctor';
-    return RequestCard(
-      key: ValueKey(c.id),
-      name: name,
-      initials: initialsOf(name),
-      avatarColorIndex: avatarIndexFrom(null, c.initiatorId ?? c.id),
-      messagePreview: c.lastMessagePreview,
-      heroTag: c.initiatorId != null ? 'member-avatar-${c.initiatorId}' : null,
-      onAccept: () => _accept(c),
-      onDelete: () => _delete(c),
-      onBlock: () => _block(c),
-      onTap: () => context.push(AppRoutes.chat(c.id)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final async = ref.watch(requestsProvider);
-    return async.when(
-      skipLoadingOnReload: true,
-      skipLoadingOnRefresh: true,
-      loading: () => const SkeletonList(),
-      error: (e, _) => _StatusPane(
-        icon: Icons.cloud_off_rounded,
-        title: 'Couldn’t load requests',
-        subtitle: ErrorMessages.forApi(e),
-        actionLabel: 'Retry',
-        onAction: () => ref.invalidate(requestsProvider),
-      ),
-      data: (all) {
-        final visible = all.where((c) => !c.isHidden).toList();
-        final hidden = all.where((c) => c.isHidden).toList();
-        if (visible.isEmpty && hidden.isEmpty) {
-          return ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            children: [
-              SizedBox(height: MediaQuery.of(context).size.height * 0.18),
-              const _StatusPane(
-                icon: Icons.mark_email_unread_outlined,
-                title: Strings.netEmptyRequests,
-                subtitle: Strings.netExplainRequestTier,
-              ),
-            ],
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: () => ref.read(requestsProvider.notifier).refresh(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.only(
-              top: AppSpacing.sm,
-              left: AppSpacing.screenHorizontal,
-              right: AppSpacing.screenHorizontal,
-              bottom: MediaQuery.paddingOf(context).bottom + AppSpacing.sm,
-            ),
-            children: [
-              for (var i = 0; i < visible.length; i++) ...[
-                FadeSlideIn.staggered(
-                  i,
-                  _card(visible[i]),
-                  enabled: i <= AppMotion.staggerCap,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-              ],
-              if (hidden.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xs),
-                AppPressable(
-                  onTap: () => setState(() => _showHidden = !_showHidden),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.sm,
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          '${Strings.netHiddenRequests} (${hidden.length})',
-                          style: AppText.button.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        Icon(
-                          _showHidden
-                              ? Icons.expand_less_rounded
-                              : Icons.chevron_right_rounded,
-                          color: AppColors.textSecondary,
-                          size: 20,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_showHidden)
-                  for (final c in hidden) ...[
-                    _card(c),
-                    const SizedBox(height: AppSpacing.sm),
-                  ],
-              ],
-            ],
-          ),
-        );
-      },
     );
   }
 }

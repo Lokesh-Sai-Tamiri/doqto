@@ -23,11 +23,7 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
     final ws = ref.read(websocketClientProvider);
     final sub = ws.events.listen((event) {
       if (event.type == WsEventServer.newMessage ||
-          event.type == WsEventServer.messageRead ||
-          // A request I sent was accepted (flips pending→open in the default
-          // list) or one I received was accepted/declined elsewhere → resync.
-          event.type == WsEventServer.conversationRequestAccepted ||
-          event.type == WsEventServer.conversationRequestDeclined) {
+          event.type == WsEventServer.messageRead) {
         refresh();
       }
     });
@@ -68,91 +64,6 @@ final conversationsProvider =
     AsyncNotifierProvider<ConversationsNotifier, List<Conversation>>(
       ConversationsNotifier.new,
     );
-
-/// Received message requests (access=pending_request, initiator != me), the
-/// "Requests" tab of the Messages screen. Network-only (a live inbox — no
-/// cache): refetched via `filter=requests` and refreshed on the three
-/// conversation_request_* WS events + reconnect. Focused = [conversationsProvider]
-/// (the default list already excludes received requests), so the two never
-/// double-count. Tier is read here, from the list — never from thread detail.
-class RequestsNotifier extends AsyncNotifier<List<Conversation>> {
-  @override
-  Future<List<Conversation>> build() async {
-    final ws = ref.read(websocketClientProvider);
-    final sub = ws.events.listen((event) {
-      if (event.type == WsEventServer.conversationRequestReceived ||
-          event.type == WsEventServer.conversationRequestAccepted ||
-          event.type == WsEventServer.conversationRequestDeclined) {
-        refresh();
-      }
-    });
-    // Gap recovery: a reconnect means events were missed — refetch.
-    final stateSub = ws.states.listen((s) {
-      if (s == WsConnState.connected) refresh();
-    });
-    ref.onDispose(sub.cancel);
-    ref.onDispose(stateSub.cancel);
-
-    final list = await ref
-        .read(chatRepositoryProvider)
-        .listConversations(filter: 'requests');
-    return list;
-  }
-
-  Future<void> refresh() async {
-    try {
-      final list = await ref
-          .read(chatRepositoryProvider)
-          .listConversations(filter: 'requests');
-      state = AsyncData(list); // stays on previous data → no flash
-    } catch (_) {
-      // Keep showing what we have.
-    }
-  }
-
-  void removeLocally(String conversationId) {
-    final list = state.valueOrNull;
-    if (list == null) return;
-    state = AsyncData(list.where((c) => c.id != conversationId).toList());
-  }
-
-  /// Accept a received request: optimistically drop it here, POST accept, then
-  /// refresh Focused (the conversation flips to open and reappears there).
-  /// Restores truth on failure.
-  Future<void> accept(String conversationId) async {
-    removeLocally(conversationId);
-    try {
-      await ref.read(chatRepositoryProvider).acceptRequest(conversationId);
-      await ref.read(conversationsProvider.notifier).refresh();
-    } catch (e) {
-      await refresh();
-      rethrow;
-    }
-  }
-
-  /// Decline a received request (silent to the initiator): optimistically drop
-  /// it here, POST decline. Restores truth on failure.
-  Future<void> decline(String conversationId) async {
-    removeLocally(conversationId);
-    try {
-      await ref.read(chatRepositoryProvider).declineRequest(conversationId);
-    } catch (e) {
-      await refresh();
-      rethrow;
-    }
-  }
-}
-
-final requestsProvider =
-    AsyncNotifierProvider<RequestsNotifier, List<Conversation>>(
-      RequestsNotifier.new,
-    );
-
-/// Visible (non-hidden) received-request count — the Requests segment badge.
-final requestsCountProvider = Provider<int>((ref) {
-  final list = ref.watch(requestsProvider).valueOrNull ?? const [];
-  return list.where((c) => !c.isHidden).length;
-});
 
 /// Send an outbox entry over the wire per its kind. Shared by the per-thread
 /// notifier and the global drainer; the server dedups by client_id, so

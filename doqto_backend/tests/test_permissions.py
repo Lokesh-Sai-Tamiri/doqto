@@ -143,63 +143,43 @@ def test_direct_colleague_open():
     assert d.mode == "open"
 
 
-def test_direct_existing_open():
-    assert can_start_direct(ctx(existing_conversation_access="open")).mode == "open"
-
-
 def test_direct_connection_open():
     assert can_start_direct(ctx(is_first_degree=True)).mode == "open"
 
 
-def test_direct_external_disabled():
-    d = can_start_direct(ctx(external_networking_enabled_for_both=False))
-    assert not d.allowed and d.reason == "networking_disabled"
-
-
-def test_direct_dm_nobody_denied():
-    d = can_start_direct(ctx(target_privacy=priv(dm_policy=DmPolicy.NOBODY)))
-    assert not d.allowed and d.reason == "dm_policy_nobody"
-
-
-def test_direct_dm_connections_only_denied():
-    d = can_start_direct(ctx(target_privacy=priv(dm_policy=DmPolicy.CONNECTIONS_ONLY)))
-    assert not d.allowed and d.reason == "dm_policy_connections_only"
-
-
-def test_direct_dm_everyone_open():
-    d = can_start_direct(ctx(target_privacy=priv(dm_policy=DmPolicy.EVERYONE)))
-    assert d.mode == "open"
-
-
-def test_direct_request_tier():
-    d = can_start_direct(
-        ctx(target_privacy=priv(dm_policy=DmPolicy.CONNECTIONS_AND_REQUESTS))
-    )
-    assert d.allowed and d.mode == "request"
+def test_direct_stranger_denied_regardless_of_policy_or_flags():
+    """No request tier: a stranger is denied even with the most permissive
+    DM policy, networking on, and a previously open thread."""
+    for kw in (
+        {},
+        {"target_privacy": priv(dm_policy=DmPolicy.EVERYONE)},
+        {"target_privacy": priv(dm_policy=DmPolicy.CONNECTIONS_AND_REQUESTS)},
+        {"existing_conversation_access": "open"},
+        {"external_networking_enabled_for_both": False},
+    ):
+        d = can_start_direct(ctx(**kw))
+        assert not d.allowed and d.reason == "not_connected", kw
 
 
 # --------------------------------------------------------------------------- #
-# can_message
+# can_message — same table as can_start_direct
 # --------------------------------------------------------------------------- #
-def test_message_pending_request_is_request():
+def test_message_connection_open():
+    assert can_message(ctx(is_first_degree=True)).mode == "open"
+
+
+def test_message_colleague_open():
+    assert can_message(ctx(shared_org_ids=frozenset({ORG}))).mode == "open"
+
+
+def test_message_stranger_denied_even_with_pending_thread():
     d = can_message(ctx(existing_conversation_access="pending_request"))
-    assert d.mode == "request" and d.reason == "pending_request"
+    assert not d.allowed and d.reason == "not_connected"
 
 
-def test_message_pending_but_blocked_denied():
-    d = can_message(
-        ctx(existing_conversation_access="pending_request", is_blocked_either_way=True)
-    )
+def test_message_blocked_denied():
+    d = can_message(ctx(is_first_degree=True, is_blocked_either_way=True))
     assert not d.allowed and d.reason == "blocked"
-
-
-def test_message_declined_denied():
-    d = can_message(ctx(existing_conversation_access="declined"))
-    assert not d.allowed and d.reason == "request_declined"
-
-
-def test_message_open_delegates_open():
-    assert can_message(ctx(existing_conversation_access="open")).mode == "open"
 
 
 # --------------------------------------------------------------------------- #

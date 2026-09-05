@@ -129,31 +129,17 @@ def can_send_invitation(ctx: RelationshipContext) -> Decision:
 # Direct messaging  (open | request | denied)
 # --------------------------------------------------------------------------- #
 def _direct_decision(ctx: RelationshipContext) -> Decision:
+    """Only colleagues (shared org) and first-degree connections may chat.
+    There is no message-request tier and no DM-policy path any more."""
     if ctx.is_blocked_either_way:
         return Decision.denied("blocked")
     if ctx.viewer_id == ctx.target_id:
         return Decision.denied("self")
-    # Colleagues always message freely (regression rule) — before any gate.
     if _is_colleague(ctx):
         return Decision.open("colleague")
-    # An already-open conversation stays open (e.g. an accepted request).
-    if ctx.existing_conversation_access == "open":
-        return Decision.open("existing_open")
-    # Connections DM freely.
     if ctx.is_first_degree:
         return Decision.open("connection")
-    # External path.
-    if not ctx.external_networking_enabled_for_both:
-        return Decision.denied("networking_disabled")
-    policy = ctx.target_privacy.dm_policy
-    if policy == DmPolicy.NOBODY:
-        return Decision.denied("dm_policy_nobody")
-    if policy == DmPolicy.CONNECTIONS_ONLY:
-        return Decision.denied("dm_policy_connections_only")
-    if policy == DmPolicy.EVERYONE:
-        return Decision.open("dm_everyone")
-    # CONNECTIONS_AND_REQUESTS — stranger reaches out as a message request.
-    return Decision.request("message_request")
+    return Decision.denied("not_connected")
 
 
 def can_start_direct(ctx: RelationshipContext) -> Decision:
@@ -162,17 +148,9 @@ def can_start_direct(ctx: RelationshipContext) -> Decision:
 
 
 def can_message(ctx: RelationshipContext) -> Decision:
-    """Can the viewer send into a direct conversation with the target?
-
-    Same table as can_start_direct, but a still-pending request is not yet an
-    open channel — surface it as 'request' so the send-guard (M4) applies.
-    """
-    if ctx.existing_conversation_access == "pending_request":
-        if ctx.is_blocked_either_way:
-            return Decision.denied("blocked")
-        return Decision.request("pending_request")
-    if ctx.existing_conversation_access == "declined":
-        return Decision.denied("request_declined")
+    """Can the viewer send into a direct conversation with the target? Same
+    rule as starting one — the relationship is re-checked on every send so a
+    removed connection or a block freezes the thread."""
     return _direct_decision(ctx)
 
 

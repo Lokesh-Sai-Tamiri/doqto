@@ -87,22 +87,21 @@ void main() {
     expect(notifications.shown, isEmpty);
   });
 
-  test('an incoming message request raises a banner', () async {
+  test('legacy message-request events raise no banner', () async {
+    // The request tier is gone: only colleagues and connections can chat, so
+    // these server events (if an old backend ever emits them) are ignored.
     socket.emit(WsEvent(WsEventServer.conversationRequestReceived, {
       'conversation_id': 'c9',
       'sender_id': 'u7',
       'sender_name': 'Dr. Laura Caldwell',
     }));
+    socket.emit(WsEvent(WsEventServer.conversationRequestAccepted, {
+      'conversation_id': 'c4',
+      'user_id': 'u9',
+      'user_name': 'Dr. Aaron Mercado',
+    }));
     await Future<void>.delayed(Duration.zero);
-
-    final banner = notifications.shown.single;
-    expect(banner['title'], Strings.netRequestNotificationTitle);
-    expect(banner['body'], 'Dr. Laura Caldwell sent you a message request');
-    // Opens the request thread itself, where Accept / Block live.
-    expect(banner['route'], 'doqto:///chat/c9');
-    expect(routePathForPayload(banner['route']!), '/chat/c9');
-    // The stranger's opening line must never ride along in the banner.
-    expect(banner['body'], isNot(contains('quick consult')));
+    expect(notifications.shown, isEmpty);
   });
 
   test('the sender is told when their connection request is accepted',
@@ -120,27 +119,8 @@ void main() {
     expect(banner['route'], 'doqto:///people/u9');
   });
 
-  test('the initiator is told when their message request is accepted',
-      () async {
-    socket.emit(WsEvent(WsEventServer.conversationRequestAccepted, {
-      'conversation_id': 'c4',
-      'user_id': 'u9',
-      'user_name': 'Dr. Aaron Mercado',
-    }));
-    await Future<void>.delayed(Duration.zero);
-
-    final banner = notifications.shown.single;
-    expect(banner['title'], Strings.netRequestAcceptedNotificationTitle);
-    expect(banner['body'], 'Dr. Aaron Mercado accepted your message request');
-    // Straight into the thread that just unlocked.
-    expect(banner['route'], 'doqto:///chat/c4');
-    expect(routePathForPayload(banner['route']!), '/chat/c4');
-  });
-
   test('accepted events without their id are ignored', () async {
     socket.emit(WsEvent(WsEventServer.invitationAccepted, {'user_name': 'X'}));
-    socket.emit(
-        WsEvent(WsEventServer.conversationRequestAccepted, {'user_name': 'X'}));
     await Future<void>.delayed(Duration.zero);
     expect(notifications.shown, isEmpty);
   });

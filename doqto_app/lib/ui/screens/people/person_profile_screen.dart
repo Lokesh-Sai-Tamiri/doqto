@@ -228,9 +228,7 @@ class _ProfileBody extends ConsumerWidget {
               if (showMessageButton) ...[
                 const SizedBox(height: AppSpacing.sm),
                 AppButton(
-                  label: rel.canMessage == CanMessage.request
-                      ? Strings.netSendMessageRequest
-                      : Strings.netMessage,
+                  label: Strings.netMessage,
                   icon: Icons.chat_bubble_outline,
                   variant: AppButtonVariant.ghost,
                   expand: true,

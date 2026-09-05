@@ -20,13 +20,15 @@ class ErrorMessages {
 
   static const Map<String, String> _byCode = {
     // Message edit / delete (sender-only, time-boxed)
-    'edit_window_closed': 'Messages can only be edited within 5 minutes of sending.',
-    'delete_window_closed': 'Messages can only be deleted within 3 minutes of sending.',
+    'not_connected': 'Connect with this doctor to message them.',
+    'edit_window_closed':
+        'Messages can only be edited within 5 minutes of sending.',
+    'delete_window_closed':
+        'Messages can only be deleted within 3 minutes of sending.',
     'message_deleted': 'This message was already deleted.',
     'not_message_sender': 'You can only change your own messages.',
     // Auth / OTP
-    'otp_expired':
-        'That code has expired. Tap "Resend code" and try again.',
+    'otp_expired': 'That code has expired. Tap "Resend code" and try again.',
     'otp_invalid':
         'That code doesn\'t match. Please re-enter the 6-digit code we sent.',
     'otp_too_many_attempts':
@@ -36,7 +38,8 @@ class ErrorMessages {
     'otp_too_many_requests':
         'Too many code requests. Please try again in an hour.',
     'no_refresh_token': 'Your session ended. Please sign in again.',
-    'refresh_failed': 'We couldn\'t refresh your session. Please sign in again.',
+    'refresh_failed':
+        'We couldn\'t refresh your session. Please sign in again.',
     'session_revoked': 'Your session ended. Please sign in again.',
     'missing_authorization': 'Please sign in to continue.',
     'user_not_found': 'We couldn\'t find your account. Please sign in again.',
@@ -88,7 +91,8 @@ class ErrorMessages {
 
     // Scheduled messages
     'invalid_schedule_time': 'Pick a time at least a minute in the future.',
-    'conversation_not_open': 'You can\'t schedule messages in this conversation yet.',
+    'conversation_not_open':
+        'You can\'t schedule messages in this conversation yet.',
   };
 
   /// Translate any thrown error into a physician-friendly single-line message.

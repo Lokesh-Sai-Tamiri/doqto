@@ -9,27 +9,11 @@ class ChatRepository {
   final ApiClient _api;
   ChatRepository(this._api);
 
-  /// [filter] == 'requests' returns received pending message requests
-  /// (access=pending_request, initiator != me), each carrying `is_hidden`.
-  /// The default (unfiltered) list excludes received requests but includes
-  /// ones I initiated (rendered with a "Request sent" chip).
-  Future<List<Conversation>> listConversations({String? filter}) async {
-    final list = await _api.getList(
-      ApiRoutes.conversations,
-      query: filter == null ? null : {'filter': filter},
-    );
-    return list.map((e) => Conversation.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  /// Recipient accepts a pending message request → access flips to open and the
-  /// conversation moves to Focused. Idempotent server-side.
-  Future<void> acceptRequest(String conversationId) async {
-    await _api.post(ApiRoutes.conversationRequestAccept(conversationId));
-  }
-
-  /// Recipient declines a pending message request (silent to the initiator).
-  Future<void> declineRequest(String conversationId) async {
-    await _api.post(ApiRoutes.conversationRequestDecline(conversationId));
+  Future<List<Conversation>> listConversations() async {
+    final list = await _api.getList(ApiRoutes.conversations);
+    return list
+        .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Conversation> createConversation({
@@ -37,11 +21,10 @@ class ChatRepository {
     String? name,
     required List<String> memberIds,
   }) async {
-    final j = await _api.post(ApiRoutes.conversations, body: {
-      'type': type.wire,
-      'name': name,
-      'member_ids': memberIds,
-    });
+    final j = await _api.post(
+      ApiRoutes.conversations,
+      body: {'type': type.wire, 'name': name, 'member_ids': memberIds},
+    );
     return Conversation.fromJson(j);
   }
 
@@ -60,7 +43,9 @@ class ChatRepository {
       ApiRoutes.conversationMessages(conversationId),
       query: query.isEmpty ? null : query,
     );
-    return list.map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => Message.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Message> sendText(
@@ -135,7 +120,8 @@ class ChatRepository {
       filename: filename,
       fields: {
         'duration_sec': durationSec,
-        if (transcript != null && transcript.isNotEmpty) 'transcript': transcript,
+        if (transcript != null && transcript.isNotEmpty)
+          'transcript': transcript,
         // Outbox idempotency key — retries return the original row.
         'client_id': ?clientId,
       },
@@ -145,7 +131,10 @@ class ChatRepository {
 
   /// Sender-only, within 5 min of sending; the server keeps the history.
   Future<Message> editMessage(String messageId, String content) async {
-    final j = await _api.patch(ApiRoutes.message(messageId), body: {'content': content});
+    final j = await _api.patch(
+      ApiRoutes.message(messageId),
+      body: {'content': content},
+    );
     return Message.fromJson(j);
   }
 
@@ -163,7 +152,9 @@ class ChatRepository {
   /// Previous versions, oldest first — any member may read them.
   Future<List<MessageEdit>> messageEdits(String messageId) async {
     final list = await _api.getList(ApiRoutes.messageEdits(messageId));
-    return list.map((e) => MessageEdit.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => MessageEdit.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> markRead(String messageId) async {
@@ -185,14 +176,20 @@ class ChatRepository {
   }
 
   Future<void> addMembers(String conversationId, List<String> userIds) async {
-    await _api.patch(ApiRoutes.conversationMembers(conversationId), body: {'user_ids': userIds});
+    await _api.patch(
+      ApiRoutes.conversationMembers(conversationId),
+      body: {'user_ids': userIds},
+    );
   }
 
   Future<void> removeMember(String conversationId, String userId) async {
     await _api.delete(ApiRoutes.conversationMember(conversationId, userId));
   }
 
-  Future<void> updateSettings(String conversationId, {int? disappearAfterSec}) async {
+  Future<void> updateSettings(
+    String conversationId, {
+    int? disappearAfterSec,
+  }) async {
     await _api.patch(
       ApiRoutes.conversationSettings(conversationId),
       body: {'disappear_after_sec': disappearAfterSec},

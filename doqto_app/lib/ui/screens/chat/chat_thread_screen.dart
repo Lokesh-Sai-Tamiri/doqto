@@ -68,6 +68,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   // Composer edit mode: the sent message whose text is being replaced.
   Message? _editing;
 
+  /// WhatsApp-style selection mode: long-press starts it, taps toggle.
+  final _selected = <String>{};
+  bool get _selecting => _selected.isNotEmpty;
+
   // --- New-message entrance tracking (screen-local; no state-layer changes).
   // Messages present at first build (and older pages loaded later) never
   // animate; only messages created after the screen opened do.
@@ -164,42 +168,113 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (action == 'delete') await notifier.discard(clientId);
   }
 
-  /// Long-press on an own sent bubble: edit (text, ≤5 min) / delete (≤3 min).
-  /// The server is the authority on the windows; this only decides what to show.
-  Future<void> _onMessageLongPress(Message m) async {
+  void _toggleSelect(Message m) {
+    setState(
+      () => _selected.contains(m.id)
+          ? _selected.remove(m.id)
+          : _selected.add(m.id),
+    );
+  }
+
+  void _clearSelection() => setState(_selected.clear);
+
+  List<Message> _selectedMessages() {
+    final all = ref.read(messagesProvider(widget.conversationId)).value ?? [];
+    return [
+      for (final m in all)
+        if (_selected.contains(m.id)) m,
+    ];
+  }
+
+  /// Edit only when exactly one own text message is selected and its window
+  /// is open (WhatsApp hides the pencil otherwise).
+  Message? _editable() {
     final me = ref.read(authProvider).user?.id;
-    if (me == null) return;
-    final canEdit = m.canEdit(me: me);
-    final canDelete = m.canDelete(me: me);
-    if (!canEdit && !canDelete) return;
-    final action = await showModalBottomSheet<String>(
+    final sel = _selectedMessages();
+    if (me == null || sel.length != 1 || !sel.first.canEdit(me: me)) {
+      return null;
+    }
+    return sel.first;
+  }
+
+  /// WhatsApp's dialog: "Delete for me" always; "Delete for everyone" only
+  /// when every selected message is mine and inside the 3-minute window.
+  Future<void> _deleteSelected() async {
+    final me = ref.read(authProvider).user?.id;
+    final sel = _selectedMessages();
+    if (me == null || sel.isEmpty) return;
+    final forEveryone = sel.every((m) => m.canDelete(me: me));
+    final choice = await showDialog<String>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
+      builder: (ctx) => AlertDialog(
+        title: Text(Strings.chatDeleteTitle(sel.length)),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (canEdit)
-              ListTile(
-                leading: const Icon(
-                  Icons.edit_outlined,
-                  color: AppColors.medBlue,
-                ),
-                title: const Text(Strings.chatEditMessage),
-                onTap: () => Navigator.pop(ctx, 'edit'),
+            TextButton(
+              key: const ValueKey('delete-for-me'),
+              onPressed: () => Navigator.pop(ctx, 'me'),
+              child: const Text(Strings.chatDeleteForMe),
+            ),
+            if (forEveryone)
+              TextButton(
+                key: const ValueKey('delete-for-everyone'),
+                onPressed: () => Navigator.pop(ctx, 'everyone'),
+                child: const Text(Strings.chatDeleteForEveryone),
               ),
-            if (canDelete)
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: AppColors.red),
-                title: const Text(Strings.chatDeleteMessage),
-                onTap: () => Navigator.pop(ctx, 'delete'),
-              ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(Strings.cancel),
+            ),
           ],
         ),
       ),
     );
-    if (!mounted) return;
-    if (action == 'edit') _startEdit(m);
-    if (action == 'delete') await _deleteMessage(m);
+    if (!mounted || choice == null) return;
+    _clearSelection();
+    if (_editing != null && sel.any((m) => m.id == _editing!.id)) _cancelEdit();
+    final notifier = ref.read(messagesProvider(widget.conversationId).notifier);
+    try {
+      if (choice == 'me') {
+        await notifier.hide([for (final m in sel) m.id]);
+      } else {
+        for (final m in sel) {
+          await notifier.delete(m.id);
+        }
+      }
+    } catch (e) {
+      _toast(ErrorMessages.forApi(e));
+    }
+  }
+
+  /// Selection-mode app bar: count, pencil (single editable), trash.
+  PreferredSizeWidget _selectionBar() {
+    final editable = _editable();
+    return AppBar(
+      leading: IconButton(
+        key: const ValueKey('select-close'),
+        icon: const Icon(Icons.close),
+        onPressed: _clearSelection,
+      ),
+      title: Text('${_selected.length}'),
+      actions: [
+        if (editable != null)
+          IconButton(
+            key: const ValueKey('select-edit'),
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () {
+              _clearSelection();
+              _startEdit(editable);
+            },
+          ),
+        IconButton(
+          key: const ValueKey('select-delete'),
+          icon: const Icon(Icons.delete_outline),
+          onPressed: _deleteSelected,
+        ),
+      ],
+    );
   }
 
   void _startEdit(Message m) {
@@ -227,17 +302,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       await ref
           .read(messagesProvider(widget.conversationId).notifier)
           .edit(m.id, text);
-    } catch (e) {
-      _toast(ErrorMessages.forApi(e));
-    }
-  }
-
-  Future<void> _deleteMessage(Message m) async {
-    if (_editing?.id == m.id) _cancelEdit();
-    try {
-      await ref
-          .read(messagesProvider(widget.conversationId).notifier)
-          .delete(m.id);
     } catch (e) {
       _toast(ErrorMessages.forApi(e));
     }
@@ -772,20 +836,25 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         deleted: true,
       );
     }
-    return _withActions(m, _buildLiveBubble(m, isMine, msgs, i, grouped));
+    return _buildLiveBubble(m, isMine, msgs, i, grouped);
   }
 
-  /// Own sent bubbles get the long-press edit/delete menu while a window is
-  /// still open; the menu itself re-checks, so a stale wrap is harmless.
-  Widget _withActions(Message m, Widget bubble) {
-    final me = ref.read(authProvider).user?.id;
-    if (me == null || !(m.canEdit(me: me) || m.canDelete(me: me))) {
-      return bubble;
-    }
+  /// Any non-system row: long-press starts selection, taps toggle while
+  /// selecting (the bubble's own taps are swallowed, like WhatsApp), and the
+  /// whole row tints when selected.
+  Widget _selectable(Message m, Widget row) {
+    if (m.type == MessageType.system) return row;
+    final selected = _selected.contains(m.id);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onLongPress: () => _onMessageLongPress(m),
-      child: bubble,
+      onLongPress: _selecting ? null : () => _toggleSelect(m),
+      onTap: _selecting ? () => _toggleSelect(m) : null,
+      child: ColoredBox(
+        color: selected
+            ? AppColors.medBlue.withValues(alpha: 0.18)
+            : Colors.transparent,
+        child: AbsorbPointer(absorbing: _selecting, child: row),
+      ),
     );
   }
 
@@ -1003,169 +1072,181 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         !(otherRel?.isColleague ?? false) &&
         otherRel?.connectionState != RelationshipState.connected;
 
-    return Scaffold(
-      appBar: !widget.showAppBar
-          ? null
-          : AppBar(
-              titleSpacing: 0,
-              title: display == null
-                  ? const Text('Chat')
-                  : InkWell(
-                      onTap: () => context.push(
-                        AppRoutes.chatDetails(widget.conversationId),
-                      ),
-                      child: Row(
-                        children: [
-                          DoctorAvatar(
-                            initials: display.initials,
-                            size: AvatarSize.sm,
-                            imageUrl: display.otherUser?.avatarPresignedUrl,
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  display.title,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (otherTyping)
+    return PopScope(
+      canPop: !_selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _clearSelection();
+      },
+      child: Scaffold(
+        appBar: _selecting
+            ? _selectionBar()
+            : !widget.showAppBar
+            ? null
+            : AppBar(
+                titleSpacing: 0,
+                title: display == null
+                    ? const Text('Chat')
+                    : InkWell(
+                        onTap: () => context.push(
+                          AppRoutes.chatDetails(widget.conversationId),
+                        ),
+                        child: Row(
+                          children: [
+                            DoctorAvatar(
+                              initials: display.initials,
+                              size: AvatarSize.sm,
+                              imageUrl: display.otherUser?.avatarPresignedUrl,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
                                   Text(
-                                    'typing…',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.medBlue,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                    display.title,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                              ],
+                                  if (otherTyping)
+                                    Text(
+                                      'typing…',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.medBlue,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-            ),
-      body: Column(
-        children: [
-          const ConnectivityBanner(),
-          Expanded(
-            child: async.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('$e')),
-              data: (allMsgs) {
-                // Hide disappearing messages past their expiry even before the
-                // server purge tick; any rebuild re-filters.
-                final now = DateTime.now().toUtc();
-                final msgs = allMsgs
-                    .where(
-                      (m) => m.expiresAt == null || m.expiresAt!.isAfter(now),
-                    )
-                    .toList();
-                _trackNew(msgs, me?.id);
-                final notifier = ref.read(
-                  messagesProvider(widget.conversationId).notifier,
-                );
-                return Stack(
-                  children: [
-                    ListView.builder(
-                      controller: _scroll,
-                      reverse: true,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppSpacing.sm,
-                      ),
-                      // +1 row at the top (list end) for the older-page spinner.
-                      itemCount: msgs.length + (notifier.loadingOlder ? 1 : 0),
-                      itemBuilder: (_, i) {
-                        if (i >= msgs.length) {
-                          return const Padding(
-                            padding: EdgeInsets.all(AppSpacing.md),
-                            child: Center(
-                              child: SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+              ),
+        body: Column(
+          children: [
+            const ConnectivityBanner(),
+            Expanded(
+              child: async.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('$e')),
+                data: (allMsgs) {
+                  // Hide disappearing messages past their expiry even before the
+                  // server purge tick; any rebuild re-filters.
+                  final now = DateTime.now().toUtc();
+                  final msgs = allMsgs
+                      .where(
+                        (m) => m.expiresAt == null || m.expiresAt!.isAfter(now),
+                      )
+                      .toList();
+                  _trackNew(msgs, me?.id);
+                  final notifier = ref.read(
+                    messagesProvider(widget.conversationId).notifier,
+                  );
+                  return Stack(
+                    children: [
+                      ListView.builder(
+                        controller: _scroll,
+                        reverse: true,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                        ),
+                        // +1 row at the top (list end) for the older-page spinner.
+                        itemCount:
+                            msgs.length + (notifier.loadingOlder ? 1 : 0),
+                        itemBuilder: (_, i) {
+                          if (i >= msgs.length) {
+                            return const Padding(
+                              padding: EdgeInsets.all(AppSpacing.md),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        }
-                        final m = msgs[i];
-                        final isMine = me?.id == m.senderId;
-                        Widget row = _buildBubble(m, isMine, msgs, i);
-                        // NEW messages only: sent slide from right, received
-                        // from left. Keyed by id so history/pagination and
-                        // recycled list elements never replay.
-                        row = _MessageEntrance(
-                          key: ValueKey('enter-${m.id}'),
-                          animate: _entranceIds.contains(m.id),
-                          fromRight: isMine,
-                          onShown: () => _entranceIds.remove(m.id),
-                          child: row,
-                        );
-                        // Day pill above the first message of each day
-                        // (reversed list: "above" = index i + 1).
-                        final showDay =
-                            i == msgs.length - 1 ||
-                            !_sameDay(
-                              m.createdAt.toLocal(),
-                              msgs[i + 1].createdAt.toLocal(),
                             );
-                        if (showDay) {
-                          row = Column(
-                            children: [
-                              _DateChip(
-                                label: _dayLabel(m.createdAt.toLocal()),
-                              ),
-                              row,
-                            ],
+                          }
+                          final m = msgs[i];
+                          final isMine = me?.id == m.senderId;
+                          Widget row = _selectable(
+                            m,
+                            _buildBubble(m, isMine, msgs, i),
                           );
-                        }
-                        return row;
-                      },
-                    ),
-                    Positioned(
-                      right: AppSpacing.lg,
-                      bottom: AppSpacing.lg,
-                      child: _JumpToBottomPill(
-                        visible: _showJump,
-                        unreadCount: _unseenCount,
-                        onTap: _jumpToBottom,
+                          // NEW messages only: sent slide from right, received
+                          // from left. Keyed by id so history/pagination and
+                          // recycled list elements never replay.
+                          row = _MessageEntrance(
+                            key: ValueKey('enter-${m.id}'),
+                            animate: _entranceIds.contains(m.id),
+                            fromRight: isMine,
+                            onShown: () => _entranceIds.remove(m.id),
+                            child: row,
+                          );
+                          // Day pill above the first message of each day
+                          // (reversed list: "above" = index i + 1).
+                          final showDay =
+                              i == msgs.length - 1 ||
+                              !_sameDay(
+                                m.createdAt.toLocal(),
+                                msgs[i + 1].createdAt.toLocal(),
+                              );
+                          if (showDay) {
+                            row = Column(
+                              children: [
+                                _DateChip(
+                                  label: _dayLabel(m.createdAt.toLocal()),
+                                ),
+                                row,
+                              ],
+                            );
+                          }
+                          return row;
+                        },
                       ),
-                    ),
-                  ],
-                );
-              },
+                      Positioned(
+                        right: AppSpacing.lg,
+                        bottom: AppSpacing.lg,
+                        child: _JumpToBottomPill(
+                          visible: _showJump,
+                          unreadCount: _unseenCount,
+                          onTap: _jumpToBottom,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-          ),
-          if (otherTyping) const TypingIndicator(),
-          // Request-tier region: banners + (composer | locked bar). Tier comes
-          // from the LIST providers above — never a thread-detail fetch.
-          RequestComposerBar(
-            isRecipientPending: isRecipientPending,
-            isInitiatorBeforeFirst: isInitiatorBeforeFirst,
-            composerLocked: composerLocked,
-            isDeclined: isDeclined,
-            showNotConnected: showNotConnected,
-            otherId: otherId,
-            otherName: display?.title ?? '',
-            busy: _requestBusy,
-            onAccept: _acceptRequest,
-            onDelete: _declineRequest,
-            onBlock: _blockFromThread,
-            onDismissNotConnected: () =>
-                setState(() => _notConnectedDismissed = true),
-            composer: _showRecorder
-                ? VoiceRecorderPanel(
-                    conversationId: widget.conversationId,
-                    onSent: () => setState(() => _showRecorder = false),
-                    onCancel: () => setState(() => _showRecorder = false),
-                  )
-                : _composer(hideAttachments: composerTextOnly),
-          ),
-        ],
+            if (otherTyping) const TypingIndicator(),
+            // Request-tier region: banners + (composer | locked bar). Tier comes
+            // from the LIST providers above — never a thread-detail fetch.
+            RequestComposerBar(
+              isRecipientPending: isRecipientPending,
+              isInitiatorBeforeFirst: isInitiatorBeforeFirst,
+              composerLocked: composerLocked,
+              isDeclined: isDeclined,
+              showNotConnected: showNotConnected,
+              otherId: otherId,
+              otherName: display?.title ?? '',
+              busy: _requestBusy,
+              onAccept: _acceptRequest,
+              onDelete: _declineRequest,
+              onBlock: _blockFromThread,
+              onDismissNotConnected: () =>
+                  setState(() => _notConnectedDismissed = true),
+              composer: _showRecorder
+                  ? VoiceRecorderPanel(
+                      conversationId: widget.conversationId,
+                      onSent: () => setState(() => _showRecorder = false),
+                      onCancel: () => setState(() => _showRecorder = false),
+                    )
+                  : _composer(hideAttachments: composerTextOnly),
+            ),
+          ],
+        ),
       ),
     );
   }

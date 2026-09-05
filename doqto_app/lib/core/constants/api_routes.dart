@@ -48,6 +48,7 @@ class ApiRoutes {
   static String messageRead(String id) => '$apiV1/messages/$id/read';
   static String message(String id) => '$apiV1/messages/$id'; // PATCH edit / DELETE
   static String messageEdits(String id) => '$apiV1/messages/$id/edits';
+  static const String messagesHide = '$apiV1/messages/hide'; // POST delete-for-me
   static String messageFileUrl(String id) => '$apiV1/messages/$id/file-url';
 
   // People / profiles (networking M1/M2)

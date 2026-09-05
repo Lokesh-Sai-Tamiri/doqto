@@ -223,3 +223,50 @@ async def test_history_requires_membership(client, chat, db):
         headers=await helpers.auth_headers(outsider.id),
     )
     assert resp.status_code == 403
+
+
+async def test_hide_is_per_user_any_message_any_age(client, chat, db):
+    """'Delete for me': mine or theirs, old or tombstone; the other side keeps it."""
+    mine = await _send(client, chat, "mine")
+    theirs = await _send(client, chat, "theirs", headers=chat.bob_headers)
+    await _backdate(db, theirs["id"], MESSAGE_DELETE_WINDOW_SEC * 10)
+    resp = await client.post(
+        "/api/v1/messages/hide",
+        json={"message_ids": [mine["id"], theirs["id"]]},
+        headers=chat.alice_headers,
+    )
+    assert resp.status_code == 200, resp.text
+
+    ids = lambda r: [m["id"] for m in r.json()]  # noqa: E731
+    url = f"/api/v1/conversations/{chat.conv.id}/messages"
+    alice = ids(await client.get(url, headers=chat.alice_headers))
+    assert mine["id"] not in alice and theirs["id"] not in alice
+    bob = ids(await client.get(url, headers=chat.bob_headers))
+    assert mine["id"] in bob and theirs["id"] in bob
+
+    # Chat-list preview skips what I hid.
+    resp = await client.get("/api/v1/conversations", headers=chat.alice_headers)
+    conv = next(c for c in resp.json() if c["id"] == str(chat.conv.id))
+    assert conv["last_message_preview"] != "theirs"
+    # Idempotent.
+    resp = await client.post(
+        "/api/v1/messages/hide", json={"message_ids": [mine["id"]]}, headers=chat.alice_headers
+    )
+    assert resp.status_code == 200
+
+
+async def test_hide_ignores_messages_outside_my_conversations(client, chat, db):
+    from tests import helpers
+
+    msg = await _send(client, chat)
+    outsider = await helpers.create_user(db, full_name="Dr Outsider")
+    resp = await client.post(
+        "/api/v1/messages/hide",
+        json={"message_ids": [msg["id"]]},
+        headers=await helpers.auth_headers(outsider.id),
+    )
+    assert resp.status_code == 200
+    resp = await client.get(
+        f"/api/v1/conversations/{chat.conv.id}/messages", headers=chat.alice_headers
+    )
+    assert msg["id"] in [m["id"] for m in resp.json()]

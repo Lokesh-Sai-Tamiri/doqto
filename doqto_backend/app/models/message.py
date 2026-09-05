@@ -78,6 +78,27 @@ class MessageEdit(Base):
     )
 
 
+class MessageHide(Base):
+    """'Delete for me': the message stays for everyone else, this user never
+    lists it again. No PHI here — just the pair."""
+
+    __tablename__ = Tables.MESSAGE_HIDES
+
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(f"{Tables.MESSAGES}.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(f"{Tables.USERS}.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    hidden_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class ScheduledMessage(Base):
     """A text message queued for future delivery. Content is PHI — encrypted
     at rest exactly like sent messages. `scheduled_at` is the UTC instant;

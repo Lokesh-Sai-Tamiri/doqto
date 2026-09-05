@@ -155,6 +155,11 @@ class ChatRepository {
     return Message.fromJson(j);
   }
 
+  /// "Delete for me": hides for this user only; any message, any age.
+  Future<void> hideMessages(List<String> messageIds) async {
+    await _api.post(ApiRoutes.messagesHide, body: {'message_ids': messageIds});
+  }
+
   /// Previous versions, oldest first — any member may read them.
   Future<List<MessageEdit>> messageEdits(String messageId) async {
     final list = await _api.getList(ApiRoutes.messageEdits(messageId));

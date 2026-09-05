@@ -20,6 +20,10 @@ class MessageEditIn(BaseModel):
     content: str = Field(min_length=1, max_length=5000)
 
 
+class MessageHideIn(BaseModel):
+    message_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+
+
 class MessageEditOut(BaseModel):
     content: str
     replaced_at: datetime

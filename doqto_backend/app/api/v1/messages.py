@@ -28,7 +28,13 @@ from app.core.security import decrypt_message, encrypt_message
 from app.db.postgres import get_db
 from app.models import Conversation, ConversationMember, Message, User
 from app.schemas.common import OkResponse
-from app.schemas.message import FileUrlOut, MessageEditIn, MessageEditOut, MessageOut
+from app.schemas.message import (
+    FileUrlOut,
+    MessageEditIn,
+    MessageEditOut,
+    MessageHideIn,
+    MessageOut,
+)
 from app.services.audit_service import AuditService
 from app.services.file_service import FileService
 from app.services.message_service import MessageError, MessageService
@@ -344,6 +350,18 @@ async def delete_message(
         except Exception:
             logging.getLogger("doqto.messages").warning("s3 delete failed for %s", s3_key)
     return out
+
+
+@router.post(ApiRoutes.MESSAGES_HIDE, response_model=OkResponse)
+async def hide_messages(
+    body: MessageHideIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OkResponse:
+    """'Delete for me': hide messages from this user's view only."""
+    await enforce_rate_limit(user.id, "hide_messages")
+    await MessageService.hide_messages(message_ids=body.message_ids, user_id=user.id, db=db)
+    return OkResponse()
 
 
 @router.get(ApiRoutes.MESSAGES_EDITS, response_model=list[MessageEditOut])

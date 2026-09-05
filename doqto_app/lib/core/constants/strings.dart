@@ -50,6 +50,9 @@ class Strings {
   static const String chatEditingMessage = 'Editing message';
   static const String chatEditHistory = 'Edit history';
   static const String chatEditHistoryEmpty = 'No earlier versions.';
+  static const String chatDeleteForMe = 'Delete for me';
+  static const String chatDeleteForEveryone = 'Delete for everyone';
+  static String chatDeleteTitle(int n) => n == 1 ? 'Delete message?' : 'Delete $n messages?';
 
   // Group
   static const String groupNewTitle = 'New Group';

@@ -28,6 +28,7 @@ from app.models import (
     DirectConversationKey,
     Message,
     MessageEdit,
+    MessageHide,
     MessageReceipt,
     User,
 )
@@ -437,12 +438,15 @@ class MessageService:
         limit: int,
         db: AsyncSession,
         after_seq: int | None = None,
+        user_id: uuid.UUID | None = None,
     ) -> list[Message]:
         stmt = select(Message).where(
             Message.conversation_id == conversation_id,
             Message.is_deleted.is_(False),
             MessageService._not_expired(),
         )
+        if user_id is not None:
+            stmt = stmt.where(MessageService._not_hidden_for(user_id))
         if after_seq is not None:
             # Forward catch-up sync: everything the client hasn't seen, oldest first.
             stmt = stmt.where(Message.seq > after_seq).order_by(Message.seq.asc())
@@ -456,7 +460,7 @@ class MessageService:
 
     @staticmethod
     async def latest_per_conversation(
-        *, conversation_ids: list[uuid.UUID], db: AsyncSession
+        *, conversation_ids: list[uuid.UUID], db: AsyncSession, user_id: uuid.UUID | None = None
     ) -> dict[uuid.UUID, Message]:
         """Return the most recent non-deleted message for each given conversation, keyed by conv id.
 
@@ -472,8 +476,39 @@ class MessageService:
             .order_by(Message.conversation_id, Message.created_at.desc())
             .distinct(Message.conversation_id)
         )
+        if user_id is not None:
+            stmt = stmt.where(MessageService._not_hidden_for(user_id))
         rows = await db.execute(stmt)
         return {m.conversation_id: m for m in rows.scalars().all()}
+
+    @staticmethod
+    def _not_hidden_for(user_id: uuid.UUID):
+        return ~select(MessageHide.message_id).where(
+            MessageHide.message_id == Message.id, MessageHide.user_id == user_id
+        ).exists()
+
+    @staticmethod
+    async def hide_messages(
+        *, message_ids: list[uuid.UUID], user_id: uuid.UUID, db: AsyncSession
+    ) -> int:
+        """'Delete for me': any message in a conversation the user belongs to,
+        own or theirs, live or tombstone, any age. Idempotent."""
+        rows = await db.execute(
+            select(Message.id)
+            .join(ConversationMember, ConversationMember.conversation_id == Message.conversation_id)
+            .where(
+                Message.id.in_(message_ids),
+                ConversationMember.user_id == user_id,
+                ~select(MessageHide.message_id)
+                .where(MessageHide.message_id == Message.id, MessageHide.user_id == user_id)
+                .exists(),
+            )
+        )
+        ids = list(rows.scalars().all())
+        for mid in ids:
+            db.add(MessageHide(message_id=mid, user_id=user_id))
+        await db.commit()
+        return len(ids)
 
     @staticmethod
     def to_out(msg: Message, read: bool = False, delivered: bool = False) -> MessageOut:

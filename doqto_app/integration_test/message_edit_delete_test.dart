@@ -37,8 +37,9 @@ void main() {
     await app.main();
     await _settle(tester);
 
-    final container =
-        ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
     await container
         .read(authProvider.notifier)
         .verifyOtp(phone: '+15550000101', code: '777777');
@@ -57,12 +58,17 @@ void main() {
     await _settle(tester, 2500);
     expect(find.text(unique), findsOneWidget);
 
-    // Edit
+    // Edit: long-press selects → pencil in the selection bar
     await tester.longPress(find.text(unique));
     await _settle(tester);
-    await tester.tap(find.text(Strings.chatEditMessage));
+    expect(find.byKey(const ValueKey('select-edit')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('select-edit')));
     await _settle(tester);
     expect(find.text(Strings.chatEditingMessage), findsOneWidget);
+    // Focus the composer by tapping it (as a user would) before typing; the
+    // harness's implicit focus request can race the field's own refocus.
+    await tester.tap(find.byType(TextField).first);
+    await _settle(tester, 300);
     await tester.enterText(find.byType(TextField).first, '$unique edited');
     await _settle(tester, 300);
     await tester.tap(find.byKey(const ValueKey('composer-send')));
@@ -71,7 +77,9 @@ void main() {
     // Scope to THIS bubble: earlier runs leave edited messages in the thread.
     final editedLabel = find.descendant(
       of: find.ancestor(
-          of: find.text('$unique edited'), matching: find.byType(MessageBubble)),
+        of: find.text('$unique edited'),
+        matching: find.byType(MessageBubble),
+      ),
       matching: find.text(Strings.chatEdited),
     );
     expect(editedLabel, findsOneWidget);
@@ -86,13 +94,30 @@ void main() {
     await _settle(tester, 2000);
     expect(find.text(Strings.chatEditHistory), findsNothing);
 
-    // Delete
+    // Delete for everyone (own, < 3 min) → tombstone
     await tester.longPress(find.text('$unique edited'));
     await _settle(tester);
-    await tester.tap(find.text(Strings.chatDeleteMessage));
+    await tester.tap(find.byKey(const ValueKey('select-delete')));
+    await _settle(tester);
+    expect(find.byKey(const ValueKey('delete-for-everyone')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('delete-for-everyone')));
     await _settle(tester, 2500);
     expect(find.text(Strings.chatMessageDeleted), findsWidgets);
     expect(find.text('$unique edited'), findsNothing);
+
+    // Delete for me on a tombstone + an old edited message (mixed/old →
+    // no "everyone" option, no pencil); both vanish from MY view.
+    final tombs = find.text(Strings.chatMessageDeleted);
+    final tombCount = tester.widgetList(tombs).length;
+    await tester.longPress(tombs.first);
+    await _settle(tester);
+    expect(find.byKey(const ValueKey('select-edit')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('select-delete')));
+    await _settle(tester);
+    expect(find.byKey(const ValueKey('delete-for-everyone')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('delete-for-me')));
+    await _settle(tester, 2500);
+    expect(tester.widgetList(tombs).length, tombCount - 1);
     await _settle(tester, 4000); // hold for a screenshot from the shell
   });
 }

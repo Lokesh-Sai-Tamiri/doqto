@@ -55,7 +55,9 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
     try {
       final list = await ref.read(chatRepositoryProvider).listConversations();
       await ref.read(chatCacheProvider).putConversations(list);
-      state = AsyncData(list); // stays on previous data until this resolves → no flash
+      state = AsyncData(
+        list,
+      ); // stays on previous data until this resolves → no flash
     } catch (_) {
       // Offline refresh: keep showing what we have.
     }
@@ -64,7 +66,8 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
 
 final conversationsProvider =
     AsyncNotifierProvider<ConversationsNotifier, List<Conversation>>(
-        ConversationsNotifier.new);
+      ConversationsNotifier.new,
+    );
 
 /// Received message requests (access=pending_request, initiator != me), the
 /// "Requests" tab of the Messages screen. Network-only (a live inbox — no
@@ -142,7 +145,8 @@ class RequestsNotifier extends AsyncNotifier<List<Conversation>> {
 
 final requestsProvider =
     AsyncNotifierProvider<RequestsNotifier, List<Conversation>>(
-        RequestsNotifier.new);
+      RequestsNotifier.new,
+    );
 
 /// Visible (non-hidden) received-request count — the Requests segment badge.
 final requestsCountProvider = Provider<int>((ref) {
@@ -204,8 +208,9 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
     if (cached != null) state = AsyncData([...pending, ...cached]);
 
     try {
-      final msgs =
-          await ref.read(chatRepositoryProvider).listMessages(conversationId);
+      final msgs = await ref
+          .read(chatRepositoryProvider)
+          .listMessages(conversationId);
       hasMore = msgs.length >= AppConstants.messagesPageSize;
       await cache.putMessages(conversationId, msgs);
       return [...pending, ...msgs];
@@ -233,9 +238,10 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
           content: e.content,
           type: switch (e.kind) {
             OutboxKind.text => MessageType.text,
-            OutboxKind.media => (e.mimeType ?? '').startsWith('image/')
-                ? MessageType.image
-                : MessageType.file,
+            OutboxKind.media =>
+              (e.mimeType ?? '').startsWith('image/')
+                  ? MessageType.image
+                  : MessageType.file,
             OutboxKind.voice => MessageType.voiceNote,
           },
           fileName: e.fileName,
@@ -267,7 +273,8 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
           // Conversation-level ack: flip gray double-checks on own messages.
           if (event.data['conversation_id'] != conversationId) break;
           state = AsyncData([
-            for (final m in state.value ?? <Message>[]) m.copyWith(delivered: true),
+            for (final m in state.value ?? <Message>[])
+              m.copyWith(delivered: true),
           ]);
           break;
         case WsEventServer.messageRead:
@@ -294,7 +301,10 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
           state = AsyncData([
             for (final m in current)
               if (m.id == id)
-                m.copyWith(transcript: transcript, transcriptStatus: TranscriptStatus.completed)
+                m.copyWith(
+                  transcript: transcript,
+                  transcriptStatus: TranscriptStatus.completed,
+                )
               else
                 m,
           ]);
@@ -371,8 +381,9 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
   /// Fallback resync: refetch page 1 and merge (dedup by id).
   Future<void> _refetchLatest(String conversationId) async {
     try {
-      final fresh =
-          await ref.read(chatRepositoryProvider).listMessages(conversationId);
+      final fresh = await ref
+          .read(chatRepositoryProvider)
+          .listMessages(conversationId);
       final current = state.value ?? [];
       final freshIds = {for (final m in fresh) m.id};
       // Keep what the page doesn't cover: pending/failed bubbles and older pages.
@@ -399,12 +410,14 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
       createdAt: DateTime.now().toUtc(),
     );
     await ref.read(outboxProvider).add(entry);
-    _insert(Message.pending(
-      clientId: entry.clientId,
-      conversationId: arg,
-      senderId: me,
-      content: content,
-    ));
+    _insert(
+      Message.pending(
+        clientId: entry.clientId,
+        conversationId: arg,
+        senderId: me,
+        content: content,
+      ),
+    );
 
     // 2. Attempt delivery.
     await _deliver(entry);
@@ -422,8 +435,10 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
       return;
     }
     try {
-      final msg =
-          await deliverOutboxEntry(ref.read(chatRepositoryProvider), entry);
+      final msg = await deliverOutboxEntry(
+        ref.read(chatRepositoryProvider),
+        entry,
+      );
       await ref.read(outboxProvider).remove(entry.clientId);
       _insert(msg);
     } catch (_) {
@@ -469,11 +484,9 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
     final me = ref.read(authProvider).user?.id;
     if (me == null) return;
     final clientId = uuidV4();
-    final path = await ref.read(outboxMediaStoreProvider).persistBytes(
-          clientId: clientId,
-          fileName: filename,
-          bytes: bytes,
-        );
+    final path = await ref
+        .read(outboxMediaStoreProvider)
+        .persistBytes(clientId: clientId, fileName: filename, bytes: bytes);
     final entry = OutboxEntry(
       clientId: clientId,
       conversationId: arg,
@@ -484,16 +497,18 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
       mimeType: contentType,
     );
     await ref.read(outboxProvider).add(entry);
-    _insert(Message.pending(
-      clientId: clientId,
-      conversationId: arg,
-      senderId: me,
-      type: (contentType ?? '').startsWith('image/')
-          ? MessageType.image
-          : MessageType.file,
-      fileName: filename,
-      localPath: path,
-    ));
+    _insert(
+      Message.pending(
+        clientId: clientId,
+        conversationId: arg,
+        senderId: me,
+        type: (contentType ?? '').startsWith('image/')
+            ? MessageType.image
+            : MessageType.file,
+        fileName: filename,
+        localPath: path,
+      ),
+    );
     unawaited(_deliver(entry));
   }
 
@@ -507,10 +522,9 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
     final me = ref.read(authProvider).user?.id;
     if (me == null) return;
     final clientId = uuidV4();
-    final path = await ref.read(outboxMediaStoreProvider).persistFile(
-          clientId: clientId,
-          sourcePath: sourcePath,
-        );
+    final path = await ref
+        .read(outboxMediaStoreProvider)
+        .persistFile(clientId: clientId, sourcePath: sourcePath);
     final entry = OutboxEntry(
       clientId: clientId,
       conversationId: arg,
@@ -522,14 +536,16 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
       transcript: transcript,
     );
     await ref.read(outboxProvider).add(entry);
-    _insert(Message.pending(
-      clientId: clientId,
-      conversationId: arg,
-      senderId: me,
-      type: MessageType.voiceNote,
-      voiceDurationSec: durationSec,
-      transcript: transcript,
-    ));
+    _insert(
+      Message.pending(
+        clientId: clientId,
+        conversationId: arg,
+        senderId: me,
+        type: MessageType.voiceNote,
+        voiceDurationSec: durationSec,
+        transcript: transcript,
+      ),
+    );
     unawaited(_deliver(entry));
   }
 
@@ -537,8 +553,9 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
   Future<void> loadOlder() async {
     if (!hasMore || loadingOlder) return;
     final current = state.value ?? [];
-    final oldest =
-        current.where((m) => m.status == MessageStatus.sent).lastOrNull;
+    final oldest = current
+        .where((m) => m.status == MessageStatus.sent)
+        .lastOrNull;
     if (oldest == null) return;
     loadingOlder = true;
     try {
@@ -547,8 +564,10 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
           .listMessages(arg, before: oldest.createdAt);
       hasMore = older.length >= AppConstants.messagesPageSize;
       final ids = {for (final m in current) m.id};
-      state =
-          AsyncData([...current, ...older.where((m) => !ids.contains(m.id))]);
+      state = AsyncData([
+        ...current,
+        ...older.where((m) => !ids.contains(m.id)),
+      ]);
     } catch (_) {
       // Scroll again to retry.
     } finally {
@@ -560,7 +579,9 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
 
   /// Edit within 5 min of sending (server-enforced). Applies the returned row.
   Future<void> edit(String messageId, String content) async {
-    _replace(await ref.read(chatRepositoryProvider).editMessage(messageId, content));
+    _replace(
+      await ref.read(chatRepositoryProvider).editMessage(messageId, content),
+    );
   }
 
   /// Delete within 3 min of sending (server-enforced). Applies the tombstone.
@@ -568,12 +589,26 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
     _replace(await ref.read(chatRepositoryProvider).deleteMessage(messageId));
   }
 
+  /// "Delete for me": drop the rows locally after the server hides them.
+  Future<void> hide(List<String> messageIds) async {
+    await ref.read(chatRepositoryProvider).hideMessages(messageIds);
+    final ids = messageIds.toSet();
+    state = AsyncData([
+      for (final m in state.value ?? [])
+        if (!ids.contains(m.id)) m,
+    ]);
+    await _recache(arg);
+  }
+
   /// Replace a server row in place (edit/delete), keeping local tick state.
   void _replace(Message msg) {
     final current = state.value ?? [];
     state = AsyncData([
       for (final m in current)
-        if (m.id == msg.id) msg.copyWith(read: m.read, delivered: m.delivered) else m,
+        if (m.id == msg.id)
+          msg.copyWith(read: m.read, delivered: m.delivered)
+        else
+          m,
     ]);
     _recache(msg.conversationId);
   }
@@ -582,7 +617,8 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
     final current = state.value ?? [];
     // Replace the optimistic bubble once the server row exists (matched by
     // client_id — covers both the POST response and the WS broadcast).
-    if (msg.clientId != null && current.any((m) => m.clientId == msg.clientId)) {
+    if (msg.clientId != null &&
+        current.any((m) => m.clientId == msg.clientId)) {
       state = AsyncData([
         for (final m in current)
           if (m.clientId == msg.clientId) msg else m,
@@ -596,7 +632,9 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
 }
 
 final messagesProvider =
-    AsyncNotifierProvider.family<MessagesNotifier, List<Message>, String>(MessagesNotifier.new);
+    AsyncNotifierProvider.family<MessagesNotifier, List<Message>, String>(
+      MessagesNotifier.new,
+    );
 
 /// Drains the outbox whenever the socket (re)connects and once on app start.
 /// Successful sends reach open threads via the WS broadcast (matched by
@@ -668,5 +706,6 @@ class TypingNotifier extends FamilyNotifier<bool, String> {
   }
 }
 
-final typingProvider =
-    NotifierProvider.family<TypingNotifier, bool, String>(TypingNotifier.new);
+final typingProvider = NotifierProvider.family<TypingNotifier, bool, String>(
+  TypingNotifier.new,
+);

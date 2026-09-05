@@ -208,7 +208,9 @@ async def list_conversations(
     )
     conv_ids = [c.id for c in convs]
     # Batched: 4 queries total regardless of conversation count (was ~2×N).
-    latest = await MessageService.latest_per_conversation(conversation_ids=conv_ids, db=db)
+    latest = await MessageService.latest_per_conversation(
+        conversation_ids=conv_ids, db=db, user_id=user.id
+    )
     conv_members = await MessageService.members_by_conversation(
         conversation_ids=conv_ids, db=db
     )
@@ -361,6 +363,7 @@ async def list_messages(
         limit=limit,
         db=db,
         after_seq=after_seq,
+        user_id=user.id,
     )
     # A3 hybrid: GROUP ticks come from member seq cursors, DIRECT from receipts.
     if conv.type == ConversationType.GROUP:

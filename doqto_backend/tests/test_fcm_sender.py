@@ -74,3 +74,15 @@ async def test_unregistered_token_is_pruned(monkeypatch, sender):
 async def test_transient_error_keeps_token(monkeypatch, sender):
     _patch_http(monkeypatch, 503, "unavailable", [])
     assert await sender.send(token="t", title="a", body="b", data={}, collapse_key="k") is True
+
+
+def test_bearer_refresh_transport_is_installed(monkeypatch):
+    """Regression: google-auth's default transport needs `requests`; a missing
+    dependency only showed up in prod on the first real push."""
+    import google.auth.transport.requests  # noqa: F401
+
+    monkeypatch.setattr(settings, "FCM_PROJECT_ID", "doqto-test")
+    monkeypatch.setattr(settings, "FCM_SERVICE_ACCOUNT_JSON", json.dumps(_fake_sa()))
+    s = push_service.FcmPushSender()
+    monkeypatch.setattr(s._creds, "refresh", lambda req: setattr(s._creds, "token", "fresh"))
+    assert s._bearer() == "fresh"

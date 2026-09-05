@@ -76,11 +76,13 @@ async def _dispatch(chat) -> None:
     )
 
 
-async def test_online_recipient_is_skipped(db, chat, fake_sender):
-    await _register(db, chat.bob.id)
+async def test_online_recipient_is_still_pushed(db, chat, fake_sender):
+    """A killed iOS app keeps its socket 'online' for minutes; FCM suppresses
+    foreground display itself, so presence must not gate the push."""
+    token = await _register(db, chat.bob.id)
     await _set_presence(chat.bob.id, PresenceStatus.ONLINE, PRESENCE_ONLINE_TTL_SECONDS)
     await _dispatch(chat)
-    assert fake_sender.calls == []
+    assert [c["token"] for c in fake_sender.calls] == [token]
 
 
 async def test_away_recipient_is_pushed(db, chat, fake_sender):

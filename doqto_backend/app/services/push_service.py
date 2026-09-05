@@ -1,4 +1,4 @@
-"""Push notification pipeline — presence-gated, sender-side, PHI-free.
+"""Push notification pipeline — sender-side, PHI-free, always pushed (no presence gate).
 
 Dev default (PUSH_PROVIDER=log) is a logging stub mirroring FakeSNSClient;
 real FCM slots in later via PUSH_PROVIDER=fcm + credentials in config.
@@ -29,10 +29,7 @@ from app.core.constants import (
     PUSH_BODY_NEW_MESSAGE,
     PUSH_TITLE,
 )
-from app.core.enums import PresenceStatus
-from app.core.redis_keys import presence_key
 from app.db.postgres import SessionLocal
-from app.db.redis import get_redis
 from app.models import DeviceToken
 
 log = logging.getLogger("doqto.push")
@@ -226,11 +223,8 @@ class PushService:
     ) -> None:
         """Presence-gated single-recipient push (fire-and-forget)."""
         try:
-            redis = await get_redis()
             sender = _sender()
             async with SessionLocal() as db:
-                if await redis.get(presence_key(recipient_id)) == PresenceStatus.ONLINE.value:
-                    return  # live WS covers them
                 rows = (
                     await db.scalars(
                         select(DeviceToken).where(DeviceToken.user_id == recipient_id)
@@ -244,6 +238,7 @@ class PushService:
                         data=data,
                         collapse_key=collapse_key,
                     )
+                    log.info("push %s user=%s", "sent" if ok else "dead-token", recipient_id)
                     if not ok:
                         await db.delete(row)
                 await db.commit()
@@ -258,7 +253,6 @@ class PushService:
         sender_id: uuid.UUID,
     ) -> None:
         try:
-            redis = await get_redis()
             sender = _sender()
             # PHI-free by policy — constants only, plus the conversation UUID
             # for deep-linking. Nothing else may ever be added here.
@@ -268,9 +262,9 @@ class PushService:
                 for uid in recipient_ids:
                     if uid == sender_id:
                         continue
-                    # ONLINE users have a live WS — local banners cover them.
-                    if await redis.get(presence_key(uid)) == PresenceStatus.ONLINE.value:
-                        continue
+                    # No presence gate: a killed/backgrounded iOS app keeps its
+                    # socket "open" for minutes, and FCM already suppresses
+                    # foreground display on both platforms — no duplicates.
                     rows = (
                         await db.scalars(
                             select(DeviceToken).where(DeviceToken.user_id == uid)
@@ -284,6 +278,7 @@ class PushService:
                             data=data,
                             collapse_key=str(conversation_id),
                         )
+                        log.info("push %s user=%s conv=%s", "sent" if ok else "dead-token", uid, conversation_id)
                         if not ok:
                             await db.delete(row)  # permanently-invalid token
                 await db.commit()

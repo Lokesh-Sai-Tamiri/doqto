@@ -282,6 +282,11 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
               if (msgId == null || m.id == msgId) m.copyWith(read: true) else m,
           ]);
           break;
+        case WsEventServer.messageEdited:
+        case WsEventServer.messageDeleted:
+          final msg = Message.fromJson(event.data);
+          if (msg.conversationId == conversationId) _replace(msg);
+          break;
         case WsEventServer.transcriptReady:
           final id = event.data['message_id'] as String;
           final transcript = event.data['transcript'] as String?;
@@ -551,6 +556,26 @@ class MessagesNotifier extends FamilyAsyncNotifier<List<Message>, String> {
       // Nudge listeners so the spinner row rebuilds even on failure.
       state = AsyncData([...(state.value ?? [])]);
     }
+  }
+
+  /// Edit within 5 min of sending (server-enforced). Applies the returned row.
+  Future<void> edit(String messageId, String content) async {
+    _replace(await ref.read(chatRepositoryProvider).editMessage(messageId, content));
+  }
+
+  /// Delete within 3 min of sending (server-enforced). Applies the tombstone.
+  Future<void> delete(String messageId) async {
+    _replace(await ref.read(chatRepositoryProvider).deleteMessage(messageId));
+  }
+
+  /// Replace a server row in place (edit/delete), keeping local tick state.
+  void _replace(Message msg) {
+    final current = state.value ?? [];
+    state = AsyncData([
+      for (final m in current)
+        if (m.id == msg.id) msg.copyWith(read: m.read, delivered: m.delivered) else m,
+    ]);
+    _recache(msg.conversationId);
   }
 
   void _insert(Message msg) {

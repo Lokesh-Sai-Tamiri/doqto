@@ -3,6 +3,7 @@ import '../../core/enums/app_enums.dart';
 import '../api/api_client.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
+import '../models/message_edit.dart';
 
 class ChatRepository {
   final ApiClient _api;
@@ -140,6 +141,24 @@ class ChatRepository {
       },
     );
     return Message.fromJson(j);
+  }
+
+  /// Sender-only, within 5 min of sending; the server keeps the history.
+  Future<Message> editMessage(String messageId, String content) async {
+    final j = await _api.patch(ApiRoutes.message(messageId), body: {'content': content});
+    return Message.fromJson(j);
+  }
+
+  /// Sender-only, within 3 min of sending; returns the tombstone row.
+  Future<Message> deleteMessage(String messageId) async {
+    final j = await _api.delete(ApiRoutes.message(messageId));
+    return Message.fromJson(j);
+  }
+
+  /// Previous versions, oldest first — any member may read them.
+  Future<List<MessageEdit>> messageEdits(String messageId) async {
+    final list = await _api.getList(ApiRoutes.messageEdits(messageId));
+    return list.map((e) => MessageEdit.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<void> markRead(String messageId) async {

@@ -23,6 +23,8 @@ class Message {
   final MessageStatus status;
   final String? clientId; // outbox idempotency key (echoed by the server)
   final int? seq; // per-conversation sequence (null for pending/legacy cache)
+  final DateTime? editedAt; // sender edited the body (history on the server)
+  final DateTime? deletedAt; // tombstone: content/media gone, row kept
   // Outbox media file on disk — lets pending image bubbles show a real
   // preview instead of a filename. Never serialized; rebuilt from the outbox.
   final String? localPath;
@@ -47,7 +49,32 @@ class Message {
     this.clientId,
     this.seq,
     this.localPath,
+    this.editedAt,
+    this.deletedAt,
   });
+
+  /// Sender may edit a text message this long after sending (server-enforced).
+  static const editWindow = Duration(minutes: 5);
+
+  /// Sender may delete any message this long after sending (server-enforced).
+  static const deleteWindow = Duration(minutes: 3);
+
+  bool get isDeleted => deletedAt != null;
+
+  bool _own(String me, DateTime now, Duration window) =>
+      senderId == me &&
+      !isDeleted &&
+      status == MessageStatus.sent &&
+      !now.difference(createdAt).isNegative &&
+      now.difference(createdAt) <= window;
+
+  bool canEdit({required String me, DateTime? now}) =>
+      type == MessageType.text &&
+      _own(me, (now ?? DateTime.now()).toUtc(), editWindow);
+
+  bool canDelete({required String me, DateTime? now}) =>
+      type != MessageType.system &&
+      _own(me, (now ?? DateTime.now()).toUtc(), deleteWindow);
 
   /// Optimistic local message (text, media, or voice): shown with a clock tick
   /// while the outbox delivers it. `id` is the clientId until the server row
@@ -102,6 +129,8 @@ class Message {
         delivered: (j['delivered'] as bool?) ?? false,
         clientId: j['client_id'] as String?,
         seq: j['seq'] as int?,
+        editedAt: j['edited_at'] != null ? DateTime.parse(j['edited_at'] as String) : null,
+        deletedAt: j['deleted_at'] != null ? DateTime.parse(j['deleted_at'] as String) : null,
       );
 
   Map<String, dynamic> toJson() => {
@@ -122,6 +151,8 @@ class Message {
         'delivered': delivered,
         'client_id': clientId,
         'seq': seq,
+        'edited_at': editedAt?.toIso8601String(),
+        'deleted_at': deletedAt?.toIso8601String(),
       };
 
   Message copyWith({
@@ -151,5 +182,7 @@ class Message {
         clientId: clientId,
         seq: seq,
         localPath: localPath,
+        editedAt: editedAt,
+        deletedAt: deletedAt,
       );
 }

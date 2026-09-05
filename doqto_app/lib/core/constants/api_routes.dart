@@ -46,6 +46,8 @@ class ApiRoutes {
   static String messageUpload(String convId) => '$apiV1/messages/upload/$convId';
   static String messageVoiceNote(String convId) => '$apiV1/messages/voice-notes/$convId';
   static String messageRead(String id) => '$apiV1/messages/$id/read';
+  static String message(String id) => '$apiV1/messages/$id'; // PATCH edit / DELETE
+  static String messageEdits(String id) => '$apiV1/messages/$id/edits';
   static String messageFileUrl(String id) => '$apiV1/messages/$id/file-url';
 
   // People / profiles (networking M1/M2)

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/constants/strings.dart';
 import '../../core/tokens/colors.dart';
 import '../../core/tokens/motion.dart';
 import '../../core/tokens/radii.dart';
@@ -29,17 +30,27 @@ class MessageStatusTick extends StatelessWidget {
   Widget build(BuildContext context) {
     final icon = switch (status) {
       MessageStatus.sending => _PulsingClock(
-          key: const ValueKey('tick-sending'),
-          color: idleColor,
-        ),
-      MessageStatus.failed => const Icon(Icons.error_outline,
-          key: ValueKey('tick-failed'), size: 15, color: Color(0xFFFFB4A9)),
+        key: const ValueKey('tick-sending'),
+        color: idleColor,
+      ),
+      MessageStatus.failed => const Icon(
+        Icons.error_outline,
+        key: ValueKey('tick-failed'),
+        size: 15,
+        color: Color(0xFFFFB4A9),
+      ),
       MessageStatus.sent => Icon(
-          (read || delivered) ? Icons.done_all : Icons.check,
-          key: ValueKey('tick-sent-${read ? 'read' : delivered ? 'delivered' : 'sent'}'),
-          size: 15,
-          color: read ? const Color(0xFF7FC8FF) : idleColor,
+        (read || delivered) ? Icons.done_all : Icons.check,
+        key: ValueKey(
+          'tick-sent-${read
+              ? 'read'
+              : delivered
+              ? 'delivered'
+              : 'sent'}',
         ),
+        size: 15,
+        color: read ? const Color(0xFF7FC8FF) : idleColor,
+      ),
     };
     return AnimatedSwitcher(
       duration: AppMotion.maybe(context, AppMotion.micro),
@@ -64,10 +75,14 @@ class _PulsingClockState extends State<_PulsingClock>
     with SingleTickerProviderStateMixin {
   static const Duration _period = Duration(milliseconds: 900);
 
-  late final AnimationController _controller =
-      AnimationController(vsync: this, duration: _period);
-  late final Animation<double> _opacity = Tween<double>(begin: 1.0, end: 0.45)
-      .animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _period,
+  );
+  late final Animation<double> _opacity = Tween<double>(
+    begin: 1.0,
+    end: 0.45,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
   @override
   void didChangeDependencies() {
@@ -105,13 +120,18 @@ class SystemMessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.xs,
+      ),
       child: Center(
         child: Container(
-          constraints:
-              BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.8),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.sizeOf(context).width * 0.8,
+          ),
           padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.xs + 2),
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs + 2,
+          ),
           decoration: BoxDecoration(
             color: AppColors.gray100,
             borderRadius: AppRadii.rFull,
@@ -141,6 +161,13 @@ class MessageBubble extends StatelessWidget {
   /// day — tightens vertical spacing so runs read as one group.
   final bool grouped;
 
+  /// Sender deleted it: WhatsApp-style tombstone, no ticks, [text] ignored.
+  final bool deleted;
+
+  /// Sender edited it: "Edited" label next to the time; tap opens history.
+  final bool edited;
+  final VoidCallback? onEditedTap;
+
   const MessageBubble({
     super.key,
     required this.text,
@@ -152,6 +179,9 @@ class MessageBubble extends StatelessWidget {
     this.delivered = false,
     this.status = MessageStatus.sent,
     this.grouped = false,
+    this.deleted = false,
+    this.edited = false,
+    this.onEditedTap,
   });
 
   @override
@@ -159,11 +189,21 @@ class MessageBubble extends StatelessWidget {
     final radius = isMine ? AppRadii.bubbleSent : AppRadii.bubbleReceived;
     final bg = isMine ? AppColors.medBlue : AppColors.white;
     final fg = isMine ? AppColors.white : AppColors.textPrimary;
-    final timeColor = isMine ? AppColors.white.withValues(alpha: 0.55) : AppColors.textMuted;
+    final timeColor = isMine
+        ? AppColors.white.withValues(alpha: 0.55)
+        : AppColors.textMuted;
+    final muted = isMine
+        ? AppColors.white.withValues(alpha: 0.7)
+        : AppColors.textMuted;
 
     Widget bubble = Container(
-      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.72),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.sizeOf(context).width * 0.72,
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm + 2,
+      ),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: radius,
@@ -184,18 +224,49 @@ class MessageBubble extends StatelessWidget {
                 ),
               ),
             ),
-          Text(text, style: AppText.messageBody.copyWith(color: fg)),
+          if (deleted)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.block, size: 14, color: muted),
+                const SizedBox(width: 4),
+                Text(
+                  Strings.chatMessageDeleted,
+                  style: AppText.messageBody.copyWith(
+                    color: muted,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            )
+          else
+            Text(text, style: AppText.messageBody.copyWith(color: fg)),
           const SizedBox(height: 2),
           Align(
             alignment: Alignment.bottomRight,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (edited && !deleted) ...[
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onEditedTap,
+                    child: Text(
+                      Strings.chatEdited,
+                      style: AppText.timestamp.copyWith(
+                        color: timeColor,
+                        decoration: TextDecoration.underline,
+                        decorationColor: timeColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ],
                 Text(
                   DateFormat.jm().format(timestamp),
                   style: AppText.timestamp.copyWith(color: timeColor),
                 ),
-                if (isMine) ...[
+                if (isMine && !deleted) ...[
                   const SizedBox(width: 3),
                   MessageStatusTick(
                     status: status,
@@ -224,7 +295,9 @@ class MessageBubble extends StatelessWidget {
         AppSpacing.xs,
       ),
       child: Row(
-        mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [bubble],
       ),
     );
@@ -243,8 +316,10 @@ class _ShakeOnce extends StatefulWidget {
 
 class _ShakeOnceState extends State<_ShakeOnce>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller =
-      AnimationController(vsync: this, duration: AppMotion.emphasizedDuration);
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.emphasizedDuration,
+  );
 
   bool _started = false;
 

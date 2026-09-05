@@ -43,6 +43,13 @@ class Strings {
   static const String chatMessageHint = 'Message...';
   static const String chatRecording = 'Recording...';
   static const String chatRecordingInstruction = 'Release to send · Slide left to cancel';
+  static const String chatMessageDeleted = 'This message was deleted';
+  static const String chatEdited = 'Edited';
+  static const String chatEditMessage = 'Edit message';
+  static const String chatDeleteMessage = 'Delete message';
+  static const String chatEditingMessage = 'Editing message';
+  static const String chatEditHistory = 'Edit history';
+  static const String chatEditHistoryEmpty = 'No earlier versions.';
 
   // Group
   static const String groupNewTitle = 'New Group';

@@ -21,6 +21,7 @@ import '../../../core/tokens/typography.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/models/conversation.dart';
 import '../../../data/models/message.dart';
+import '../../../data/models/message_edit.dart';
 import '../../../data/models/organization.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chat_state.dart';
@@ -64,6 +65,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   bool _typing = false;
   bool _hasText = false;
   Timer? _typingPing;
+  // Composer edit mode: the sent message whose text is being replaced.
+  Message? _editing;
 
   // --- New-message entrance tracking (screen-local; no state-layer changes).
   // Messages present at first build (and older pages loaded later) never
@@ -94,8 +97,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     // Infinite scroll-back: nearing the top (= end of the reversed list)
     // pulls the next older page.
     _scroll.addListener(() {
-      if (_scroll.position.pixels >
-          _scroll.position.maxScrollExtent - 400) {
+      if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 400) {
         ref.read(messagesProvider(widget.conversationId).notifier).loadOlder();
       }
       final showJump = _scroll.position.pixels > _jumpThresholdPx;
@@ -158,6 +160,145 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (action == 'delete') await notifier.discard(clientId);
   }
 
+  /// Long-press on an own sent bubble: edit (text, ≤5 min) / delete (≤3 min).
+  /// The server is the authority on the windows; this only decides what to show.
+  Future<void> _onMessageLongPress(Message m) async {
+    final me = ref.read(authProvider).user?.id;
+    if (me == null) return;
+    final canEdit = m.canEdit(me: me);
+    final canDelete = m.canDelete(me: me);
+    if (!canEdit && !canDelete) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (canEdit)
+              ListTile(
+                leading: const Icon(
+                  Icons.edit_outlined,
+                  color: AppColors.medBlue,
+                ),
+                title: const Text(Strings.chatEditMessage),
+                onTap: () => Navigator.pop(ctx, 'edit'),
+              ),
+            if (canDelete)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: AppColors.red),
+                title: const Text(Strings.chatDeleteMessage),
+                onTap: () => Navigator.pop(ctx, 'delete'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'edit') _startEdit(m);
+    if (action == 'delete') await _deleteMessage(m);
+  }
+
+  void _startEdit(Message m) {
+    setState(() {
+      _editing = m;
+      _input.text = m.content ?? '';
+      _hasText = _input.text.trim().isNotEmpty;
+    });
+    _input.selection = TextSelection.collapsed(offset: _input.text.length);
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _editing = null;
+      _input.clear();
+      _hasText = false;
+    });
+    _stopTyping();
+  }
+
+  Future<void> _submitEdit(Message m, String text) async {
+    _cancelEdit();
+    if (text == m.content) return; // nothing changed
+    try {
+      await ref
+          .read(messagesProvider(widget.conversationId).notifier)
+          .edit(m.id, text);
+    } catch (e) {
+      _toast(ErrorMessages.forApi(e));
+    }
+  }
+
+  Future<void> _deleteMessage(Message m) async {
+    if (_editing?.id == m.id) _cancelEdit();
+    try {
+      await ref
+          .read(messagesProvider(widget.conversationId).notifier)
+          .delete(m.id);
+    } catch (e) {
+      _toast(ErrorMessages.forApi(e));
+    }
+  }
+
+  /// Every earlier version of an edited message, newest first — either side.
+  Future<void> _showEditHistory(Message m) async {
+    final future = ref.read(chatRepositoryProvider).messageEdits(m.id);
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: FutureBuilder<List<MessageEdit>>(
+          future: future,
+          builder: (ctx, snap) {
+            if (snap.hasError) {
+              return Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Text(ErrorMessages.forApi(snap.error)),
+              );
+            }
+            if (!snap.hasData) {
+              return const SizedBox(
+                height: 120,
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              );
+            }
+            final edits = snap.data!.reversed.toList();
+            return ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              children: [
+                ListTile(
+                  title: Text(Strings.chatEditHistory, style: AppText.label),
+                  subtitle: Text(
+                    '${Strings.chatEdited} ${DateFormat.yMMMd().add_jm().format((m.editedAt ?? m.createdAt).toLocal())}',
+                    style: AppText.caption,
+                  ),
+                ),
+                const Divider(height: 1),
+                if (edits.isEmpty)
+                  const ListTile(title: Text(Strings.chatEditHistoryEmpty))
+                else
+                  for (final e in edits)
+                    ListTile(
+                      title: Text(e.content, style: AppText.messageBody),
+                      subtitle: Text(
+                        DateFormat.yMMMd().add_jm().format(
+                          e.replacedAt.toLocal(),
+                        ),
+                        style: AppText.timestamp,
+                      ),
+                    ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _toast(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
   void _wsTyping(bool typing) {
     ref.read(websocketClientProvider).send({
       'type': typing
@@ -197,6 +338,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty) return;
+    final editing = _editing;
+    if (editing != null) {
+      return _submitEdit(editing, text);
+    }
     _input.clear();
     setState(() => _hasText = false); // clear() doesn't fire onChanged
     _stopTyping();
@@ -254,37 +399,37 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Schedule message',
-                    style: Theme.of(ctx).textTheme.titleMedium,
-                    textAlign: TextAlign.center),
+                Text(
+                  'Schedule message',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
                 ListTile(
-                  leading:
-                      const Icon(Icons.event, color: AppColors.medBlue),
+                  leading: const Icon(Icons.event, color: AppColors.medBlue),
                   title: Text(DateFormat.yMMMEd().format(date)),
                   onTap: () async {
                     final picked = await showDatePicker(
                       context: ctx,
                       initialDate: date,
                       firstDate: DateTime.now(),
-                      lastDate:
-                          DateTime.now().add(const Duration(days: 365)),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
                     );
                     if (picked != null) setSheet(() => date = picked);
                   },
                 ),
                 ListTile(
-                  leading:
-                      const Icon(Icons.schedule, color: AppColors.medBlue),
+                  leading: const Icon(Icons.schedule, color: AppColors.medBlue),
                   title: Text(time.format(ctx)),
                   onTap: () async {
-                    final picked =
-                        await showTimePicker(context: ctx, initialTime: time);
+                    final picked = await showTimePicker(
+                      context: ctx,
+                      initialTime: time,
+                    );
                     if (picked != null) setSheet(() => time = picked);
                   },
                 ),
                 ListTile(
-                  leading:
-                      const Icon(Icons.public, color: AppColors.medBlue),
+                  leading: const Icon(Icons.public, color: AppColors.medBlue),
                   title: DropdownButton<String>(
                     value: zone,
                     isExpanded: true,
@@ -292,7 +437,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     items: [
                       for (final z in _zones)
                         DropdownMenuItem(
-                            value: z, child: Text(z.replaceAll('_', ' '))),
+                          value: z,
+                          child: Text(z.replaceAll('_', ' ')),
+                        ),
                     ],
                     onChanged: (z) {
                       if (z != null) setSheet(() => zone = z);
@@ -312,8 +459,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     );
     if (confirmed != true || !mounted) return;
 
-    final wall =
-        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    final wall = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
     // Device zone: the client already knows the UTC instant — send it as UTC.
     // Named zone: send the wall-clock time and let the server's tz database
     // resolve the instant (DST rules live in one place).
@@ -322,7 +474,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         : DateFormat("yyyy-MM-dd'T'HH:mm:00").format(wall);
     final tz = zone == _deviceZone ? 'UTC' : zone;
     try {
-      await ref.read(chatRepositoryProvider).scheduleText(
+      await ref
+          .read(chatRepositoryProvider)
+          .scheduleText(
             widget.conversationId,
             text,
             scheduledLocal: scheduledLocal,
@@ -330,8 +484,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(ErrorMessages.forApi(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(ErrorMessages.forApi(e))));
       }
       return;
     }
@@ -339,11 +494,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     _input.clear();
     setState(() => _hasText = false);
     _stopTyping();
-    final zoneLabel = zone == _deviceZone ? '' : ' (${zone.replaceAll('_', ' ')})';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-          'Scheduled for ${DateFormat.yMMMEd().format(wall)} ${time.format(context)}$zoneLabel'),
-    ));
+    final zoneLabel = zone == _deviceZone
+        ? ''
+        : ' (${zone.replaceAll('_', ' ')})';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Scheduled for ${DateFormat.yMMMEd().format(wall)} ${time.format(context)}$zoneLabel',
+        ),
+      ),
+    );
   }
 
   // ---- Request-tier actions (recipient) -----------------------------------
@@ -420,7 +580,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         (
           icon: Icons.photo_library_outlined,
           label: 'Choose from gallery',
-          value: 'gallery'
+          value: 'gallery',
         ),
       ],
     );
@@ -434,9 +594,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         imageQuality: 85,
       );
     } catch (_) {
-      _showError(source == 'camera'
-          ? 'Camera not available on this device'
-          : 'Could not open the photo library');
+      _showError(
+        source == 'camera'
+            ? 'Camera not available on this device'
+            : 'Could not open the photo library',
+      );
       return;
     }
     if (picked == null) return;
@@ -498,7 +660,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xs),
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.xs,
+              ),
               child: Text(title, style: AppText.heading),
             ),
             for (final o in options)
@@ -516,8 +682,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // ---- Entrance / separator helpers ---------------------------------------
@@ -539,7 +706,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       // Server echo of an optimistic outbox bubble: same message, new id —
       // it already animated under its clientId, don't replay. (The optimistic
       // bubble itself has id == clientId, so exclude that case.)
-      final isEcho = m.clientId != null &&
+      final isEcho =
+          m.clientId != null &&
           m.clientId != m.id &&
           _knownIds.contains(m.clientId);
       if (m.createdAt.isAfter(_openedAt) && !isEcho) {
@@ -577,8 +745,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final diff = today.difference(that).inDays;
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
-    return DateFormat(that.year == now.year ? 'MMM d' : 'MMM d, y')
-        .format(that);
+    return DateFormat(
+      that.year == now.year ? 'MMM d' : 'MMM d, y',
+    ).format(that);
   }
 
   /// Per-type bubble (logic unchanged from the pre-revamp itemBuilder);
@@ -589,11 +758,44 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return SystemMessageBubble(text: m.content ?? '');
     }
     final grouped = _isGrouped(msgs, i);
+    // Sender deleted it: same tombstone for every type, no menu, no ticks.
+    if (m.isDeleted) {
+      return MessageBubble(
+        text: '',
+        isMine: isMine,
+        timestamp: m.createdAt.toLocal(),
+        grouped: grouped,
+        deleted: true,
+      );
+    }
+    return _withActions(m, _buildLiveBubble(m, isMine, msgs, i, grouped));
+  }
+
+  /// Own sent bubbles get the long-press edit/delete menu while a window is
+  /// still open; the menu itself re-checks, so a stale wrap is harmless.
+  Widget _withActions(Message m, Widget bubble) {
+    final me = ref.read(authProvider).user?.id;
+    if (me == null || !(m.canEdit(me: me) || m.canDelete(me: me))) {
+      return bubble;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () => _onMessageLongPress(m),
+      child: bubble,
+    );
+  }
+
+  Widget _buildLiveBubble(
+    Message m,
+    bool isMine,
+    List<Message> msgs,
+    int i,
+    bool grouped,
+  ) {
     // Local outbox media/voice (sending or failed): the file isn't on the
     // server yet, so the URL-backed bubbles can't render it — show a labeled
     // bubble with status ticks (and the same tap-to-retry flow as failed text).
-    final isLocalPending =
-        m.clientId != null && m.status != MessageStatus.sent;
+    final isLocalPending = m.clientId != null && m.status != MessageStatus.sent;
     if (isLocalPending && m.type != MessageType.text) {
       final Widget bubble;
       if (m.type == MessageType.image && m.localPath != null) {
@@ -676,6 +878,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       delivered: m.delivered,
       status: m.status,
       grouped: grouped,
+      edited: m.editedAt != null,
+      onEditedTap: () => _showEditHistory(m),
     );
     if (m.status == MessageStatus.failed && m.clientId != null) {
       return AppPressable(
@@ -755,7 +959,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         isPending && initiatorId != null && initiatorId != meId;
     final isInitiatorPending =
         isPending && initiatorId != null && initiatorId == meId;
-    final initiatorFirstSent = isInitiatorPending &&
+    final initiatorFirstSent =
+        isInitiatorPending &&
         ((conv?.lastMessageType != null) || _sentInRequest);
     final isInitiatorBeforeFirst = isInitiatorPending && !initiatorFirstSent;
     final isDeclined = access == ConversationAccess.declined;
@@ -784,7 +989,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final otherRel = otherId == null
         ? null
         : ref.watch(relationshipProvider(otherId)).valueOrNull?.relationship;
-    final showNotConnected = access == ConversationAccess.open &&
+    final showNotConnected =
+        access == ConversationAccess.open &&
         conv != null &&
         conv.isNetwork &&
         (display?.isDirect ?? false) &&
@@ -797,42 +1003,46 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       appBar: !widget.showAppBar
           ? null
           : AppBar(
-        titleSpacing: 0,
-        title: display == null
-            ? const Text('Chat')
-            : InkWell(
-                onTap: () =>
-                    context.push(AppRoutes.chatDetails(widget.conversationId)),
-                child: Row(
-                  children: [
-                    DoctorAvatar(
-                      initials: display.initials,
-                      size: AvatarSize.sm,
-                      imageUrl: display.otherUser?.avatarPresignedUrl,
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+              titleSpacing: 0,
+              title: display == null
+                  ? const Text('Chat')
+                  : InkWell(
+                      onTap: () => context.push(
+                        AppRoutes.chatDetails(widget.conversationId),
+                      ),
+                      child: Row(
                         children: [
-                          Text(display.title, overflow: TextOverflow.ellipsis),
-                          if (otherTyping)
-                            Text(
-                              'typing…',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.medBlue,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          DoctorAvatar(
+                            initials: display.initials,
+                            size: AvatarSize.sm,
+                            imageUrl: display.otherUser?.avatarPresignedUrl,
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  display.title,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (otherTyping)
+                                  Text(
+                                    'typing…',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.medBlue,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                              ],
                             ),
+                          ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-      ),
+            ),
       body: Column(
         children: [
           const ConnectivityBanner(),
@@ -850,15 +1060,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     )
                     .toList();
                 _trackNew(msgs, me?.id);
-                final notifier =
-                    ref.read(messagesProvider(widget.conversationId).notifier);
+                final notifier = ref.read(
+                  messagesProvider(widget.conversationId).notifier,
+                );
                 return Stack(
                   children: [
                     ListView.builder(
                       controller: _scroll,
                       reverse: true,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.sm,
+                      ),
                       // +1 row at the top (list end) for the older-page spinner.
                       itemCount: msgs.length + (notifier.loadingOlder ? 1 : 0),
                       itemBuilder: (_, i) {
@@ -869,8 +1081,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                               child: SizedBox(
                                 width: 18,
                                 height: 18,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                             ),
                           );
@@ -890,13 +1103,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         );
                         // Day pill above the first message of each day
                         // (reversed list: "above" = index i + 1).
-                        final showDay = i == msgs.length - 1 ||
-                            !_sameDay(m.createdAt.toLocal(),
-                                msgs[i + 1].createdAt.toLocal());
+                        final showDay =
+                            i == msgs.length - 1 ||
+                            !_sameDay(
+                              m.createdAt.toLocal(),
+                              msgs[i + 1].createdAt.toLocal(),
+                            );
                         if (showDay) {
                           row = Column(
                             children: [
-                              _DateChip(label: _dayLabel(m.createdAt.toLocal())),
+                              _DateChip(
+                                label: _dayLabel(m.createdAt.toLocal()),
+                              ),
                               row,
                             ],
                           );
@@ -958,97 +1176,150 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  child: TextField(
-                    controller: _input,
-                    minLines: 1,
-                    maxLines: 5,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.send,
-                    onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                    decoration: InputDecoration(
-                      hintText: Strings.chatMessageHint,
-                      border: OutlineInputBorder(
-                        borderRadius: AppRadii.rXl,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md + 2,
-                        vertical: AppSpacing.md - 2,
-                      ),
-                    ),
-                    onChanged: _onInputChanged,
-                    onSubmitted: (_) => _send(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              // WhatsApp-style morph: attach + mic when idle, send while
-              // typing — scale+fade swap, never a snap. In request mode the
-              // idle affordances collapse to nothing (text-only).
-              AnimatedSwitcher(
-                duration: AppMotion.maybe(context, AppMotion.micro),
-                switchInCurve: AppMotion.curveEnter,
-                switchOutCurve: AppMotion.curveExit,
-                transitionBuilder: (child, anim) => ScaleTransition(
-                  scale: anim,
-                  child: FadeTransition(opacity: anim, child: child),
-                ),
-                child: _hasText
-                    ? AppPressable(
-                        key: const ValueKey('composer-send'),
-                        haptic: true,
-                        minTarget: true,
-                        onTap: _send,
-                        onLongPress: _openScheduleSheet,
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: const BoxDecoration(
-                            color: AppColors.medBlue,
-                            shape: BoxShape.circle,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_editing != null) _editingStrip(_editing!),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      child: TextField(
+                        controller: _input,
+                        minLines: 1,
+                        maxLines: 5,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.send,
+                        onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                        decoration: InputDecoration(
+                          hintText: Strings.chatMessageHint,
+                          border: OutlineInputBorder(
+                            borderRadius: AppRadii.rXl,
                           ),
-                          child: const Icon(
-                            Icons.send_rounded,
-                            color: AppColors.white,
-                            size: 20,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md + 2,
+                            vertical: AppSpacing.md - 2,
                           ),
                         ),
-                      )
-                    : hideAttachments
+                        onChanged: _onInputChanged,
+                        onSubmitted: (_) => _send(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  // WhatsApp-style morph: attach + mic when idle, send while
+                  // typing — scale+fade swap, never a snap. In request mode the
+                  // idle affordances collapse to nothing (text-only).
+                  AnimatedSwitcher(
+                    duration: AppMotion.maybe(context, AppMotion.micro),
+                    switchInCurve: AppMotion.curveEnter,
+                    switchOutCurve: AppMotion.curveExit,
+                    transitionBuilder: (child, anim) => ScaleTransition(
+                      scale: anim,
+                      child: FadeTransition(opacity: anim, child: child),
+                    ),
+                    child: _hasText
+                        ? AppPressable(
+                            key: const ValueKey('composer-send'),
+                            haptic: true,
+                            minTarget: true,
+                            onTap: _send,
+                            onLongPress: _openScheduleSheet,
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: const BoxDecoration(
+                                color: AppColors.medBlue,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _editing != null
+                                    ? Icons.check_rounded
+                                    : Icons.send_rounded,
+                                color: AppColors.white,
+                                size: 20,
+                              ),
+                            ),
+                          )
+                        : hideAttachments
                         ? const SizedBox(
-                            key: ValueKey('composer-idle-empty'), height: 44)
+                            key: ValueKey('composer-idle-empty'),
+                            height: 44,
+                          )
                         : Row(
                             key: const ValueKey('composer-idle'),
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
                                 onPressed: _pickAttachment,
-                                icon: const Icon(Icons.attach_file,
-                                    color: AppColors.medBlue),
+                                icon: const Icon(
+                                  Icons.attach_file,
+                                  color: AppColors.medBlue,
+                                ),
                               ),
                               IconButton(
                                 onPressed: () =>
                                     setState(() => _showRecorder = true),
-                                icon: const Icon(Icons.mic,
-                                    color: AppColors.medBlue),
+                                icon: const Icon(
+                                  Icons.mic,
+                                  color: AppColors.medBlue,
+                                ),
                               ),
                             ],
                           ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  /// "Editing message" strip above the composer with the original text and a
+  /// close button that abandons the edit.
+  Widget _editingStrip(Message m) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.xs,
+        0,
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.edit_outlined, size: 18, color: AppColors.medBlue),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  Strings.chatEditingMessage,
+                  style: AppText.label.copyWith(color: AppColors.medBlue),
+                ),
+                Text(
+                  m.content ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.caption,
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: _cancelEdit,
+            icon: const Icon(Icons.close, size: 20),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// One-shot entrance for a NEW message bubble: fade + horizontal slide
@@ -1074,10 +1345,14 @@ class _MessageEntrance extends StatefulWidget {
 
 class _MessageEntranceState extends State<_MessageEntrance>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller =
-      AnimationController(vsync: this, duration: AppMotion.enter);
-  late final Animation<double> _t =
-      CurvedAnimation(parent: _controller, curve: AppMotion.curveEnter);
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.enter,
+  );
+  late final Animation<double> _t = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.curveEnter,
+  );
 
   bool _started = false;
 
@@ -1208,13 +1483,15 @@ class _JumpToBottomPill extends StatelessWidget {
                       ),
                       decoration: const BoxDecoration(
                         color: AppColors.medBlue,
-                        borderRadius:
-                            BorderRadius.all(Radius.circular(AppRadii.full)),
+                        borderRadius: BorderRadius.all(
+                          Radius.circular(AppRadii.full),
+                        ),
                       ),
                       child: Text(
                         '$unreadCount',
-                        style: AppText.badge
-                            .copyWith(color: AppColors.onPrimary),
+                        style: AppText.badge.copyWith(
+                          color: AppColors.onPrimary,
+                        ),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.xs),

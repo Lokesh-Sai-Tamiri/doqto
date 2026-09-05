@@ -19,6 +19,11 @@ class ErrorMessages {
   ErrorMessages._();
 
   static const Map<String, String> _byCode = {
+    // Message edit / delete (sender-only, time-boxed)
+    'edit_window_closed': 'Messages can only be edited within 5 minutes of sending.',
+    'delete_window_closed': 'Messages can only be deleted within 3 minutes of sending.',
+    'message_deleted': 'This message was already deleted.',
+    'not_message_sender': 'You can only change your own messages.',
     // Auth / OTP
     'otp_expired':
         'That code has expired. Tap "Resend code" and try again.',

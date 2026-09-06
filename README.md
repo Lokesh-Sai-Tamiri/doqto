@@ -63,3 +63,4 @@ Every color, enum wire value, Redis key, and API path lives in exactly one place
 - [`docs/design.md`](docs/design.md) — design tokens (colors, type, spacing, motion)
 - [`docs/enums.md`](docs/enums.md) — wire-value contract
 - [`RUN.md`](RUN.md) — all run + troubleshooting commands
+- [`docs/ios-release.md`](docs/ios-release.md) — App Store submission procedure (ITMS-90111 fixes, release script)

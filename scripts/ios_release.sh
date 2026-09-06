@@ -81,13 +81,16 @@ DEVELOPER_DIR=$XCODE_BETA xcodebuild -exportArchive \
   | grep -iE "error|succeeded|failed|Upload succeeded"
 
 # Also keep a local copy of exactly what was uploaded, and verify it.
-DEVELOPER_DIR=$XCODE_BETA xcodebuild -exportArchive \
-  -archivePath "$ARCHIVE" -exportOptionsPlist <(sed 's|<string>upload</string>|<string>export</string>|' build/ios/ExportUpload.plist) \
-  -exportPath build/ios/ipa-clean >/dev/null 2>&1 || true
-if [ -f build/ios/ipa-clean/doqto_app.ipa ]; then
+sed 's|<string>upload</string>|<string>export</string>|' build/ios/ExportUpload.plist > build/ios/ExportLocal.plist
+rm -rf build/ios/ipa-clean
+if DEVELOPER_DIR=$XCODE_BETA xcodebuild -exportArchive \
+  -archivePath "$ARCHIVE" -exportOptionsPlist build/ios/ExportLocal.plist \
+  -exportPath build/ios/ipa-clean -allowProvisioningUpdates > build/ios/export-local.log 2>&1; then
   echo "== verify build/ios/ipa-clean/doqto_app.ipa"
   unzip -p build/ios/ipa-clean/doqto_app.ipa Payload/Runner.app/Info.plist > build/ios/ipa-clean/Info.plist
   plutil -p build/ios/ipa-clean/Info.plist | grep -E "CFBundleVersion|CFBundleShortVersionString|BuildMachineOSBuild"
-  unzip -l build/ios/ipa-clean/doqto_app.ipa | grep -q objective_c && echo "objective_c present!" || echo "no objective_c"
+  if unzip -l build/ios/ipa-clean/doqto_app.ipa | grep -q objective_c; then echo "objective_c present!"; else echo "no objective_c"; fi
+else
+  echo "== local verification export failed (see build/ios/export-local.log); upload above is unaffected"
 fi
 echo "== done: wait for TestFlight 'Complete', then attach build ${next} in App Store Connect and submit."

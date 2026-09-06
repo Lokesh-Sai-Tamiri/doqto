@@ -590,7 +590,6 @@ class TypingNotifier extends FamilyNotifier<bool, String> {
 
   @override
   bool build(String conversationId) {
-    final me = ref.read(authProvider).user?.id;
     final ws = ref.read(websocketClientProvider);
     final sub = ws.events.listen((event) {
       if (event.type != WsEventServer.typingStart &&
@@ -599,6 +598,10 @@ class TypingNotifier extends FamilyNotifier<bool, String> {
       }
       final convId = event.data['conversation_id'] as String?;
       final uid = event.data['user_id'] as String?;
+      // Read `me` per event: a thread opened from a notification tap at cold
+      // start builds before auth has loaded, and a snapshot taken then would
+      // be null forever — letting our own typing echo show as "B is typing".
+      final me = ref.read(authProvider).user?.id;
       if (convId != conversationId || uid == me) return;
       if (event.type == WsEventServer.typingStart) {
         state = true;

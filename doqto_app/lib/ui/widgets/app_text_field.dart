@@ -47,6 +47,13 @@ class AppTextField extends StatefulWidget {
   /// Defaults to Words (names, places); pass sentences for free prose.
   final TextCapitalization? textCapitalization;
 
+  /// Optional trailing widget inside the frame (e.g. a password eye toggle).
+  final Widget? suffix;
+
+  /// Supply a focus node when something outside needs it (an autocomplete
+  /// wrapper, say). The owner disposes it; the field only borrows it.
+  final FocusNode? focusNode;
+
   const AppTextField({
     super.key,
     this.controller,
@@ -64,6 +71,8 @@ class AppTextField extends StatefulWidget {
     this.validator,
     this.dismissOnValid = false,
     this.textCapitalization,
+    this.suffix,
+    this.focusNode,
   });
 
   @override
@@ -71,7 +80,8 @@ class AppTextField extends StatefulWidget {
 }
 
 class AppTextFieldState extends State<AppTextField> {
-  final _focus = FocusNode();
+  late final FocusNode _focus = widget.focusNode ?? FocusNode();
+  bool get _ownsFocus => widget.focusNode == null;
   String? _internalError;
   bool _hasBlurred = false;
   bool _focused = false;
@@ -85,7 +95,7 @@ class AppTextFieldState extends State<AppTextField> {
   @override
   void dispose() {
     _focus.removeListener(_onFocusChange);
-    _focus.dispose();
+    if (_ownsFocus) _focus.dispose();
     super.dispose();
   }
 
@@ -176,6 +186,7 @@ class AppTextFieldState extends State<AppTextField> {
             decoration: InputDecoration(
               hintText: widget.hint,
               counterText: '',
+              suffixIcon: widget.suffix,
               border: noBorder,
               enabledBorder: noBorder,
               focusedBorder: noBorder,

@@ -84,7 +84,8 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
         AuthStage.pendingVerification => AppRoutes.pending,
         AuthStage.needsOrg => AppRoutes.orgSelection,
         AuthStage.needsRegistration => AppRoutes.registration,
-        _ => AppRoutes.phone,
+        AuthStage.needsPayment => AppRoutes.payments,
+        _ => AppRoutes.login,
       });
     } catch (e) {
       setState(() {

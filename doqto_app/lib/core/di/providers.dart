@@ -12,6 +12,7 @@ import '../../data/repositories/user_repository.dart';
 import '../../data/services/chat_cache.dart';
 import '../../data/services/groups_cache.dart';
 import '../../data/services/network_cache.dart';
+import '../../data/services/npi_lookup.dart';
 import '../../data/services/outbox.dart';
 import '../../data/services/push_token_provider.dart';
 
@@ -65,6 +66,9 @@ final pushTokenProviderProvider =
     Provider<PushTokenProvider>((ref) => FirebasePushTokenProvider());
 
 final chatCacheProvider = Provider<ChatCache>((ref) => ChatCache());
+
+/// Public CMS registry prefill. Overridden with a fake in widget tests.
+final npiLookupProvider = Provider<NpiLookup>((ref) => NpiLookup());
 
 final networkCacheProvider = Provider<NetworkCache>((ref) => NetworkCache());
 

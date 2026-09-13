@@ -6,12 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/di/providers.dart';
 import '../core/enums/app_enums.dart';
 import '../data/models/user.dart';
+import '../data/repositories/user_repository.dart';
 import 'org_state.dart';
 
 enum AuthStage {
   unknown,
   signedOut,
   needsRegistration,
+  /// Straight after registration: pick a plan. Only ever set by
+  /// [AuthNotifier.completeRegistration] — there is no server-side record of a
+  /// plan yet, so a returning user is never sent back here.
+  needsPayment,
   needsOrg,
   pendingVerification,
   signedIn,
@@ -95,7 +100,10 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<AuthStage> _resolveStageForRegisteredUser() async {
     try {
       final orgs = await ref.read(orgRepositoryProvider).listMine();
-      if (orgs.isEmpty) return AuthStage.needsOrg;
+      // No org is no longer a blocker: onboarding ends at the plan picker and
+      // chats loads without one. Joining an org later comes back through here
+      // and connects the socket then.
+      if (orgs.isEmpty) return AuthStage.signedIn;
       // Pick the most recently created org as "current". Users with multiple
       // orgs can switch in a later release.
       final org = orgs.first;
@@ -184,14 +192,36 @@ class AuthNotifier extends Notifier<AuthState> {
     required String fullName,
     String? specialty,
     required String npiNumber,
+    String? city,
+    // Named `practiceState` here: `state` is the notifier's own field.
+    String? practiceState,
   }) async {
-    final user = await ref.read(authRepositoryProvider).register(
+    var user = await ref.read(authRepositoryProvider).register(
           fullName: fullName,
           specialty: specialty,
           npiNumber: npiNumber,
         );
-    // After registration the user has no org yet → send them to org selection.
-    state = AuthState(AuthStage.needsOrg, user);
+    // `register` has no city/state (and silently ignores extras), so the
+    // practice location from the NPI registry goes on through the profile
+    // endpoint. Best-effort: a registered user must never be bounced back to
+    // the form because a location didn't save.
+    if ((city ?? '').isNotEmpty || (practiceState ?? '').isNotEmpty) {
+      try {
+        user = await ref
+            .read(userRepositoryProvider)
+            .updateMe(UserPatchBody(city: city, state: practiceState));
+      } catch (_) {}
+    }
+    // Details are in — next stop is the plan picker.
+    state = AuthState(AuthStage.needsPayment, user);
+  }
+
+  /// Leaves the plan picker, whether they chose a plan or skipped. Nothing is
+  /// charged or persisted yet — see docs/payments.md.
+  Future<void> completePayment() async {
+    final user = state.user;
+    if (user == null) return;
+    state = AuthState(await _resolveStageForRegisteredUser(), user);
   }
 
   /// Replace the cached user (e.g. after a profile update). Keeps the current

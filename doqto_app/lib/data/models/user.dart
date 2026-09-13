@@ -41,7 +41,8 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> j) => User(
         id: j['id'] as String,
-        phone: j['phone'] as String,
+        // Absent for accounts created by social sign-in until they add one.
+        phone: (j['phone'] ?? '') as String,
         email: j['email'] as String?,
         fullName: (j['full_name'] ?? '') as String,
         specialty: j['specialty'] as String?,

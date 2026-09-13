@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/constants/strings.dart';
 import '../../../core/di/providers.dart';
 import '../../../core/enums/app_enums.dart';
 import '../../../core/router/app_router.dart';
@@ -29,7 +30,7 @@ class MyOrgScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: Text(org?.name ?? 'My Org')),
       body: org == null
-          ? const Center(child: Text('No organization selected'))
+          ? const _NoOrg()
           : ref.watch(orgMembersProvider(org.id)).when(
                 loading: () => const SkeletonList(),
                 error: (e, _) => Center(
@@ -192,6 +193,65 @@ class _MemberRowState extends ConsumerState<_MemberRow> {
                         onPressed: _startChat,
                       ),
               ),
+      ),
+    );
+  }
+}
+
+
+/// Onboarding no longer forces anyone into an org (see docs/payments.md), so
+/// this is the normal state for a new user — not an error. It offers the same
+/// two doors the old org-selection step did.
+class _NoOrg extends StatelessWidget {
+  const _NoOrg();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: AppColors.medBlueLight,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.apartment_rounded,
+                  color: AppColors.medBlue, size: 30),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              Strings.orgNoneTitle,
+              style: AppText.heading,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              Strings.orgNoneBody,
+              style: AppText.body,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              label: Strings.orgNoneCreate,
+              icon: Icons.add_rounded,
+              expand: true,
+              onPressed: () => context.push(AppRoutes.createOrg),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppButton(
+              label: Strings.orgNoneJoin,
+              icon: Icons.vpn_key_rounded,
+              variant: AppButtonVariant.secondary,
+              expand: true,
+              onPressed: () => context.push(AppRoutes.joinOrg),
+            ),
+          ],
+        ),
       ),
     );
   }

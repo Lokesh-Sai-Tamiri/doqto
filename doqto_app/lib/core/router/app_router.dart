@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/organization.dart';
 import '../../state/auth_state.dart';
 import '../../ui/screens/auth/otp_screen.dart';
-import '../../ui/screens/auth/phone_screen.dart';
+import '../../ui/screens/auth/login_screen.dart';
 import '../../ui/screens/auth/registration_screen.dart';
 import '../../ui/screens/chat/chat_details_screen.dart';
 import '../../ui/screens/chat/chat_list_screen.dart';
@@ -29,14 +29,16 @@ import '../../ui/screens/profile/profile_edit_screen.dart';
 import '../../ui/screens/profile/profile_screen.dart';
 import '../../ui/screens/settings/settings_screen.dart';
 import '../../ui/screens/voice_broadcast/voice_broadcast_screen.dart';
+import '../../ui/screens/payments/payments_screen.dart';
 import '../../ui/screens/splash/splash_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
   static const splash = '/';
-  static const phone = '/auth/phone';
+  static const login = '/auth/login';
   static const otp = '/auth/otp';
   static const registration = '/auth/registration';
+  static const payments = '/payments';
   static const orgSelection = '/org/select';
   static const createOrg = '/org/create';
   static const joinOrg = '/org/join';
@@ -106,9 +108,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, s) => const SplashScreen(),
       ),
       GoRoute(
-        path: AppRoutes.phone,
+        path: AppRoutes.login,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (_, s) => const PhoneScreen(),
+        builder: (_, s) => const LoginScreen(),
       ),
       GoRoute(
         path: AppRoutes.otp,
@@ -119,6 +121,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.registration,
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, s) => const RegistrationScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.payments,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, s) => const PaymentsScreen(),
       ),
       GoRoute(
         path: AppRoutes.orgSelection,
@@ -275,7 +282,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (auth.stage == AuthStage.unknown) return null;
       final inAuthFlow = [
         AppRoutes.splash,
-        AppRoutes.phone,
+        AppRoutes.login,
         AppRoutes.otp,
         AppRoutes.registration,
       ].contains(loc);
@@ -285,9 +292,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         AppRoutes.joinOrg,
         AppRoutes.pending,
       ].contains(loc);
-      if (auth.stage == AuthStage.signedOut && !inAuthFlow) return AppRoutes.phone;
+      if (auth.stage == AuthStage.signedOut &&
+          (!inAuthFlow || loc == AppRoutes.registration)) {
+        // Your details is the second half of sign-up: it needs the session a
+        // verified phone (or, later, social sign-in) creates.
+        return AppRoutes.login;
+      }
       if (auth.stage == AuthStage.needsRegistration && loc != AppRoutes.registration) {
         return AppRoutes.registration;
+      }
+      if (auth.stage == AuthStage.needsPayment && loc != AppRoutes.payments) {
+        return AppRoutes.payments;
       }
       if (auth.stage == AuthStage.needsOrg && !inOrgFlow) {
         return AppRoutes.orgSelection;
@@ -297,7 +312,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
       // Signed-in user shouldn't be stuck on the pending screen or any of the
       // pre-auth / org-onboarding flows. Push them to chats.
-      if (auth.stage == AuthStage.signedIn && (inAuthFlow || inOrgFlow)) {
+      if (auth.stage == AuthStage.signedIn &&
+          (inAuthFlow || inOrgFlow || loc == AppRoutes.payments)) {
         return AppRoutes.chats;
       }
       return null;

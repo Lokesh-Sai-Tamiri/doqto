@@ -16,14 +16,60 @@ class Strings {
   static const String authVerify = 'Verify';
   static const String authResend = 'Resend code';
 
+  // Login — one screen, four ways in
+  static const String loginTabPhone = 'Phone';
+  static const String loginTabEmail = 'Username / Email';
+  static const String loginPhoneHelper = 'Tap the flag to change country';
+  static const String loginIdentifier = 'Username / Email';
+  static const String loginIdentifierHint = 'you@hospital.org or username';
+  static const String loginPassword = 'Password';
+  static const String loginPasswordHint = 'Your password';
+  static const String loginForgotPassword = 'Forgot password?';
+  static const String loginSignIn = 'Sign in';
+  static const String loginDividerOr = 'or continue with';
+  static const String loginGoogle = 'Continue with Google';
+  static const String loginFacebook = 'Continue with Facebook';
+  static const String loginComingSoon =
+      'This sign-in method is coming soon. Use your phone number for now.';
+
   // Registration
-  static const String regFullName = 'Full name';
+  static const String regFirstName = 'First name';
+  static const String regLastName = 'Last name';
   static const String regSpecialty = 'Specialty';
   static const String regNpi = 'NPI number';
-  static const String regNpiHelper = 'Find your NPI at nppes.cms.hhs.gov';
+  static const String regSpecialtyOther = 'Your specialty';
+  static const String regSpecialtyOtherHint = 'Type your specialty';
+  static const String regNpiAmbiguous =
+      'Several clinicians share that name. Enter your NPI and we\'ll fill in the rest.';
+  static const String regMatchTitle = 'Found on the NPI registry';
+  static const String regPhone = 'Phone number';
+  static const String regPhoneSendCode = 'Send code';
+  static const String regPhoneCode = 'Verification code';
+  static const String regPhoneVerified = 'Phone number verified';
+  static const String regPhoneUnverified =
+      'Verify this number, or clear it to skip.';
+  static const String regMatchDismiss = 'Not me';
   static const String regContinue = 'Continue';
 
+  // Plans (shown once, straight after registration)
+  static const String planTitle = 'Choose your plan';
+  static const String planSubtitle =
+      'Full access to secure messaging, groups and your network.';
+  static const String planMonthly = 'Monthly';
+  static const String planMonthlyPrice = '\$29/mo';
+  static const String planYearly = 'Yearly';
+  static const String planYearlyPrice = '\$290/yr';
+  static const String planYearlyNote = '2 months free';
+  static const String planContinue = 'Continue';
+  static const String planSkip = 'Skip for now';
+
   // Org
+  static const String orgNoneTitle = 'You\'re not in an organization yet';
+  static const String orgNoneBody =
+      'Organizations connect you with colleagues at your hospital or practice, '
+      'and turn on live updates for your chats.';
+  static const String orgNoneCreate = 'Create an organization';
+  static const String orgNoneJoin = 'Join with an invite code';
   static const String orgSelectTitle = 'Get started';
   static const String orgCreateTitle = 'Create Organization';
   static const String orgCreateSub = 'Set up your hospital or practice';

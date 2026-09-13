@@ -34,7 +34,7 @@ class SettingsScreen extends ConsumerWidget {
     }
     // signOut also wipes the local encrypted PHI caches.
     await ref.read(authProvider.notifier).signOut();
-    if (context.mounted) context.go(AppRoutes.phone);
+    if (context.mounted) context.go(AppRoutes.login);
   }
 
   @override
@@ -82,7 +82,7 @@ class SettingsScreen extends ConsumerWidget {
                 expand: true,
                 onPressed: () async {
                   await ref.read(authProvider.notifier).signOut();
-                  if (context.mounted) context.go(AppRoutes.phone);
+                  if (context.mounted) context.go(AppRoutes.login);
                 },
               ),
             ),

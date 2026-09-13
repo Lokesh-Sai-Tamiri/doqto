@@ -103,6 +103,39 @@ class Validators {
         return null;
       };
 
+  /// Email: one @, a dot in the domain, no spaces. Deliberately permissive —
+  /// the only authority on whether an address exists is a mail server.
+  static Validator email() => (value) {
+        final v = value.trim();
+        if (v.isEmpty) return 'Please enter your email address.';
+        if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$').hasMatch(v)) {
+          return 'That doesn\'t look like an email address.';
+        }
+        return null;
+      };
+
+  /// Sign-in identifier: either an email address or a username. An `@`
+  /// anywhere means the user is typing an email, so they get the email error
+  /// rather than a confusing username one.
+  static Validator usernameOrEmail() => (value) {
+        final v = value.trim();
+        if (v.isEmpty) return 'Please enter your username or email.';
+        if (v.contains('@')) return email()(v);
+        if (v.length < 3) return 'Usernames are at least 3 characters.';
+        if (!RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(v)) {
+          return 'Usernames use letters, digits, dot, dash or underscore.';
+        }
+        return null;
+      };
+
+  /// Password on sign-in: non-empty and long enough to be worth sending.
+  /// Strength rules belong on the sign-up form, not here.
+  static Validator password() => (value) {
+        if (value.isEmpty) return 'Please enter your password.';
+        if (value.length < 8) return 'Passwords are at least 8 characters.';
+        return null;
+      };
+
   /// OTP: exactly N digits.
   static Validator otp(int length) => (value) {
         final v = value.trim();
@@ -114,15 +147,14 @@ class Validators {
         return null;
       };
 
-  /// Full name: at least two words, each ≥ 2 chars.
-  static Validator fullName() => (value) {
+  /// A single name part (first or last). [field] names it in the message.
+  /// Registration collects the two halves separately so the NPI registry can
+  /// be queried by first and last name.
+  static Validator personName(String field) => (value) {
         final v = value.trim();
-        if (v.isEmpty) return 'Please enter your full name.';
-        final parts = v.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-        if (parts.length < 2) return 'Please enter both your first and last name.';
-        if (parts.any((p) => p.length < 2)) {
-          return 'Each name must be at least 2 characters.';
-        }
+        final f = field.toLowerCase();
+        if (v.isEmpty) return 'Please enter your $f.';
+        if (v.length < 2) return 'Your $f must be at least 2 characters.';
         return null;
       };
 

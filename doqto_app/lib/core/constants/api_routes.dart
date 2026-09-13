@@ -15,6 +15,10 @@ class ApiRoutes {
   static const String usersMe = '$apiV1/users/me';
   static const String usersMeAvatar = '$apiV1/users/me/avatar';
   static const String usersMePushTokens = '$apiV1/users/me/push-tokens';
+  // Attach a phone to the signed-in account. NOT YET ON THE BACKEND — see
+  // docs/phone-verification.md for the contract.
+  static const String usersMePhone = '$apiV1/users/me/phone';
+  static const String usersMePhoneVerify = '$apiV1/users/me/phone/verify';
 
   // Orgs
   static const String orgs = '$apiV1/orgs';

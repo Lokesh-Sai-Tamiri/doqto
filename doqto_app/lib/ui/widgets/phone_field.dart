@@ -36,6 +36,9 @@ class PhoneField extends StatefulWidget {
   final String? helperText;
   final bool autofocus;
 
+  /// Empty is valid. Only a number that was actually typed gets checked.
+  final bool optional;
+
   const PhoneField({
     super.key,
     required this.onChanged,
@@ -44,6 +47,7 @@ class PhoneField extends StatefulWidget {
     this.onCountryChanged,
     this.helperText,
     this.autofocus = false,
+    this.optional = false,
   });
 
   @override
@@ -101,7 +105,11 @@ class PhoneFieldState extends State<PhoneField> {
     widget.onChanged(e164);
     if (_hasBlurred) _runValidator();
     // ponytail: drop the keypad the moment the number is complete
-    if (_focus.hasFocus && validationError() == null) _focus.unfocus();
+    // (not when empty: an optional field is "valid" empty, and backspacing
+    // the last digit must not snatch the keyboard away)
+    if (_focus.hasFocus && e164.isNotEmpty && validationError() == null) {
+      _focus.unfocus();
+    }
   }
 
   void _onFocusChange() {
@@ -116,7 +124,9 @@ class PhoneFieldState extends State<PhoneField> {
   @visibleForTesting
   String? validationError() {
     final digits = _controller.text.replaceAll(RegExp(r'\D'), '');
-    if (digits.isEmpty) return 'Please enter your phone number.';
+    if (digits.isEmpty) {
+      return widget.optional ? null : 'Please enter your phone number.';
+    }
     try {
       final parsed = PhoneNumber.parse(
         digits,
